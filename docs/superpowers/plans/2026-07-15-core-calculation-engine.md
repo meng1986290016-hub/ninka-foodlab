@@ -57,16 +57,17 @@
 - Produces: workspace scripts pnpm typecheck and pnpm test.
 - Produces: package @food-rd/core with temporary export CORE_VERSION.
 
-- [ ] **Step 1: Initialize Git on the main branch**
+- [ ] **Step 1: Verify the initialized repository and main branch**
 
 Run:
 
 ~~~bash
-git init -b main
+git rev-parse --is-inside-work-tree
+git branch --show-current
 git status --short
 ~~~
 
-Expected: Git reports an empty repository and lists the existing docs directory as untracked.
+Expected: the first two lines are true and main; the design and plan documents are already committed.
 
 - [ ] **Step 2: Add the workspace configuration**
 
@@ -222,7 +223,7 @@ Expected: TypeScript exits 0 and Vitest reports one passing test.
 - [ ] **Step 6: Commit the bootstrap**
 
 ~~~bash
-git add .gitignore .nvmrc package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json packages docs
+git add .gitignore .nvmrc package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json packages
 git commit -m "chore: bootstrap food R&D core workspace"
 ~~~
 

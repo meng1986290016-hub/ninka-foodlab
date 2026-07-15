@@ -4,4 +4,5 @@ export * from "./cost.js";
 export * from "./decimal.js";
 export * from "./nutrition.js";
 export * from "./result.js";
+export * from "./targets.js";
 export * from "./units.js";

@@ -37,5 +37,5 @@
 ## 计划文件
 
 - 第一阶段详细计划：docs/superpowers/plans/2026-07-15-core-calculation-engine.md
+- 第二阶段详细计划：docs/superpowers/plans/2026-07-16-desktop-storage.md
 - 后续阶段在上一阶段接口通过验收后分别生成详细计划，避免根据尚未稳定的接口预写失真的文件级步骤。
-

@@ -7,6 +7,7 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "build": "pnpm --filter @food-rd/core build",
     "typecheck": "pnpm --filter @food-rd/core typecheck",
     "test": "pnpm --filter @food-rd/core test"
   }

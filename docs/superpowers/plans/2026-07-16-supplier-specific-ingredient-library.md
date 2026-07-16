@@ -34,7 +34,7 @@
 - Consumes: existing `DesktopApiError`, `DraftRecord`, and `DatabaseStatus`.
 - Produces: `Category`, `Supplier`, `MaterialGroup`, `IngredientVariant`, `NutrientDefinition`, `VariantNutrition`, input types, comparison types, and revised `DesktopApi` signatures used by every later task.
 
-- [ ] **Step 1: Write the failing type-contract test**
+- [x] **Step 1: Write the failing type-contract test**
 
 ```ts
 import { describe, expectTypeOf, it } from "vitest";
@@ -62,13 +62,13 @@ describe("supplier-specific DesktopApi contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify the old contract fails**
+- [x] **Step 2: Run the test and verify the old contract fails**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/api/desktop-api-contract.test.ts`
 
 Expected: FAIL because `listMaterialGroups`, `saveIngredientVariant`, and the new types do not exist.
 
-- [ ] **Step 3: Define the complete public types**
+- [x] **Step 3: Define the complete public types**
 
 ```ts
 export type EntityId = string;
@@ -212,11 +212,11 @@ export interface DesktopApi {
 }
 ```
 
-- [ ] **Step 4: Extend the structured error codes and map the Tauri adapter**
+- [x] **Step 4: Extend the structured error codes and map the Tauri adapter**
 
 Add `duplicate_name`, `duplicate_variant`, `reference_conflict`, `invalid_decimal`, and `conversion_unavailable` to `DesktopErrorCode`. Replace each old ingredient invoke in `TauriDesktopApi` with the Task 1 command names and payloads. The Rust commands do not exist yet, but the TypeScript adapter must compile and its invoke-contract tests must pass; Task 10 supplies the server side.
 
-- [ ] **Step 5: Run the contract and Tauri-adapter tests**
+- [x] **Step 5: Run the contract and Tauri-adapter tests**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/api/desktop-api-contract.test.ts src/api/tauri-desktop-api.test.ts`
 
@@ -235,7 +235,7 @@ Expected: both tests PASS. A full typecheck may still identify the old browser a
 - Consumes: Task 1 public types.
 - Produces: `readBrowserState`, `writeBrowserState`, `migrateV1ToV2`, and a `BrowserDemoApi` that satisfies all non-comparison `DesktopApi` methods.
 
-- [ ] **Step 1: Write failing migration and CRUD tests**
+- [x] **Step 1: Write failing migration and CRUD tests**
 
 ```ts
 it("migrates a flat v1 record without losing price, density, source or notes", async () => {
@@ -262,13 +262,13 @@ it("creates a custom category, supplier, group and supplier variant", async () =
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/api/browser-demo-api.test.ts`
 
 Expected: FAIL because schema v2 and grouped methods are missing.
 
-- [ ] **Step 3: Add the versioned browser state and deterministic migration**
+- [x] **Step 3: Add the versioned browser state and deterministic migration**
 
 ```ts
 export interface BrowserStateV2 {
@@ -309,17 +309,17 @@ export function migrateV1ToV2(legacy: LegacyState, context: MigrationContext): B
 
 Migration IDs must be stable derivations of legacy IDs, not new random IDs on every read. Convert the removed `tags` into a comma-separated suffix in `researchNotes` only when non-empty. Ignore the two legacy manual dates because `updatedAt` already preserves the latest committed record time.
 
-- [ ] **Step 4: Implement category, supplier, group, and variant CRUD**
+- [x] **Step 4: Implement category, supplier, group, and variant CRUD**
 
 Use immutable array replacement and one `write` per successful operation. `saveIngredientVariant` must validate nullable decimals with `/^(0|[1-9]\d*)(\.\d+)?$/`, detect duplicate supplier/model within one group, compute a new `updatedAt` only immediately before the final write, and throw `DesktopApiError("duplicate_variant", ...)` unless `duplicateConfirmed` is true.
 
-- [ ] **Step 5: Run browser adapter tests and typecheck**
+- [x] **Step 5: Run browser adapter tests and typecheck**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/api/browser-demo-api.test.ts && pnpm --filter @food-rd/desktop typecheck`
 
 Expected: all browser adapter tests PASS and both adapters satisfy the same contract.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/desktop/src/api

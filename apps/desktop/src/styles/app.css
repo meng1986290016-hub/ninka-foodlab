@@ -696,6 +696,104 @@ tbody tr:hover {
   font-weight: 400;
 }
 
+.reference-field {
+  position: relative;
+}
+
+.reference-field > label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.reference-combobox {
+  position: relative;
+}
+
+.reference-combobox > input {
+  padding-right: 52px;
+}
+
+.reference-clear {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 10px;
+  padding: 3px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 12px;
+  transform: translateY(-50%);
+}
+
+.reference-popover {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  box-shadow: 0 10px 28px rgb(22 42 32 / 12%);
+}
+
+.reference-popover [role="listbox"] {
+  max-height: 196px;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+.reference-option,
+.reference-create {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  text-align: left;
+}
+
+.reference-option {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 4px;
+}
+
+.reference-option:hover,
+.reference-option.is-active,
+.reference-option[aria-selected="true"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.reference-create {
+  min-height: 40px;
+  padding: 8px 11px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-accent);
+  font-weight: 630;
+}
+
+.reference-create:hover {
+  background: var(--color-accent-soft);
+}
+
+.reference-state {
+  padding: 10px;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 430;
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .data-helper {
   grid-column: 1 / -1;
   margin: 0;

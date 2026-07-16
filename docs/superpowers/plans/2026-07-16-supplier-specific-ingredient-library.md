@@ -493,7 +493,7 @@ git commit -m "feat(ingredients): show expandable supplier variants"
 - Consumes: category and supplier methods from `DesktopApi`.
 - Produces: reusable accessible comboboxes and a group editor that returns `MaterialGroupInput`.
 
-- [ ] **Step 1: Write failing inline-create tests**
+- [x] **Step 1: Write failing inline-create tests**
 
 ```tsx
 it("creates and selects a custom category from the category control", async () => {
@@ -505,27 +505,27 @@ it("creates and selects a custom category from the category control", async () =
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/reference-comboboxes.test.tsx`
 
 Expected: FAIL because both controls are missing.
 
-- [ ] **Step 3: Implement accessible listbox behavior**
+- [x] **Step 3: Implement accessible listbox behavior**
 
 Both controls must support typing, filtering, ArrowDown/ArrowUp, Enter selection, Escape close, loading, empty state, and one explicit create button. Trim names and surface `duplicate_name` errors inline. Do not create a category or supplier merely because free text was typed.
 
-- [ ] **Step 4: Build `MaterialGroupEditor`**
+- [x] **Step 4: Build `MaterialGroupEditor`**
 
 The editor contains only common material name and optional category. It must not render tags, notes, internal code, dates, price, density, supplier, or nutrition fields.
 
-- [ ] **Step 5: Run tests and typecheck**
+- [x] **Step 5: Run tests and typecheck**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/reference-comboboxes.test.tsx && pnpm --filter @food-rd/desktop typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/desktop/src/features/ingredients apps/desktop/src/styles/app.css

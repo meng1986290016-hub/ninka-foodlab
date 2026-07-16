@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { BrowserDemoApi } from "./browser-demo-api";
+import { builtInNutrients } from "./browser-schema";
 import { DesktopApiError } from "./types";
 
 class MemoryStorage implements Storage {
@@ -40,7 +41,7 @@ function emptyV2Storage() {
       categories: [],
       suppliers: [],
       materialGroups: [],
-      nutrientDefinitions: [],
+      nutrientDefinitions: builtInNutrients(),
       settings: {},
       drafts: {},
     }),
@@ -326,5 +327,70 @@ describe("BrowserDemoApi", () => {
     await groupedApi.archiveSupplier(supplier.id);
     await groupedApi.archiveCategory(category.id);
     expect(await groupedApi.listMaterialGroups()).toEqual([]);
+  });
+
+  it("calculates completeness and comparison rows from saved source values", async () => {
+    let sequence = 0;
+    const groupedApi = new BrowserDemoApi({
+      storage: emptyV2Storage(),
+      createId: () => `comparison-${++sequence}`,
+      now: () => "2026-07-16T05:00:00.000Z",
+    });
+    const supplierA = await groupedApi.createSupplier("供应商A");
+    const supplierB = await groupedApi.createSupplier("供应商B");
+    const group = await groupedApi.createMaterialGroup({
+      name: "脱脂乳粉",
+      categoryId: null,
+    });
+    const nutritionValues = builtInNutrients().map((definition) => ({
+      nutrientDefinitionId: definition.id,
+      value: definition.id === "fat" ? null : "0",
+    }));
+    const variantA = await groupedApi.saveIngredientVariant({
+      materialGroupId: group.id,
+      supplierId: supplierA.id,
+      modelOrSpecification: "A型",
+      internalCode: null,
+      currentPrice: "31.50",
+      priceUnit: "kg",
+      densityGPerMl: null,
+      source: "规格书A",
+      researchNotes: "",
+      nutrition: { basis: "per_100g", values: nutritionValues },
+    });
+    const variantB = await groupedApi.saveIngredientVariant({
+      materialGroupId: group.id,
+      supplierId: supplierB.id,
+      modelOrSpecification: "B型",
+      internalCode: null,
+      currentPrice: null,
+      priceUnit: "kg",
+      densityGPerMl: null,
+      source: "规格书B",
+      researchNotes: "",
+      nutrition: {
+        basis: "per_100g",
+        values: nutritionValues.map((value) =>
+          value.nutrientDefinitionId === "protein"
+            ? { ...value, value: null }
+            : value,
+        ),
+      },
+    });
+
+    expect(variantA.completeness).toMatchObject({
+      percent: 90,
+      missingFields: ["脂肪"],
+    });
+    const comparison = await groupedApi.compareIngredientVariants(group.id, [
+      variantA.id,
+      variantB.id,
+    ]);
+    expect(
+      comparison.rows.find((row) => row.key === "nutrient:protein")?.values,
+    ).toEqual({
+      [variantA.id]: "0",
+      [variantB.id]: null,
+    });
   });
 });

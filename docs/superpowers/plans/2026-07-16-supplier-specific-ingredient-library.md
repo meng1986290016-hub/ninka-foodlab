@@ -339,7 +339,7 @@ git commit -m "feat(ingredients): group supplier-specific browser records"
 - Consumes: `IngredientVariantInput`, `NutrientDefinition`, `VariantComparison`.
 - Produces: `calculateCompleteness(input, definitions)` and `buildVariantComparison(group, ids, definitions)`.
 
-- [ ] **Step 1: Write failing unknown/zero and density tests**
+- [x] **Step 1: Write failing unknown/zero and density tests**
 
 ```ts
 it("counts confirmed zero as present and null as missing", () => {
@@ -358,13 +358,13 @@ it("requires density only for per-100ml source data", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/nutrition-model.test.ts`
 
 Expected: FAIL because `calculateCompleteness` does not exist.
 
-- [ ] **Step 3: Implement the exact completeness denominator**
+- [x] **Step 3: Implement the exact completeness denominator**
 
 The denominator is current price, source, eight built-in nutrient values, and density only for `per_100ml`. Optional model, internal code, research notes, and custom nutrients do not lower completeness.
 
@@ -386,17 +386,17 @@ export function calculateCompleteness(
 }
 ```
 
-- [ ] **Step 4: Build comparison rows without coercing unknown to zero**
+- [x] **Step 4: Build comparison rows without coercing unknown to zero**
 
 Return fixed rows for price, density, completeness, latest update, source, and research notes followed by one row per nutrient definition. Keep missing cells as `null`; never call `Number(null)`.
 
-- [ ] **Step 5: Wire both functions into `BrowserDemoApi` and run tests**
+- [x] **Step 5: Wire both functions into `BrowserDemoApi` and run tests**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/nutrition-model.test.ts src/api/browser-demo-api.test.ts`
 
 Expected: both test files PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/desktop/src/features/ingredients/nutrition-model.ts apps/desktop/src/features/ingredients/nutrition-model.test.ts apps/desktop/src/api/browser-demo-api.ts

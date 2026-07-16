@@ -22,6 +22,10 @@ import {
   type Supplier,
   type VariantComparison,
 } from "./types";
+import {
+  buildVariantComparison,
+  calculateCompleteness,
+} from "../features/ingredients/nutrition-model";
 
 interface BrowserDemoApiOptions {
   storage?: Storage;
@@ -391,16 +395,11 @@ export class BrowserDemoApi implements DesktopApi {
     const previous = input.id === undefined
       ? null
       : this.findVariant(state, input.id).variant;
-    const timestamp = this.now();
-    const variant: IngredientVariant = {
-      id: previous?.id ?? this.createId(),
-      materialGroupId: group.id,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+    const normalizedInput: IngredientVariantInput = {
+      ...input,
       modelOrSpecification: input.modelOrSpecification.trim(),
       internalCode: nullableText(input.internalCode),
       currentPrice: nullableText(input.currentPrice),
-      priceUnit: input.priceUnit,
       densityGPerMl: nullableText(input.densityGPerMl),
       source: input.source.trim(),
       researchNotes: input.researchNotes.trim(),
@@ -411,10 +410,26 @@ export class BrowserDemoApi implements DesktopApi {
           value: nullableText(value.value),
         })),
       },
-      completeness: previous?.completeness ?? {
-        percent: 0,
-        missingFields: [],
-      },
+    };
+    const completeness = calculateCompleteness(
+      normalizedInput,
+      state.nutrientDefinitions,
+    );
+    const timestamp = this.now();
+    const variant: IngredientVariant = {
+      id: previous?.id ?? this.createId(),
+      materialGroupId: group.id,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      modelOrSpecification: normalizedInput.modelOrSpecification,
+      internalCode: normalizedInput.internalCode,
+      currentPrice: normalizedInput.currentPrice,
+      priceUnit: normalizedInput.priceUnit,
+      densityGPerMl: normalizedInput.densityGPerMl,
+      source: normalizedInput.source,
+      researchNotes: normalizedInput.researchNotes,
+      nutrition: normalizedInput.nutrition,
+      completeness,
       createdAt: previous?.createdAt ?? timestamp,
       updatedAt: timestamp,
       archivedAt: null,
@@ -497,11 +512,11 @@ export class BrowserDemoApi implements DesktopApi {
   ): Promise<VariantComparison> {
     const state = this.read();
     const group = this.findGroup(state, materialGroupId);
-    const selected = group.variants.filter(
-      (variant) =>
-        variant.archivedAt === null && variantIds.includes(variant.id),
+    return buildVariantComparison(
+      group,
+      variantIds,
+      state.nutrientDefinitions,
     );
-    return { materialGroupId, variants: selected, rows: [] };
   }
 
   async getSetting<T>(key: string) {

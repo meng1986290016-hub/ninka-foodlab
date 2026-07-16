@@ -1,6 +1,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 import type { DesktopApi } from "./desktop-api";
+import { DesktopApiError } from "./types";
 import type {
   Category,
   DatabaseStatus,
@@ -15,6 +16,7 @@ import type {
   NutrientDefinition,
   Supplier,
   VariantComparison,
+  DesktopErrorCode,
 } from "./types";
 
 type Invoke = <T>(
@@ -22,8 +24,47 @@ type Invoke = <T>(
   args?: Record<string, unknown>,
 ) => Promise<T>;
 
+const desktopErrorCodes = new Set<DesktopErrorCode>([
+  "invalid_input",
+  "invalid_decimal",
+  "not_found",
+  "duplicate_code",
+  "duplicate_name",
+  "duplicate_variant",
+  "reference_conflict",
+  "conversion_unavailable",
+  "storage_failure",
+  "unknown",
+]);
+
+function toDesktopApiError(cause: unknown) {
+  if (cause instanceof Error) return cause;
+  if (typeof cause === "object" && cause !== null) {
+    const value = cause as { code?: unknown; field?: unknown; message?: unknown };
+    if (typeof value.message === "string") {
+      const code =
+        typeof value.code === "string" &&
+        desktopErrorCodes.has(value.code as DesktopErrorCode)
+          ? (value.code as DesktopErrorCode)
+          : "unknown";
+      return new DesktopApiError(
+        code,
+        value.message,
+        typeof value.field === "string" ? value.field : undefined,
+      );
+    }
+  }
+  return new DesktopApiError("unknown", "桌面命令执行失败");
+}
+
 export class TauriDesktopApi implements DesktopApi {
-  constructor(private readonly invoke: Invoke = tauriInvoke) {}
+  constructor(private readonly invokeCommand: Invoke = tauriInvoke) {}
+
+  private invoke<T>(command: string, args?: Record<string, unknown>) {
+    return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
+      throw toDesktopApiError(cause);
+    });
+  }
 
   listCategories() {
     return this.invoke<Category[]>("list_categories");

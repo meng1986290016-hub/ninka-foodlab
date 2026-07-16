@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { TauriDesktopApi } from "./tauri-desktop-api";
+import { DesktopApiError } from "./types";
 
 describe("TauriDesktopApi", () => {
   it("uses the grouped material list command contract", async () => {
@@ -37,6 +38,44 @@ describe("TauriDesktopApi", () => {
 
     expect(invoke).toHaveBeenCalledWith("save_ingredient_variant", { input });
     expect(invoke.mock.calls[0]?.[1]?.input).not.toHaveProperty("updatedAt");
+  });
+
+  it("maps comparison and versioned drafts to camel-case payloads", async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    const api = new TauriDesktopApi(invoke);
+
+    await api.compareIngredientVariants("material-1", ["variant-1", "variant-2"]);
+    await api.saveDraft("ingredient-variant-editor", "new:material-1", 2, {
+      currentPrice: "31.50",
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "compare_ingredient_variants", {
+      materialGroupId: "material-1",
+      variantIds: ["variant-1", "variant-2"],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "save_draft", {
+      kind: "ingredient-variant-editor",
+      key: "new:material-1",
+      payloadVersion: 2,
+      payload: { currentPrice: "31.50" },
+    });
+  });
+
+  it("maps structured native failures without exposing storage details", async () => {
+    const invoke = vi.fn().mockRejectedValue({
+      code: "storage_failure",
+      message: "数据库操作失败",
+      field: null,
+    });
+    const api = new TauriDesktopApi(invoke);
+
+    const failure = await api.listCategories().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(DesktopApiError);
+    expect(failure).toMatchObject({
+      code: "storage_failure",
+      message: "数据库操作失败",
+    });
   });
 
   it("uses the stable list command contract", async () => {

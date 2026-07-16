@@ -801,7 +801,7 @@ git commit -m "feat(storage): persist supplier-specific ingredients"
 - Consumes: Rust repository and Task 1 `DesktopApi` methods.
 - Produces: Tauri commands with snake_case command names and camelCase JSON payloads, verified against the already conforming `TauriDesktopApi` from Task 1.
 
-- [ ] **Step 1: Write failing command-contract tests**
+- [x] **Step 1: Write failing command-contract tests**
 
 ```ts
 it("saves a supplier variant without sending updatedAt", async () => {
@@ -815,23 +815,23 @@ it("saves a supplier variant without sending updatedAt", async () => {
 
 Rust serialization tests must assert that unknown nutrient JSON is `null`, confirmed zero is `"0"`, and repository errors serialize as `{ code, message, field }` without a DB path or SQL.
 
-- [ ] **Step 2: Run TypeScript and Rust tests and verify failure**
+- [x] **Step 2: Run TypeScript and Rust tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/api/tauri-desktop-api.test.ts && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test ingredient_commands`
 
 Expected: FAIL because commands and mappings are incomplete.
 
-- [ ] **Step 3: Implement command handlers and adapter methods**
+- [x] **Step 3: Implement command handlers and adapter methods**
 
 Commands perform deserialization, application-state lookup, repository call and structured error mapping only. Register every Task 1 method. Do not place nutrition calculations, completeness rules or UI defaults in Rust commands.
 
-- [ ] **Step 4: Run all contract tests**
+- [x] **Step 4: Run all contract tests**
 
 Run: `pnpm --filter @food-rd/desktop test && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
 
 Expected: all TypeScript and Rust tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src-tauri/src apps/desktop/src-tauri/tests apps/desktop/src/api/tauri-desktop-api.test.ts

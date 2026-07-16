@@ -421,11 +421,11 @@ git commit -m "feat(ingredients): calculate variant data completeness"
 - Consumes: `DesktopApi.listMaterialGroups`, `MaterialGroup`, and `IngredientVariant`.
 - Produces: an expandable list with group-level name/category/count and variant-level supplier/model/price/completeness/updatedAt/actions.
 
-- [ ] **Step 1: Generate and inspect the updated visual concept**
+- [x] **Step 1: Generate and inspect the updated visual concept**
 
 Use the approved sage-green desktop visual language and generate one concept showing an expanded “脱脂乳粉” group, three indented supplier variants, supplier completeness, per-variant update dates, and a right-side comparison drawer. Inspect the image with `view_image` and save the accepted reference at the exact path above. Do not change the approved information architecture while translating the concept to code.
 
-- [ ] **Step 2: Rewrite the failing user-flow tests**
+- [x] **Step 2: Rewrite the failing user-flow tests**
 
 ```tsx
 it("expands a common material to show supplier-specific rows", async () => {
@@ -444,19 +444,19 @@ it("searches supplier, model and research notes", async () => {
 });
 ```
 
-- [ ] **Step 3: Run tests and verify the flat table fails**
+- [x] **Step 3: Run tests and verify the flat table fails**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/IngredientLibrary.test.tsx`
 
 Expected: FAIL because group expand controls and supplier rows are absent.
 
-- [ ] **Step 4: Implement focused group and variant row components**
+- [x] **Step 4: Implement focused group and variant row components**
 
 `MaterialGroupRow` renders one `<tr>` with the accessible button name `展开 <name>` or `收起 <name>`. `VariantRow` renders a visually indented `<tr>` and accessible actions `编辑 <material> · <supplier>`, `复制 <material> · <supplier>`, and `归档 <material> · <supplier>`.
 
 Do not display `MaterialGroup.updatedAt`; show `variant.updatedAt` only on variant rows. Preserve the horizontal table container on narrow viewports instead of converting rows to cards.
 
-- [ ] **Step 5: Update styling**
+- [x] **Step 5: Update styling**
 
 ```css
 .material-group-row { background: var(--color-surface-muted); font-weight: 650; }
@@ -465,13 +465,13 @@ Do not display `MaterialGroup.updatedAt`; show `variant.updatedAt` only on varia
 .variant-row--selected { box-shadow: inset 3px 0 var(--color-accent); }
 ```
 
-- [ ] **Step 6: Run interaction tests, typecheck, and build**
+- [x] **Step 6: Run interaction tests, typecheck, and build**
 
 Run: `pnpm --filter @food-rd/desktop test && pnpm --filter @food-rd/desktop typecheck && pnpm --filter @food-rd/desktop build`
 
 Expected: desktop tests PASS and build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/design/phase-2-supplier-ingredient-concept.png apps/desktop/src/features/ingredients apps/desktop/src/styles/app.css

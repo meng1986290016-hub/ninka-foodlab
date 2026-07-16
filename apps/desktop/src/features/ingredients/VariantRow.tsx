@@ -6,6 +6,8 @@ interface VariantRowProps {
   onArchive: (variant: IngredientVariant) => void;
   onCopy?: ((variant: IngredientVariant) => void) | undefined;
   onEdit?: ((variant: IngredientVariant) => void) | undefined;
+  onSelectionChange: (variant: IngredientVariant, selected: boolean) => void;
+  selected: boolean;
   variant: IngredientVariant;
 }
 
@@ -26,14 +28,23 @@ export function VariantRow({
   onArchive,
   onCopy,
   onEdit,
+  onSelectionChange,
+  selected,
   variant,
 }: VariantRowProps) {
   const recordName = `${materialName} · ${variant.supplierName}`;
 
   return (
-    <tr className="variant-row">
-      <td aria-label={`${materialName} 的供应商版本`}>
+    <tr className={selected ? "variant-row variant-row--selected" : "variant-row"}>
+      <td>
         <span className="variant-branch" aria-hidden="true" />
+        <input
+          aria-label={`选择 ${recordName} 进行比较`}
+          checked={selected}
+          className="variant-select"
+          onChange={(event) => onSelectionChange(variant, event.target.checked)}
+          type="checkbox"
+        />
       </td>
       <td className="variant-category-placeholder">—</td>
       <td>{variant.supplierName}</td>

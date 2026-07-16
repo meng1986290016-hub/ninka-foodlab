@@ -11,6 +11,12 @@ interface IngredientTableProps {
   onAddVariant: (group: MaterialGroup) => void;
   onArchiveVariant: (variant: IngredientVariant) => void;
   onEditVariant?: (group: MaterialGroup, variant: IngredientVariant) => void;
+  onVariantSelectionChange: (
+    group: MaterialGroup,
+    variant: IngredientVariant,
+    selected: boolean,
+  ) => void;
+  selectedVariantIds: Set<string>;
   onToggle: (groupId: string) => void;
 }
 
@@ -21,6 +27,8 @@ export function IngredientTable({
   onAddVariant,
   onArchiveVariant,
   onEditVariant,
+  onVariantSelectionChange,
+  selectedVariantIds,
   onToggle,
 }: IngredientTableProps) {
   const variantCount = materialGroups.reduce(
@@ -66,6 +74,10 @@ export function IngredientTable({
                               ? (item) => onEditVariant(group, item)
                               : undefined
                           }
+                          onSelectionChange={(item, selected) =>
+                            onVariantSelectionChange(group, item, selected)
+                          }
+                          selected={selectedVariantIds.has(variant.id)}
                           variant={variant}
                         />
                       ))

@@ -673,7 +673,7 @@ git commit -m "feat(ingredients): recover supplier variant drafts"
 - Consumes: `DesktopApi.compareIngredientVariants` and `VariantComparison`.
 - Produces: group-scoped selection and a comparison drawer with rows for price, density, completeness, updated date, source, notes, and nutrients.
 
-- [ ] **Step 1: Write failing comparison tests**
+- [x] **Step 1: Write failing comparison tests**
 
 ```tsx
 it("compares variants only within one common material", async () => {
@@ -687,23 +687,23 @@ it("compares variants only within one common material", async () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/VariantComparisonDrawer.test.tsx`
 
 Expected: FAIL because comparison selection and drawer do not exist.
 
-- [ ] **Step 3: Implement scoped selection and comparison table**
+- [x] **Step 3: Implement scoped selection and comparison table**
 
 Selecting a variant in another group clears the previous group selection after confirmation. Require at least two IDs. Render `null` cells as `未知`; do not apply numeric high/low styling when either compared cell is unknown. Allow two or more variant columns with horizontal scrolling.
 
-- [ ] **Step 4: Run comparison and full desktop tests**
+- [x] **Step 4: Run comparison and full desktop tests**
 
 Run: `pnpm --filter @food-rd/desktop test`
 
 Expected: all desktop tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/features/ingredients apps/desktop/src/styles/app.css

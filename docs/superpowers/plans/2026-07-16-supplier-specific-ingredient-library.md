@@ -728,13 +728,13 @@ git commit -m "feat(ingredients): compare supplier variants"
 - Consumes: Task 1 JSON field names and null semantics.
 - Produces: `IngredientRepository` methods matching the grouped `DesktopApi` and one transaction for variant plus nutrient writes.
 
-- [ ] **Step 1: Install/verify Rust before writing Rust code**
+- [x] **Step 1: Install/verify Rust before writing Rust code**
 
 Run: `rustc --version && cargo --version && xcode-select -p`
 
 Expected: stable Rust, Cargo, and `/Library/Developer/CommandLineTools` are reported. If Rust is absent, obtain user approval and install stable Rust with rustfmt and Clippy; do not write untestable Rust first.
 
-- [ ] **Step 2: Write failing repository tests**
+- [x] **Step 2: Write failing repository tests**
 
 ```rust
 #[test]
@@ -757,29 +757,29 @@ fn unknown_and_confirmed_zero_round_trip_distinctly() {
 }
 ```
 
-- [ ] **Step 3: Run tests and verify failure**
+- [x] **Step 3: Run tests and verify failure**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test ingredient_repository`
 
 Expected: FAIL because migration and repository are missing.
 
-- [ ] **Step 4: Create the exact normalized schema**
+- [x] **Step 4: Create the exact normalized schema**
 
 The migration creates `categories`, `material_groups`, `suppliers`, `ingredient_variants`, `nutrient_definitions`, `ingredient_nutrient_values`, `app_settings`, `workspace_drafts`, and `schema_migrations`. Use `TEXT` for UUIDs, decimals, RFC3339 timestamps, basis and units; use nullable `TEXT` for unknown numeric values. Add foreign keys and indexes for group name, supplier name, variant group/supplier, category reference, archived status and updated time.
 
 Seed the eight built-in nutrient definitions with stable IDs/codes: `energy`, `protein`, `fat`, `saturated_fat`, `carbohydrate`, `sugars`, `dietary_fiber`, and `sodium`.
 
-- [ ] **Step 5: Implement repository transactions**
+- [x] **Step 5: Implement repository transactions**
 
 `save_variant` validates decimal strings, begins a transaction, inserts/updates the variant, replaces its nutrient rows, calculates committed `updated_at` from the repository clock, and commits. On any error, rusqlite drop rollback preserves both data and timestamp. Category/supplier/group archive methods reject active references with structured error codes.
 
-- [ ] **Step 6: Run Rust quality gates**
+- [x] **Step 6: Run Rust quality gates**
 
 Run: `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check && cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
 
 Expected: fmt, Clippy, and all Rust tests PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/desktop/src-tauri

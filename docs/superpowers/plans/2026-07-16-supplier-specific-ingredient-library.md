@@ -853,7 +853,7 @@ git commit -m "feat(desktop): expose supplier ingredient commands"
 - Consumes: complete browser and Tauri implementations.
 - Produces: reproducible verification evidence and updated user instructions.
 
-- [ ] **Step 1: Run the full automated verification**
+- [x] **Step 1: Run the full automated verification**
 
 ```bash
 pnpm install --frozen-lockfile
@@ -867,23 +867,23 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 Expected: existing 27 core tests, all desktop tests, all Rust tests, typecheck, frontend build, fmt and Clippy PASS.
 
-- [ ] **Step 2: Verify browser migration and workflow**
+- [x] **Step 2: Verify browser migration and workflow**
 
 Start `pnpm dev:desktop`, load existing schema-v1 demo data, and confirm it becomes grouped schema-v2 data without loss. Create “脱脂乳粉”, custom category “蛋白原料”, three suppliers, three variants, distinct price/nutrition values, one confirmed zero and one unknown. Expand, search, copy, edit, compare, archive and recover a draft.
 
-- [ ] **Step 3: Verify responsive rendering**
+- [x] **Step 3: Verify responsive rendering**
 
 Use Browser/IAB first; if unavailable, record the failure and use Playwright Chromium. Capture 1280×800 with the group expanded and comparison drawer open, plus 620×800. Use `view_image` on the accepted concept and latest screenshots. Check group hierarchy, supplier rows, nutrition tab, palette, typography, table density, drawer width, focus states and horizontal overflow.
 
-- [ ] **Step 4: Verify real Tauri persistence**
+- [x] **Step 4: Verify real Tauri persistence**
 
 Start `pnpm tauri dev`, repeat create/edit in the native window, quit, reopen and verify SQLite data and timestamps persist. Deliberately leave a supplier draft, restart and confirm restore/discard. Confirm no shell permission and no unrestricted filesystem capability are enabled.
 
-- [ ] **Step 5: Update CI and documentation**
+- [x] **Step 5: Update CI and documentation**
 
 CI runs pnpm install/test/typecheck/build and Rust fmt/clippy/test on macOS and Windows. README explains browser demo versus SQLite, custom category creation, supplier variants, nutrition null/zero behavior, database location and reset procedure.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/ci.yml apps/desktop/README.md docs/testing

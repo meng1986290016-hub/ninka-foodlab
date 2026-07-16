@@ -2,6 +2,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use food_rd_desktop::ingredients::{
     model::{IngredientVariantInput, MaterialGroupInput, VariantNutrition, VariantNutritionValue},
@@ -320,4 +321,35 @@ fn settings_drafts_and_database_status_round_trip_json() {
     assert_eq!(status.mode, "sqlite");
     assert_eq!(status.schema_version, 1);
     assert!(status.healthy);
+}
+
+#[test]
+fn file_database_reopens_without_losing_committed_records() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "food-rd-persistence-{}-{suffix}.sqlite3",
+        std::process::id()
+    ));
+    {
+        let mut repository = IngredientRepository::open(&path).unwrap();
+        repository.create_category("重启持久化分类").unwrap();
+        repository
+            .set_setting("restart-check", &json!({ "persisted": true }))
+            .unwrap();
+    }
+    {
+        let repository = IngredientRepository::open(&path).unwrap();
+        assert_eq!(
+            repository.list_categories().unwrap()[0].name,
+            "重启持久化分类"
+        );
+        assert_eq!(
+            repository.get_setting("restart-check").unwrap(),
+            Some(json!({ "persisted": true }))
+        );
+    }
+    std::fs::remove_file(path).unwrap();
 }

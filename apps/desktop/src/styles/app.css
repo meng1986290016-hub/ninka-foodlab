@@ -593,12 +593,173 @@ tbody tr:hover {
   font-weight: 680;
 }
 
+.drawer-header p {
+  margin: 3px 0 0;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
 .ingredient-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4) var(--space-3);
   padding: var(--space-5);
   overflow-y: auto;
+}
+
+.variant-form {
+  align-content: start;
+}
+
+.editor-tabs {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.editor-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.editor-tabs button.is-active {
+  background: var(--color-canvas);
+  color: var(--color-accent);
+  box-shadow: 0 1px 4px rgb(22 42 32 / 10%);
+}
+
+.variant-panel {
+  grid-column: 1 / -1;
+}
+
+.variant-panel[hidden] {
+  display: none;
+}
+
+.variant-fields,
+.nutrition-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-3);
+}
+
+.readonly-meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-soft);
+  font-size: 12px;
+}
+
+.readonly-meta strong {
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.readonly-meta small {
+  grid-column: 1 / -1;
+  color: var(--color-ink-muted);
+}
+
+.more-fields {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.more-fields .field {
+  width: 100%;
+}
+
+.nutrition-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-warning);
+  background: #fff8eb;
+  color: var(--color-ink-soft);
+  font-size: 12px;
+}
+
+.nutrition-table {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.nutrition-table__header,
+.nutrition-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 50px;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+}
+
+.nutrition-table__header {
+  background: var(--color-table-header);
+  color: var(--color-ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.nutrition-row {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  font-weight: 520;
+}
+
+.nutrition-row input {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  outline: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.nutrition-row input:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px rgb(11 131 80 / 10%);
+}
+
+.nutrition-unit {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.nutrition-add-button {
+  justify-self: start;
+}
+
+.custom-nutrient-form {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.custom-nutrient-form .button {
+  grid-column: 1 / -1;
 }
 
 .draft-notice {

@@ -8,6 +8,7 @@ interface IngredientTableProps {
   expandedIds: Set<string>;
   loading: boolean;
   materialGroups: MaterialGroup[];
+  onAddVariant: (group: MaterialGroup) => void;
   onArchiveVariant: (variant: IngredientVariant) => void;
   onEditVariant?: (group: MaterialGroup, variant: IngredientVariant) => void;
   onToggle: (groupId: string) => void;
@@ -17,6 +18,7 @@ export function IngredientTable({
   expandedIds,
   loading,
   materialGroups,
+  onAddVariant,
   onArchiveVariant,
   onEditVariant,
   onToggle,
@@ -50,6 +52,7 @@ export function IngredientTable({
                   <MaterialGroupRow
                     expanded={expanded}
                     group={group}
+                    onAddVariant={() => onAddVariant(group)}
                     onToggle={() => onToggle(group.id)}
                   />
                   {expanded
@@ -59,7 +62,7 @@ export function IngredientTable({
                           materialName={group.name}
                           onArchive={onArchiveVariant}
                           onEdit={
-                            group.variants.length === 1 && onEditVariant
+                            onEditVariant
                               ? (item) => onEditVariant(group, item)
                               : undefined
                           }

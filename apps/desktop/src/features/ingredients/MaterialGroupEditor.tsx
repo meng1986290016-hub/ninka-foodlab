@@ -97,10 +97,10 @@ export function MaterialGroupEditor({
         ) : null}
 
         <div className="drawer-actions">
-          <button className="secondary-button" onClick={onCancel} type="button">
+          <button className="button button--secondary" onClick={onCancel} type="button">
             取消
           </button>
-          <button className="primary-button" disabled={saving} type="submit">
+          <button className="button button--primary" disabled={saving} type="submit">
             {saving ? "正在保存…" : "保存通用原料"}
           </button>
         </div>

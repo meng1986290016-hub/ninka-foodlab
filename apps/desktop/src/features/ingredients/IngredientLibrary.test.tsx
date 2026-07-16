@@ -170,4 +170,46 @@ describe("ingredient library supplier hierarchy", () => {
     const supplierRow = screen.getByRole("row", { name: /供应商A/ });
     expect(within(supplierRow).getByText("2026/07/16")).not.toBeNull();
   });
+
+  it("creates the common material before opening its first supplier version", async () => {
+    const user = userEvent.setup();
+    render(<App api={api} />);
+    await screen.findByText("脱脂乳粉");
+
+    await user.click(screen.getByRole("button", { name: "新建原料" }));
+    expect(
+      screen.getByRole("dialog", { name: "新建通用原料" }),
+    ).not.toBeNull();
+    await user.type(screen.getByLabelText("原料名称"), "燕麦粉");
+    await user.click(screen.getByRole("button", { name: "保存通用原料" }));
+
+    const variantEditor = await screen.findByRole("dialog", {
+      name: "新建供应商版本",
+    });
+    expect(within(variantEditor).getByText("燕麦粉")).not.toBeNull();
+  });
+
+  it("adds or edits a supplier version from an expanded material group", async () => {
+    const user = userEvent.setup();
+    render(<App api={api} />);
+    await screen.findByText("脱脂乳粉");
+
+    await user.click(
+      screen.getByRole("button", { name: "为 脱脂乳粉 添加供应商版本" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "新建供应商版本" }),
+    ).not.toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "关闭供应商版本编辑器" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "展开 脱脂乳粉" }));
+    await user.click(
+      screen.getByRole("button", { name: "编辑 脱脂乳粉 · 供应商B" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "编辑供应商版本" }),
+    ).not.toBeNull();
+  });
 });

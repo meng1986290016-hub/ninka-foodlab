@@ -548,7 +548,7 @@ git commit -m "feat(ingredients): create custom categories and suppliers"
 - Consumes: `IngredientVariantInput`, supplier combobox, nutrient definitions, and `DesktopApi.saveIngredientVariant`.
 - Produces: `VariantEditor` with tabs `基本信息` and `营养成分` and no user-editable date.
 
-- [ ] **Step 1: Write failing form and nutrition tests**
+- [x] **Step 1: Write failing form and nutrition tests**
 
 ```tsx
 it("keeps internal code optional and hides it under more fields", async () => {
@@ -575,27 +575,27 @@ it("preserves blank as unknown and typed zero as confirmed zero", async () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/VariantEditor.test.tsx`
 
 Expected: FAIL because `VariantEditor` and tabs are missing.
 
-- [ ] **Step 3: Implement basic fields**
+- [x] **Step 3: Implement basic fields**
 
 Render supplier, model/specification, current price, price unit, density, source, and research notes. Put nullable internal code behind `更多字段`. Render `最新更新日期` as read-only text only for an existing variant; never place `updatedAt` in form state or API input.
 
-- [ ] **Step 4: Implement the nutrition table**
+- [x] **Step 4: Implement the nutrition table**
 
 Render the basis selector first, then one row per built-in definition with number input and fixed unit. Map `""` to `null` and preserve the string `"0"`. Add `添加自定义成分`, which creates a definition by name/unit and appends its row. For `per_100ml` with missing density, show a non-blocking warning: `可以保存原始营养数据，但无法换算为质量基准。`
 
-- [ ] **Step 5: Run tests, typecheck, and build**
+- [x] **Step 5: Run tests, typecheck, and build**
 
 Run: `pnpm --filter @food-rd/desktop test && pnpm --filter @food-rd/desktop typecheck && pnpm --filter @food-rd/desktop build`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/desktop/src/features/ingredients apps/desktop/src/styles/app.css
@@ -616,7 +616,7 @@ git commit -m "feat(ingredients): edit supplier nutrition records"
 - Consumes: `IngredientVariantInput` and existing draft API.
 - Produces: draft kind `ingredient-variant-editor`, payload version 2, explicit restore/discard, and clear-after-commit behavior.
 
-- [ ] **Step 1: Write failing versioned-draft tests**
+- [x] **Step 1: Write failing versioned-draft tests**
 
 ```tsx
 it("does not apply a v1 flat ingredient draft to the v2 variant editor", async () => {
@@ -635,23 +635,23 @@ it("restores a v2 draft only after confirmation and clears it after commit", asy
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/ingredient-draft.test.tsx`
 
 Expected: FAIL because draft kind/version and payload remain v1.
 
-- [ ] **Step 3: Implement draft v2**
+- [x] **Step 3: Implement draft v2**
 
 Use a 500ms debounce. The draft key is the variant ID or `new:<materialGroupId>`. Store supplier selection, basic fields, nutrition basis and nutrient strings. Saving a formal variant clears only its matching draft after the API commit resolves. Closing the editor does not clear it.
 
-- [ ] **Step 4: Run draft and editor tests**
+- [x] **Step 4: Run draft and editor tests**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/ingredients/ingredient-draft.test.tsx src/features/ingredients/VariantEditor.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/features/ingredients

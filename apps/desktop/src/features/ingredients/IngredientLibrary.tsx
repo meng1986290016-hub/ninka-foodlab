@@ -1,61 +1,43 @@
 import { useDeferredValue, useState } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
-import type {
-  Ingredient,
-  IngredientInput,
-  IngredientVariant,
-  MaterialGroup,
-} from "../../api/types";
+import type { IngredientVariant, MaterialGroup, MaterialGroupInput } from "../../api/types";
 import { Icon } from "../../components/Icon";
-import { IngredientEditor } from "./IngredientEditor";
 import { IngredientTable } from "./IngredientTable";
+import { MaterialGroupEditor } from "./MaterialGroupEditor";
 import { useIngredients } from "./useIngredients";
+import { VariantEditor } from "./VariantEditor";
 
 interface IngredientLibraryProps {
   api: DesktopApi;
 }
 
-function legacyIngredientFor(
-  group: MaterialGroup,
-  variant: IngredientVariant,
-): Ingredient {
-  return {
-    id: group.id,
-    name: group.name,
-    internalCode: variant.internalCode ?? "",
-    category: group.categoryName ?? "",
-    tags: [],
-    notes: variant.researchNotes,
-    densityGPerMl: variant.densityGPerMl,
-    currentPrice: variant.currentPrice ?? "",
-    priceUnit: variant.priceUnit,
-    priceUpdatedAt: variant.updatedAt.slice(0, 10),
-    source: variant.source,
-    sourceDate: variant.updatedAt.slice(0, 10),
-    completeness: variant.completeness.percent,
-    createdAt: variant.createdAt,
-    updatedAt: variant.updatedAt,
-    archivedAt: variant.archivedAt,
-  };
-}
+type EditorState =
+  | { kind: "material-group" }
+  | {
+      kind: "variant";
+      group: MaterialGroup;
+      variant: IngredientVariant | null;
+    };
 
 export function IngredientLibrary({ api }: IngredientLibraryProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
-  const [editor, setEditor] = useState<Ingredient | "new" | null>(null);
-  const {
-    archiveVariant,
-    error,
-    loading,
-    materialGroups,
-    saveLegacyIngredient,
-  } = useIngredients(api, deferredQuery);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const { archiveVariant, error, loading, materialGroups, refresh } =
+    useIngredients(api, deferredQuery);
 
-  async function handleSave(input: IngredientInput, id?: string) {
-    await saveLegacyIngredient(input, id);
-    await api.clearDraft("ingredient-editor", id ?? "new");
+  async function handleCreateGroup(input: MaterialGroupInput) {
+    const group = await api.createMaterialGroup(input);
+    refresh();
+    setExpandedIds((current) => new Set(current).add(group.id));
+    setEditor({ kind: "variant", group, variant: null });
+  }
+
+  function handleVariantSaved(group: MaterialGroup) {
+    refresh();
+    setExpandedIds((current) => new Set(current).add(group.id));
     setEditor(null);
   }
 
@@ -85,7 +67,7 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
           </div>
           <button
             className="button button--primary new-ingredient-button"
-            onClick={() => setEditor("new")}
+            onClick={() => setEditor({ kind: "material-group" })}
             type="button"
           >
             <Icon name="plus" size={18} />
@@ -121,20 +103,31 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
           expandedIds={expandedIds}
           loading={loading}
           materialGroups={materialGroups}
+          onAddVariant={(group) =>
+            setEditor({ kind: "variant", group, variant: null })
+          }
           onArchiveVariant={(variant) => void handleArchiveVariant(variant)}
           onEditVariant={(group, variant) =>
-            setEditor(legacyIngredientFor(group, variant))
+            setEditor({ kind: "variant", group, variant })
           }
           onToggle={toggleGroup}
         />
       </div>
 
-      {editor ? (
-        <IngredientEditor
+      {editor?.kind === "material-group" ? (
+        <MaterialGroupEditor
           api={api}
-          ingredient={editor === "new" ? null : editor}
           onCancel={() => setEditor(null)}
-          onSave={handleSave}
+          onSave={handleCreateGroup}
+        />
+      ) : null}
+      {editor?.kind === "variant" ? (
+        <VariantEditor
+          api={api}
+          group={editor.group}
+          onCancel={() => setEditor(null)}
+          onSaved={() => handleVariantSaved(editor.group)}
+          variant={editor.variant}
         />
       ) : null}
     </section>

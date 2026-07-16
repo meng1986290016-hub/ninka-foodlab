@@ -4,12 +4,14 @@ import { Icon } from "../../components/Icon";
 interface MaterialGroupRowProps {
   expanded: boolean;
   group: MaterialGroup;
+  onAddVariant: () => void;
   onToggle: () => void;
 }
 
 export function MaterialGroupRow({
   expanded,
   group,
+  onAddVariant,
   onToggle,
 }: MaterialGroupRowProps) {
   const action = expanded ? "收起" : "展开";
@@ -38,7 +40,17 @@ export function MaterialGroupRow({
       <td aria-label="组级价格不适用">—</td>
       <td aria-label="组级完整度不适用">—</td>
       <td aria-label="组级更新日期不显示">—</td>
-      <td />
+      <td className="row-actions">
+        <button
+          aria-label={`为 ${group.name} 添加供应商版本`}
+          className="icon-button"
+          onClick={onAddVariant}
+          title="添加供应商版本"
+          type="button"
+        >
+          <Icon name="plus" size={17} />
+        </button>
+      </td>
     </tr>
   );
 }

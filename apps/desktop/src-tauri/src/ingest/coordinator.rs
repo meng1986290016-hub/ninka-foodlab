@@ -363,14 +363,11 @@ impl IngredientIngestCoordinator {
         write_library_export(destination, format, &reviews)
     }
 
-    pub fn cleanup_orphan_attachments(&self) -> Result<usize, IngestError> {
-        let mut statement = self
-            .ingredients
-            .connection
-            .prepare("SELECT sha256 FROM source_attachments")?;
-        let hashes = statement
-            .query_map([], |row| row.get::<_, String>(0))?
-            .collect::<Result<HashSet<_>, _>>()?;
+    pub fn cleanup_orphan_attachments(&mut self) -> Result<usize, IngestError> {
+        let hashes = repository::referenced_attachment_hashes(&self.ingredients.connection)?;
+        let transaction = self.ingredients.connection.transaction()?;
+        repository::prune_unreferenced_attachment_metadata(&transaction, &hashes)?;
+        transaction.commit()?;
         self.attachment_store.remove_orphans(&hashes)
     }
 

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::{
@@ -206,6 +208,83 @@ pub fn list_job_attachments(
         })?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
+}
+
+pub fn referenced_attachment_hashes(
+    connection: &Connection,
+) -> Result<HashSet<String>, IngestError> {
+    let mut statement = connection.prepare(
+        "SELECT DISTINCT a.sha256
+         FROM source_attachments a
+         WHERE EXISTS (
+           SELECT 1 FROM ingredient_variant_attachments va
+           WHERE va.attachment_id = a.id
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM import_draft_attachments da
+           JOIN ingredient_import_drafts d ON d.id = da.draft_id
+           WHERE da.attachment_id = a.id
+             AND d.status IN ('needs_review', 'ready', 'failed')
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM import_draft_source_links sl
+           JOIN ingredient_import_drafts d ON d.id = sl.draft_id
+           WHERE sl.attachment_id = a.id
+             AND d.status IN ('needs_review', 'ready', 'failed')
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM ingredient_import_job_attachments ja
+           JOIN ingredient_import_jobs j ON j.id = ja.job_id
+           WHERE ja.attachment_id = a.id
+             AND j.status IN ('pending', 'extracting', 'recognizing', 'grouping', 'failed')
+         )",
+    )?;
+    statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<HashSet<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn prune_unreferenced_attachment_metadata(
+    transaction: &Transaction<'_>,
+    referenced_hashes: &HashSet<String>,
+) -> Result<usize, IngestError> {
+    let mut statement = transaction.prepare("SELECT id, sha256 FROM source_attachments")?;
+    let orphan_ids = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .filter_map(|row| match row {
+            Ok((id, hash)) if !referenced_hashes.contains(&hash) => Some(Ok(id)),
+            Ok(_) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(statement);
+
+    for id in &orphan_ids {
+        transaction.execute(
+            "DELETE FROM import_draft_source_links WHERE attachment_id = ?1",
+            [id],
+        )?;
+        transaction.execute(
+            "DELETE FROM import_draft_attachments WHERE attachment_id = ?1",
+            [id],
+        )?;
+        transaction.execute(
+            "DELETE FROM ingredient_import_job_attachments WHERE attachment_id = ?1",
+            [id],
+        )?;
+        transaction.execute(
+            "DELETE FROM attachment_extractions WHERE attachment_id = ?1",
+            [id],
+        )?;
+        transaction.execute("DELETE FROM source_attachments WHERE id = ?1", [id])?;
+    }
+    Ok(orphan_ids.len())
 }
 
 pub fn save_extraction(

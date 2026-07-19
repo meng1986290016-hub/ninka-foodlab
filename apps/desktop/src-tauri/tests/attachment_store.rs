@@ -2,10 +2,10 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use food_rd_desktop::ingest::attachment_store::AttachmentStore;
+use uuid::Uuid;
 
 struct AttachmentFixture {
     root: PathBuf,
@@ -15,14 +15,7 @@ struct AttachmentFixture {
 
 impl AttachmentFixture {
     fn new() -> Self {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "food-rd-attachment-test-{}-{unique}",
-            std::process::id()
-        ));
+        let root = std::env::temp_dir().join(format!("food-rd-attachment-test-{}", Uuid::new_v4()));
         let source_root = root.join("sources");
         let store_root = root.join("stored");
         fs::create_dir_all(&source_root).unwrap();

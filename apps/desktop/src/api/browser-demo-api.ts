@@ -501,9 +501,13 @@ export class BrowserDemoApi implements DesktopApi {
   cleanupOrphanAttachments() {
     const state = this.read();
     const referenced = new Set(
-      Object.values(state.importDrafts).flatMap((draft) =>
-        draft.attachments.map((attachment) => attachment.id),
-      ),
+      Object.values(state.importDrafts)
+        .filter((draft) =>
+          draft.status === "needs_review" ||
+          draft.status === "ready" ||
+          draft.status === "failed"
+        )
+        .flatMap((draft) => draft.attachments.map((attachment) => attachment.id)),
     );
     for (const group of state.materialGroups) {
       for (const variant of group.variants) {
@@ -517,7 +521,23 @@ export class BrowserDemoApi implements DesktopApi {
         removed += 1;
       }
     }
-    if (removed > 0) this.write(state);
+    if (removed > 0) {
+      state.importDrafts = Object.fromEntries(
+        Object.entries(state.importDrafts).map(([id, draft]) => [
+          id,
+          {
+            ...draft,
+            attachments: draft.attachments.filter(
+              (attachment) => state.attachments[attachment.id] !== undefined,
+            ),
+            sourceLinks: draft.sourceLinks.filter(
+              (link) => state.attachments[link.attachmentId] !== undefined,
+            ),
+          },
+        ]),
+      );
+      this.write(state);
+    }
     return Promise.resolve(removed);
   }
 

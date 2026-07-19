@@ -5,7 +5,10 @@ use std::sync::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use food_rd_desktop::ingredients::{
-    model::{IngredientVariantInput, MaterialGroupInput, VariantNutrition, VariantNutritionValue},
+    model::{
+        IngredientVariantAllergens, IngredientVariantInput, MaterialGroupInput, VariantNutrition,
+        VariantNutritionValue,
+    },
     repository::IngredientRepository,
 };
 use serde_json::json;
@@ -72,6 +75,7 @@ impl Fixture {
                     },
                 ],
             },
+            allergens: IngredientVariantAllergens::default(),
             duplicate_confirmed: false,
         }
     }

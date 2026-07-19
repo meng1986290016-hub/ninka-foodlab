@@ -26,6 +26,14 @@ CREATE TABLE ingredient_import_jobs (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE ingredient_import_job_attachments (
+  job_id TEXT NOT NULL REFERENCES ingredient_import_jobs(id) ON DELETE CASCADE,
+  attachment_id TEXT NOT NULL REFERENCES source_attachments(id) ON DELETE RESTRICT,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (job_id, attachment_id),
+  UNIQUE (job_id, position)
+);
+
 CREATE TABLE ingredient_import_drafts (
   id TEXT PRIMARY KEY,
   job_id TEXT NOT NULL REFERENCES ingredient_import_jobs(id) ON DELETE CASCADE,
@@ -69,6 +77,9 @@ CREATE TABLE ingredient_variant_allergens (
 
 CREATE INDEX ingredient_import_jobs_status_idx
 ON ingredient_import_jobs(status, updated_at);
+
+CREATE INDEX ingredient_import_job_attachments_job_idx
+ON ingredient_import_job_attachments(job_id, position);
 
 CREATE INDEX ingredient_import_drafts_job_idx
 ON ingredient_import_drafts(job_id, position);

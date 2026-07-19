@@ -57,6 +57,24 @@ pub struct DataCompleteness {
     pub missing_fields: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredientVariantAllergens {
+    pub contains: Vec<String>,
+    pub may_contain: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredientSourceAttachment {
+    pub id: String,
+    pub original_name: String,
+    pub media_type: String,
+    pub byte_size: u64,
+    pub sha256: String,
+    pub created_at: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IngredientVariant {
@@ -72,6 +90,8 @@ pub struct IngredientVariant {
     pub source: String,
     pub research_notes: String,
     pub nutrition: VariantNutrition,
+    pub allergens: IngredientVariantAllergens,
+    pub source_attachments: Vec<IngredientSourceAttachment>,
     pub completeness: DataCompleteness,
     pub created_at: String,
     pub updated_at: String,
@@ -119,6 +139,8 @@ pub struct IngredientVariantInput {
     #[serde(default)]
     pub research_notes: String,
     pub nutrition: VariantNutrition,
+    #[serde(default)]
+    pub allergens: IngredientVariantAllergens,
     #[serde(default)]
     pub duplicate_confirmed: bool,
 }

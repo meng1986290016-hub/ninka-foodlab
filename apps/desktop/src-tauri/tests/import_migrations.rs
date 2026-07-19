@@ -36,6 +36,7 @@ fn fresh_database_applies_import_schema_version_two() {
         "source_attachments",
         "attachment_extractions",
         "ingredient_import_jobs",
+        "ingredient_import_job_attachments",
         "ingredient_import_drafts",
         "import_draft_attachments",
         "import_draft_source_links",

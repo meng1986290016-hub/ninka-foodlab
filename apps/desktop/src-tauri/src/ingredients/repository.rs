@@ -12,15 +12,16 @@ use uuid::Uuid;
 use crate::database::{self, migrations};
 
 use super::model::{
-    Category, DataCompleteness, DatabaseStatus, DraftRecord, IngredientVariant,
-    IngredientVariantInput, MaterialGroup, MaterialGroupInput, NutrientDefinition, Supplier,
-    VariantComparison, VariantComparisonRow, VariantNutrition, VariantNutritionValue,
+    Category, DataCompleteness, DatabaseStatus, DraftRecord, IngredientSourceAttachment,
+    IngredientVariant, IngredientVariantAllergens, IngredientVariantInput, MaterialGroup,
+    MaterialGroupInput, NutrientDefinition, Supplier, VariantComparison, VariantComparisonRow,
+    VariantNutrition, VariantNutritionValue,
 };
 
 const DECIMAL_ERROR: &str = "请输入不带单位的非负数值";
 
-type Clock = Arc<dyn Fn() -> String + Send + Sync>;
-type IdGenerator = Arc<dyn Fn() -> String + Send + Sync>;
+pub(crate) type Clock = Arc<dyn Fn() -> String + Send + Sync>;
+pub(crate) type IdGenerator = Arc<dyn Fn() -> String + Send + Sync>;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
@@ -96,9 +97,9 @@ impl From<serde_json::Error> for RepositoryError {
 }
 
 pub struct IngredientRepository {
-    connection: Connection,
-    clock: Clock,
-    create_id: IdGenerator,
+    pub(crate) connection: Connection,
+    pub(crate) clock: Clock,
+    pub(crate) create_id: IdGenerator,
 }
 
 impl IngredientRepository {
@@ -391,36 +392,12 @@ impl IngredientRepository {
 
     pub fn save_variant(
         &mut self,
-        mut input: IngredientVariantInput,
+        input: IngredientVariantInput,
     ) -> Result<IngredientVariant, RepositoryError> {
-        normalize_and_validate_variant(&mut input)?;
-        get_material_group(&self.connection, &input.material_group_id)?;
-        find_supplier(&self.connection, &input.supplier_id)?;
-        assert_unique_variant(&self.connection, &input)?;
-        assert_unique_internal_code(&self.connection, &input)?;
-
-        let previous_created_at = match input.id.as_deref() {
-            Some(id) => Some(get_variant_from_connection(&self.connection, id)?.created_at),
-            None => None,
-        };
-        let id = input.id.clone().unwrap_or_else(|| (self.create_id)());
-        let timestamp = (self.clock)();
-        let created_at = previous_created_at.unwrap_or_else(|| timestamp.clone());
-
+        let clock = Arc::clone(&self.clock);
+        let create_id = Arc::clone(&self.create_id);
         let transaction = self.connection.transaction()?;
-        upsert_variant(&transaction, &id, &input, &created_at, &timestamp)?;
-        transaction.execute(
-            "DELETE FROM ingredient_nutrient_values WHERE ingredient_variant_id = ?1",
-            [&id],
-        )?;
-        for value in &input.nutrition.values {
-            transaction.execute(
-                "INSERT INTO ingredient_nutrient_values
-                 (ingredient_variant_id, nutrient_definition_id, value)
-                 VALUES (?1, ?2, ?3)",
-                params![id, value.nutrient_definition_id, value.value],
-            )?;
-        }
+        let id = save_variant_in_transaction(&transaction, input, &clock, &create_id)?;
         transaction.commit()?;
         get_variant_from_connection(&self.connection, &id)
     }
@@ -458,6 +435,7 @@ impl IngredientRepository {
             source: source.source,
             research_notes: source.research_notes,
             nutrition: source.nutrition,
+            allergens: source.allergens,
             duplicate_confirmed: false,
         })
     }
@@ -791,7 +769,91 @@ fn normalize_and_validate_variant(
         value.value = nullable_text(value.value.take());
         validate_decimal(&value.value, &value.nutrient_definition_id)?;
     }
+    input.allergens.contains = normalized_unique(&input.allergens.contains);
+    input.allergens.may_contain = normalized_unique(&input.allergens.may_contain);
+    let contains = input
+        .allergens
+        .contains
+        .iter()
+        .map(|name| name.to_lowercase())
+        .collect::<Vec<_>>();
+    if input
+        .allergens
+        .may_contain
+        .iter()
+        .any(|name| contains.contains(&name.to_lowercase()))
+    {
+        return Err(RepositoryError::domain(
+            "invalid_input",
+            "同一过敏原不能同时标记为含有和可能含有",
+        ));
+    }
     Ok(())
+}
+
+fn normalized_unique(values: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for value in values {
+        let value = value.trim();
+        if !value.is_empty() && seen.insert(value.to_lowercase()) {
+            normalized.push(value.to_string());
+        }
+    }
+    normalized
+}
+
+pub(crate) fn save_variant_in_transaction(
+    transaction: &Transaction<'_>,
+    mut input: IngredientVariantInput,
+    clock: &Clock,
+    create_id: &IdGenerator,
+) -> Result<String, RepositoryError> {
+    normalize_and_validate_variant(&mut input)?;
+    get_material_group(transaction, &input.material_group_id)?;
+    find_supplier(transaction, &input.supplier_id)?;
+    assert_unique_variant(transaction, &input)?;
+    assert_unique_internal_code(transaction, &input)?;
+
+    let previous_created_at = match input.id.as_deref() {
+        Some(id) => Some(get_variant_from_connection(transaction, id)?.created_at),
+        None => None,
+    };
+    let id = input.id.clone().unwrap_or_else(|| create_id());
+    let timestamp = clock();
+    let created_at = previous_created_at.unwrap_or_else(|| timestamp.clone());
+
+    upsert_variant(transaction, &id, &input, &created_at, &timestamp)?;
+    transaction.execute(
+        "DELETE FROM ingredient_nutrient_values WHERE ingredient_variant_id = ?1",
+        [&id],
+    )?;
+    for value in &input.nutrition.values {
+        transaction.execute(
+            "INSERT INTO ingredient_nutrient_values
+             (ingredient_variant_id, nutrient_definition_id, value)
+             VALUES (?1, ?2, ?3)",
+            params![id, value.nutrient_definition_id, value.value],
+        )?;
+    }
+    transaction.execute(
+        "DELETE FROM ingredient_variant_allergens WHERE ingredient_variant_id = ?1",
+        [&id],
+    )?;
+    for (relation, names) in [
+        ("contains", &input.allergens.contains),
+        ("may_contain", &input.allergens.may_contain),
+    ] {
+        for name in names {
+            transaction.execute(
+                "INSERT INTO ingredient_variant_allergens
+                 (ingredient_variant_id, allergen_name, relation)
+                 VALUES (?1, ?2, ?3)",
+                params![id, name, relation],
+            )?;
+        }
+    }
+    Ok(id)
 }
 
 fn assert_unique_name(
@@ -1098,6 +1160,44 @@ fn hydrate_variant(
         .collect::<Result<Vec<_>, _>>()?;
     let definitions = list_nutrient_definitions(connection)?;
     let completeness = calculate_completeness(&raw, &values, &definitions);
+    let mut allergen_statement = connection.prepare(
+        "SELECT allergen_name, relation
+         FROM ingredient_variant_allergens
+         WHERE ingredient_variant_id = ?1
+         ORDER BY relation, allergen_name",
+    )?;
+    let allergen_rows = allergen_statement
+        .query_map([&raw.id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut allergens = IngredientVariantAllergens::default();
+    for (name, relation) in allergen_rows {
+        if relation == "contains" {
+            allergens.contains.push(name);
+        } else if relation == "may_contain" {
+            allergens.may_contain.push(name);
+        }
+    }
+    let mut attachment_statement = connection.prepare(
+        "SELECT a.id, a.original_name, a.media_type, a.byte_size, a.sha256, a.created_at
+         FROM ingredient_variant_attachments va
+         JOIN source_attachments a ON a.id = va.attachment_id
+         WHERE va.ingredient_variant_id = ?1
+         ORDER BY a.created_at, a.original_name",
+    )?;
+    let source_attachments = attachment_statement
+        .query_map([&raw.id], |row| {
+            Ok(IngredientSourceAttachment {
+                id: row.get(0)?,
+                original_name: row.get(1)?,
+                media_type: row.get(2)?,
+                byte_size: row.get::<_, i64>(3)? as u64,
+                sha256: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(IngredientVariant {
         id: raw.id,
         material_group_id: raw.material_group_id,
@@ -1114,6 +1214,8 @@ fn hydrate_variant(
             basis: raw.nutrition_basis,
             values,
         },
+        allergens,
+        source_attachments,
         completeness,
         created_at: raw.created_at,
         updated_at: raw.updated_at,

@@ -2,8 +2,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::ingredients::repository::RepositoryError;
 
-const INITIAL_VERSION: i64 = 1;
-const INITIAL_MIGRATION: &str = include_str!("../../migrations/0001_initial.sql");
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("../../migrations/0001_initial.sql")),
+    (
+        2,
+        include_str!("../../migrations/0002_ingredient_import.sql"),
+    ),
+];
 
 pub fn apply(connection: &mut Connection, applied_at: &str) -> Result<(), RepositoryError> {
     connection.execute_batch(
@@ -19,16 +24,19 @@ pub fn apply(connection: &mut Connection, applied_at: &str) -> Result<(), Reposi
         .optional()?
         .flatten()
         .unwrap_or(0);
-    if current >= INITIAL_VERSION {
-        return Ok(());
+    for (version, migration) in MIGRATIONS {
+        if *version <= current {
+            continue;
+        }
+
+        let transaction = connection.transaction()?;
+        transaction.execute_batch(migration)?;
+        transaction.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
+            params![version, applied_at],
+        )?;
+        transaction.commit()?;
     }
 
-    let transaction = connection.transaction()?;
-    transaction.execute_batch(INITIAL_MIGRATION)?;
-    transaction.execute(
-        "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
-        params![INITIAL_VERSION, applied_at],
-    )?;
-    transaction.commit()?;
     Ok(())
 }

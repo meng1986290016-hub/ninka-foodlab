@@ -1,5 +1,7 @@
 """Render and export Ninka FoodLab platform icons."""
 
+from dataclasses import dataclass
+from io import BytesIO
 from math import cos, pi, sin, sqrt
 from pathlib import Path
 import platform
@@ -15,8 +17,36 @@ from logo_geometry import COLORS, MODULES, VARIANTS, _module_fill
 
 APPROVED_PNG_SIZES = (16, 24, 32, 48, 64, 128, 256, 512, 1024)
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
-ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 PREVIEW_SHEET_SIZE = (1600, 1200)
+
+
+@dataclass(frozen=True)
+class IcnsRepresentation:
+    chunk_type: bytes
+    filename: str
+    point_size: int
+    scale: int
+
+    @property
+    def pixel_size(self) -> int:
+        return self.point_size * self.scale
+
+
+ICNS_REPRESENTATIONS = (
+    IcnsRepresentation(b"icp4", "icon_16x16.png", 16, 1),
+    IcnsRepresentation(b"ic11", "icon_16x16@2x.png", 16, 2),
+    IcnsRepresentation(b"icp5", "icon_32x32.png", 32, 1),
+    IcnsRepresentation(b"ic12", "icon_32x32@2x.png", 32, 2),
+    IcnsRepresentation(b"ic07", "icon_128x128.png", 128, 1),
+    IcnsRepresentation(b"ic13", "icon_128x128@2x.png", 128, 2),
+    IcnsRepresentation(b"ic08", "icon_256x256.png", 256, 1),
+    IcnsRepresentation(b"ic14", "icon_256x256@2x.png", 256, 2),
+    IcnsRepresentation(b"ic09", "icon_512x512.png", 512, 1),
+    IcnsRepresentation(b"ic10", "icon_512x512@2x.png", 512, 2),
+)
+ICNS_SIZES = tuple(
+    sorted({representation.pixel_size for representation in ICNS_REPRESENTATIONS})
+)
 
 _RENDER_SCALE = 4
 _VISUAL_EXTENT_RATIO = 0.57
@@ -199,7 +229,7 @@ def _draw_wordmark(
     draw.text((ninka_box[2] + gap, y), "FoodLab", font=regular, fill=color)
 
 
-def _preview_sheet(root: Path) -> Image.Image:
+def render_preview_sheet(root: Path) -> Image.Image:
     """Compose the reproducible contact sheet for visual QA."""
     sheet = Image.new("RGBA", PREVIEW_SHEET_SIZE, COLORS["cream"])
     draw = ImageDraw.Draw(sheet)
@@ -295,59 +325,138 @@ def _preview_sheet(root: Path) -> Image.Image:
     return sheet
 
 
-def _write_icns(platform_dir: Path) -> None:
-    if platform.system() != "Darwin":
-        return
+def write_fallback_icns(iconset: Path, target: Path) -> None:
+    """Write a PNG-backed ICNS from the canonical iconset representations."""
+    chunks = []
+    for representation in ICNS_REPRESENTATIONS:
+        payload = (iconset / representation.filename).read_bytes()
+        chunks.append(
+            representation.chunk_type
+            + struct.pack(">I", len(payload) + 8)
+            + payload
+        )
+    body = b"".join(chunks)
+    target.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
+
+
+def read_icns_representations(path: Path) -> dict[bytes, Image.Image]:
+    """Decode every required PNG representation from an ICNS container."""
+    data = path.read_bytes()
+    if len(data) < 8 or data[:4] != b"icns":
+        raise ValueError("invalid ICNS signature")
+    declared_length = struct.unpack(">I", data[4:8])[0]
+    if declared_length != len(data):
+        raise ValueError("invalid ICNS declared length")
+
+    expected = {
+        representation.chunk_type: representation
+        for representation in ICNS_REPRESENTATIONS
+    }
+    decoded: dict[bytes, Image.Image] = {}
+    offset = 8
+    while offset < len(data):
+        if offset + 8 > len(data):
+            raise ValueError("truncated ICNS chunk header")
+        chunk_type = data[offset : offset + 4]
+        chunk_length = struct.unpack(">I", data[offset + 4 : offset + 8])[0]
+        if chunk_length < 8 or offset + chunk_length > len(data):
+            raise ValueError("invalid ICNS chunk length")
+        payload = data[offset + 8 : offset + chunk_length]
+        offset += chunk_length
+
+        if payload.startswith(b"\x89PNG") and chunk_type not in expected:
+            raise ValueError(
+                f"unexpected ICNS PNG representation {chunk_type!r}"
+            )
+        if chunk_type not in expected:
+            continue
+        if chunk_type in decoded:
+            raise ValueError(f"duplicate ICNS representation {chunk_type!r}")
+        representation = expected[chunk_type]
+        try:
+            with Image.open(BytesIO(payload)) as image:
+                image.load()
+                if image.format != "PNG":
+                    raise ValueError(
+                        f"ICNS representation {chunk_type!r} is not PNG"
+                    )
+                if image.size != (representation.pixel_size,) * 2:
+                    raise ValueError(
+                        f"invalid ICNS representation size for {chunk_type!r}"
+                    )
+                decoded[chunk_type] = image.convert("RGBA").copy()
+        except OSError as error:
+            raise ValueError(
+                f"invalid ICNS PNG representation {chunk_type!r}"
+            ) from error
+
+    missing = set(expected) - set(decoded)
+    if missing:
+        raise ValueError(f"missing ICNS representations: {sorted(missing)!r}")
+    return decoded
+
+
+def validate_icns(path: Path) -> None:
+    """Validate every ICNS representation against deterministic rendering."""
+    decoded = read_icns_representations(path)
+    for representation in ICNS_REPRESENTATIONS:
+        expected = render_icon(
+            representation.pixel_size,
+            simplified=representation.pixel_size < 32,
+        )
+        actual = decoded[representation.chunk_type]
+        if actual.tobytes() != expected.tobytes():
+            raise ValueError(
+                f"ICNS content mismatch: {representation.filename}"
+            )
+
+
+def write_icns(platform_dir: Path) -> None:
+    """Write and validate ICNS output, using iconutil when available on macOS."""
     iconset = Path(
         tempfile.mkdtemp(prefix=".ninka-foodlab-", suffix=".iconset", dir=platform_dir)
     )
     target = platform_dir / "ninka-foodlab.icns"
-    iconset_sizes = {
-        "icon_16x16.png": 16,
-        "icon_16x16@2x.png": 32,
-        "icon_32x32.png": 32,
-        "icon_32x32@2x.png": 64,
-        "icon_128x128.png": 128,
-        "icon_128x128@2x.png": 256,
-        "icon_256x256.png": 256,
-        "icon_256x256@2x.png": 512,
-        "icon_512x512.png": 512,
-        "icon_512x512@2x.png": 1024,
-    }
-    for name, size in iconset_sizes.items():
-        render_icon(size, simplified=size < 32).save(iconset / name)
+    target.unlink(missing_ok=True)
+    for representation in ICNS_REPRESENTATIONS:
+        render_icon(
+            representation.pixel_size,
+            simplified=representation.pixel_size < 32,
+        ).save(iconset / representation.filename)
+
+    used_iconutil = False
+    if platform.system() == "Darwin":
+        try:
+            subprocess.run(
+                ["iconutil", "-c", "icns", str(iconset), "-o", str(target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            used_iconutil = True
+        except subprocess.CalledProcessError:
+            write_fallback_icns(iconset, target)
+    else:
+        write_fallback_icns(iconset, target)
+
     try:
-        subprocess.run(
-            ["iconutil", "-c", "icns", str(iconset), "-o", str(target)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError:
-        # Some recent iconutil builds reject the documented ten-file iconset.
-        # Build the same PNG-backed ICNS chunks locally, preserving full size
-        # coverage while still exercising iconutil first on macOS.
-        chunk_sources = (
-            (b"icp4", "icon_16x16.png"),
-            (b"icp5", "icon_32x32.png"),
-            (b"icp6", "icon_32x32@2x.png"),
-            (b"ic07", "icon_128x128.png"),
-            (b"ic08", "icon_128x128@2x.png"),
-            (b"ic09", "icon_512x512.png"),
-            (b"ic10", "icon_512x512@2x.png"),
-            (b"ic11", "icon_16x16@2x.png"),
-            (b"ic12", "icon_32x32@2x.png"),
-            (b"ic13", "icon_128x128@2x.png"),
-            (b"ic14", "icon_256x256@2x.png"),
-        )
-        chunks = []
-        for chunk_type, name in chunk_sources:
-            payload = (iconset / name).read_bytes()
-            chunks.append(chunk_type + struct.pack(">I", len(payload) + 8) + payload)
-        body = b"".join(chunks)
-        target.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
-    if target.read_bytes()[:4] != b"icns" or target.stat().st_size <= 1024:
-        raise RuntimeError("iconutil did not create a valid ICNS file")
+        validate_icns(target)
+    except (OSError, ValueError) as error:
+        if used_iconutil:
+            target.unlink(missing_ok=True)
+            write_fallback_icns(iconset, target)
+            try:
+                validate_icns(target)
+            except (OSError, ValueError) as fallback_error:
+                target.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"invalid ICNS output; retained diagnostic iconset at {iconset}"
+                ) from fallback_error
+        else:
+            target.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"invalid ICNS output; retained diagnostic iconset at {iconset}"
+            ) from error
     shutil.rmtree(iconset)
 
 
@@ -364,10 +473,16 @@ def export_all(root: Path) -> None:
         render_icon(size, simplified=size < 32).save(
             png_dir / f"ninka-icon-{size}.png"
         )
-    render_icon(1024, simplified=False).save(
+    ico_frames = {
+        size: render_icon(size, simplified=size < 32) for size in ICO_SIZES
+    }
+    ico_frames[max(ICO_SIZES)].save(
         platform_dir / "ninka-foodlab.ico",
         format="ICO",
         sizes=[(size, size) for size in ICO_SIZES],
+        append_images=[
+            ico_frames[size] for size in ICO_SIZES if size != max(ICO_SIZES)
+        ],
     )
-    _write_icns(platform_dir)
-    _preview_sheet(root).save(preview_dir / "ninka-brand-sheet.png")
+    write_icns(platform_dir)
+    render_preview_sheet(root).save(preview_dir / "ninka-brand-sheet.png")

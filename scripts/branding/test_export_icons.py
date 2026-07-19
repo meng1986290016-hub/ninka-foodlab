@@ -1,17 +1,22 @@
 from collections import deque
+from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
-from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 from export_icons import (
     APPROVED_PNG_SIZES,
     ICNS_SIZES,
+    ICNS_REPRESENTATIONS,
     ICO_SIZES,
     PREVIEW_SHEET_SIZE,
     export_all,
+    read_icns_representations,
     render_icon,
+    write_icns,
 )
 
 
@@ -31,9 +36,9 @@ class ExportIconTests(unittest.TestCase):
         for y in range(image.height):
             for x in range(image.width):
                 color = image.getpixel((x, y))[:3]
-                if min(color_distance(color, target) for target in foreground) < color_distance(
-                    color, forest
-                ):
+                if min(
+                    color_distance(color, target) for target in foreground
+                ) < color_distance(color, forest):
                     active.add((x, y))
 
         component_count = 0
@@ -119,6 +124,63 @@ class ExportIconTests(unittest.TestCase):
                     {pixel[:3] for pixel in light_symbol_corner.get_flattened_data()},
                     {cream},
                 )
+
+    def test_non_darwin_replaces_stale_icns_with_complete_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            platform_dir = Path(directory)
+            target = platform_dir / "ninka-foodlab.icns"
+            target.write_bytes(b"stale")
+
+            with patch("export_icons.platform.system", return_value="Linux"), patch(
+                "export_icons.subprocess.run"
+            ) as iconutil:
+                write_icns(platform_dir)
+
+            iconutil.assert_not_called()
+            representations = read_icns_representations(target)
+            self.assertEqual(
+                set(representations),
+                {representation.chunk_type for representation in ICNS_REPRESENTATIONS},
+            )
+            for representation in ICNS_REPRESENTATIONS:
+                self.assertEqual(
+                    representations[representation.chunk_type].tobytes(),
+                    render_icon(
+                        representation.pixel_size,
+                        simplified=representation.pixel_size < 32,
+                    ).tobytes(),
+                )
+
+    def test_iconutil_failure_forces_complete_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            platform_dir = Path(directory)
+            with patch("export_icons.platform.system", return_value="Darwin"), patch(
+                "export_icons.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, ["iconutil"]),
+            ):
+                write_icns(platform_dir)
+
+            representations = read_icns_representations(
+                platform_dir / "ninka-foodlab.icns"
+            )
+            self.assertEqual(len(representations), len(ICNS_REPRESENTATIONS))
+
+    def test_invalid_fallback_is_removed_but_diagnostic_iconset_is_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            platform_dir = Path(directory)
+            target = platform_dir / "ninka-foodlab.icns"
+
+            def write_invalid_icns(iconset, output):
+                output.write_bytes(b"icns\x00\x00\x00\x08")
+
+            with patch("export_icons.platform.system", return_value="Linux"), patch(
+                "export_icons.write_fallback_icns", side_effect=write_invalid_icns
+            ):
+                with self.assertRaisesRegex(RuntimeError, "retained diagnostic iconset"):
+                    write_icns(platform_dir)
+
+            self.assertFalse(target.exists())
+            self.assertEqual(len(list(platform_dir.glob(".*.iconset"))), 1)
 
 
 if __name__ == "__main__":

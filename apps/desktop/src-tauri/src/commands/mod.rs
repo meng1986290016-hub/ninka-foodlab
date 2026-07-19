@@ -1,12 +1,16 @@
+pub mod ingest;
 pub mod ingredients;
 
 use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::ingredients::repository::{IngredientRepository, RepositoryError};
+use crate::{
+    ingest::{IngestError, coordinator::IngredientIngestCoordinator},
+    ingredients::repository::RepositoryError,
+};
 
-pub const REGISTERED_COMMANDS: [&str; 24] = [
+pub const REGISTERED_COMMANDS: [&str; 36] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -31,16 +35,28 @@ pub const REGISTERED_COMMANDS: [&str; 24] = [
     "save_draft",
     "clear_draft",
     "database_status",
+    "create_ingredient_import_job",
+    "get_ingredient_import_job",
+    "list_ingredient_import_drafts",
+    "update_ingredient_import_draft",
+    "discard_ingredient_import_draft",
+    "cancel_ingredient_import_job",
+    "retry_ingredient_import_job",
+    "commit_ingredient_import_job",
+    "commit_reviewed_ingredient_import_draft",
+    "export_ingredient_template",
+    "export_ingredient_library",
+    "cleanup_orphan_attachments",
 ];
 
 pub struct AppState {
-    pub(crate) repository: Mutex<IngredientRepository>,
+    pub(crate) coordinator: Mutex<IngredientIngestCoordinator>,
 }
 
 impl AppState {
-    pub fn new(repository: IngredientRepository) -> Self {
+    pub fn new(coordinator: IngredientIngestCoordinator) -> Self {
         Self {
-            repository: Mutex::new(repository),
+            coordinator: Mutex::new(coordinator),
         }
     }
 }
@@ -69,6 +85,20 @@ impl From<RepositoryError> for CommandError {
             code: error.code().to_string(),
             message: error.message().to_string(),
             field: error.field().map(str::to_string),
+        }
+    }
+}
+
+impl From<IngestError> for CommandError {
+    fn from(error: IngestError) -> Self {
+        let field = error
+            .issues()
+            .and_then(|issues| issues.first())
+            .and_then(|issue| issue.field_path.clone());
+        Self {
+            code: error.code().to_string(),
+            message: error.message().to_string(),
+            field,
         }
     }
 }

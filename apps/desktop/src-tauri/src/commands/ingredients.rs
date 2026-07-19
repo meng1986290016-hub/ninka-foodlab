@@ -13,11 +13,11 @@ fn with_repository<T>(
         &crate::ingredients::repository::IngredientRepository,
     ) -> Result<T, crate::ingredients::repository::RepositoryError>,
 ) -> Result<T, CommandError> {
-    let repository = state
-        .repository
+    let coordinator = state
+        .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
-    action(&repository).map_err(Into::into)
+    action(coordinator.ingredients()).map_err(Into::into)
 }
 
 fn with_repository_mut<T>(
@@ -26,11 +26,11 @@ fn with_repository_mut<T>(
         &mut crate::ingredients::repository::IngredientRepository,
     ) -> Result<T, crate::ingredients::repository::RepositoryError>,
 ) -> Result<T, CommandError> {
-    let mut repository = state
-        .repository
+    let mut coordinator = state
+        .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
-    action(&mut repository).map_err(Into::into)
+    action(coordinator.ingredients_mut()).map_err(Into::into)
 }
 
 #[tauri::command(rename_all = "camelCase")]

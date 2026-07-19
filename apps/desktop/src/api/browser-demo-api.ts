@@ -5,11 +5,13 @@ import type {
   IngredientImportDraft,
   IngredientImportJob,
   IngredientImportJobRequest,
+  ImportIssue,
   ReviewedIngredientImportDraft,
+  SourceAttachment,
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV2,
+  type BrowserStateV3,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
@@ -100,6 +102,17 @@ const seedIngredients: Ingredient[] = [
 
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)(\.\d+)?$/;
 const LEGACY_SUPPLIER_ID = "browser-legacy-unspecified-supplier";
+const SUPPORTED_IMPORT_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "pdf",
+  "docx",
+  "xlsx",
+  "csv",
+  "txt",
+]);
 
 function createInitialLegacyState(): LegacyState {
   return {
@@ -152,6 +165,128 @@ function legacyCompleteness(input: IngredientInput) {
   return Math.round((present.length / values.length) * 100);
 }
 
+function cloneBrowserState(state: BrowserStateV3): BrowserStateV3 {
+  return JSON.parse(JSON.stringify(state)) as BrowserStateV3;
+}
+
+function demoMediaType(extension: string) {
+  return (
+    {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      csv: "text/csv",
+      txt: "text/plain",
+    }[extension] ?? "application/octet-stream"
+  );
+}
+
+function demoReview(
+  fileName: string,
+  definitions: NutrientDefinition[],
+): ReviewedIngredientImportDraft {
+  const displayName = fileName.split(/[\\/]/).pop() ?? fileName;
+  const materialName = displayName.replace(/\.[^.]+$/, "").trim() || "演示原料";
+  return {
+    materialGroupId: null,
+    materialName,
+    categoryId: null,
+    categoryName: "演示分类",
+    supplierId: null,
+    supplierName: "演示供应商",
+    modelOrSpecification: "",
+    currentPrice: null,
+    priceUnit: "kg",
+    densityGPerMl: null,
+    nutritionBasis: "per_100g",
+    nutrients: definitions.map((definition) => ({
+      definitionId: definition.id,
+      name: definition.name,
+      unit: definition.unit,
+      value: null,
+    })),
+    containsAllergens: [],
+    mayContainAllergens: [],
+    source: displayName,
+    researchNotes: "浏览器演示草稿，请人工复核后保存",
+    duplicateConfirmed: false,
+  };
+}
+
+function normalizeImportReview(
+  review: ReviewedIngredientImportDraft,
+): ReviewedIngredientImportDraft {
+  return {
+    ...review,
+    materialName: review.materialName.trim(),
+    categoryName: nullableText(review.categoryName),
+    supplierName: review.supplierName.trim(),
+    modelOrSpecification: review.modelOrSpecification.trim(),
+    currentPrice: nullableText(review.currentPrice),
+    densityGPerMl: nullableText(review.densityGPerMl),
+    nutrients: review.nutrients.map((nutrient) => ({
+      ...nutrient,
+      name: nutrient.name.trim(),
+      unit: nutrient.unit.trim(),
+      value: nullableText(nutrient.value),
+    })),
+    containsAllergens: review.containsAllergens.map((value) => value.trim()).filter(Boolean),
+    mayContainAllergens: review.mayContainAllergens
+      .map((value) => value.trim())
+      .filter(Boolean),
+    source: review.source.trim(),
+    researchNotes: review.researchNotes.trim(),
+  };
+}
+
+function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
+  const normalized = normalizeImportReview(review);
+  const issues: ImportIssue[] = [];
+  const add = (message: string, fieldPath: string) => {
+    issues.push({
+      code: "missing_required",
+      severity: "error",
+      message,
+      fieldPath,
+      sourceName: null,
+      row: null,
+      column: null,
+    });
+  };
+  if (normalized.materialName === "") add("请填写原料名称", "materialName");
+  if (normalized.supplierName === "" && normalized.supplierId === null) {
+    add("请填写供应商", "supplierName");
+  }
+  if (normalized.priceUnit === null) add("请选择价格单位", "priceUnit");
+  if (normalized.nutritionBasis === null) {
+    add("请选择营养基准", "nutritionBasis");
+  }
+  for (const [fieldPath, value] of [
+    ["currentPrice", normalized.currentPrice],
+    ["densityGPerMl", normalized.densityGPerMl],
+    ...normalized.nutrients.map(
+      (nutrient) => [`nutrients.${nutrient.name}`, nutrient.value] as const,
+    ),
+  ] as const) {
+    if (value !== null && !DECIMAL_PATTERN.test(value)) {
+      issues.push({
+        code: "invalid_decimal",
+        severity: "error",
+        message: "请输入不带单位的非负数值",
+        fieldPath,
+        sourceName: null,
+        row: null,
+        column: null,
+      });
+    }
+  }
+  return issues;
+}
+
 export class BrowserDemoApi implements DesktopApi {
   private readonly storage: Storage;
   private readonly createId: () => string;
@@ -172,46 +307,181 @@ export class BrowserDemoApi implements DesktopApi {
     );
   }
 
-  createIngredientImportJob(_request: IngredientImportJobRequest) {
-    return this.unsupportedImport<IngredientImportJob>();
+  async createIngredientImportJob(request: IngredientImportJobRequest) {
+    if (request.files.length === 0) {
+      throw new DesktopApiError("invalid_input", "请至少选择一个原料文件");
+    }
+    if (request.files.some((file) => file.kind !== "browser_demo")) {
+      return this.unsupportedImport<IngredientImportJob>();
+    }
+
+    const state = this.read();
+    const timestamp = this.now();
+    const jobId = this.createId();
+    const job: IngredientImportJob = {
+      id: jobId,
+      sourceKind: request.sourceKind,
+      status: "drafts_ready",
+      progressCurrent: request.files.length,
+      progressTotal: request.files.length,
+      errorSummary: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.importJobs[job.id] = job;
+
+    request.files.forEach((file, position) => {
+      const extension = file.value.split(".").pop()?.toLocaleLowerCase("zh-CN") ?? "";
+      if (!SUPPORTED_IMPORT_EXTENSIONS.has(extension)) {
+        throw new DesktopApiError(
+          "unsupported_file",
+          "仅支持 JPG、PNG、WebP、PDF、DOCX、XLSX、CSV 和 TXT 文件",
+        );
+      }
+      const attachmentId = this.createId();
+      const attachment: SourceAttachment = {
+        id: attachmentId,
+        originalName: file.value,
+        mediaType: file.mediaType ?? demoMediaType(extension),
+        byteSize: 0,
+        sha256: `browser-demo:${file.value}`,
+        createdAt: timestamp,
+      };
+      const draftId = this.createId();
+      const review = demoReview(file.value, state.nutrientDefinitions);
+      const issues = importIssues(review);
+      state.attachments[attachmentId] = attachment;
+      state.importDrafts[draftId] = {
+        id: draftId,
+        jobId,
+        position,
+        status: issues.some((issue) => issue.severity === "error")
+          ? "needs_review"
+          : "ready",
+        review,
+        issues,
+        attachments: [attachment],
+        sourceLinks: [],
+        importedVariantId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    });
+    this.write(state);
+    return job;
   }
 
-  getIngredientImportJob(_id: string) {
-    return this.unsupportedImport<IngredientImportJob>();
+  async getIngredientImportJob(id: string) {
+    const job = this.read().importJobs[id];
+    if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
+    return job;
   }
 
-  listIngredientImportDrafts(_jobId: string) {
-    return this.unsupportedImport<IngredientImportDraft[]>();
+  async listIngredientImportDrafts(jobId: string) {
+    const state = this.read();
+    if (!state.importJobs[jobId]) {
+      throw new DesktopApiError("not_found", "找不到该导入任务");
+    }
+    return Object.values(state.importDrafts)
+      .filter((draft) => draft.jobId === jobId)
+      .sort((left, right) => left.position - right.position);
   }
 
-  updateIngredientImportDraft(
-    _id: string,
-    _review: ReviewedIngredientImportDraft,
+  async updateIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
   ) {
-    return this.unsupportedImport<IngredientImportDraft>();
+    const state = this.read();
+    const draft = this.findImportDraft(state, id);
+    if (draft.status === "imported" || draft.status === "discarded") {
+      throw new DesktopApiError("invalid_state", "该草稿不能再修改");
+    }
+    const issues = importIssues(review);
+    const updated: IngredientImportDraft = {
+      ...draft,
+      review: normalizeImportReview(review),
+      issues,
+      status: issues.some((issue) => issue.severity === "error")
+        ? "needs_review"
+        : "ready",
+      updatedAt: this.now(),
+    };
+    state.importDrafts[id] = updated;
+    this.write(state);
+    return updated;
   }
 
-  discardIngredientImportDraft(_id: string) {
-    return this.unsupportedImport<void>();
+  async discardIngredientImportDraft(id: string) {
+    const state = this.read();
+    const draft = this.findImportDraft(state, id);
+    state.importDrafts[id] = {
+      ...draft,
+      status: "discarded",
+      updatedAt: this.now(),
+    };
+    this.write(state);
   }
 
-  cancelIngredientImportJob(_id: string) {
-    return this.unsupportedImport<IngredientImportJob>();
+  async cancelIngredientImportJob(id: string) {
+    const state = this.read();
+    const job = this.findImportJob(state, id);
+    const updated = { ...job, status: "cancelled" as const, updatedAt: this.now() };
+    state.importJobs[id] = updated;
+    this.write(state);
+    return updated;
   }
 
-  retryIngredientImportJob(_id: string) {
-    return this.unsupportedImport<IngredientImportJob>();
+  async retryIngredientImportJob(id: string) {
+    const state = this.read();
+    const job = this.findImportJob(state, id);
+    if (job.status !== "cancelled" && job.status !== "failed") {
+      throw new DesktopApiError("invalid_state", "当前任务不需要重试");
+    }
+    const updated = {
+      ...job,
+      status: "drafts_ready" as const,
+      errorSummary: null,
+      updatedAt: this.now(),
+    };
+    state.importJobs[id] = updated;
+    this.write(state);
+    return updated;
   }
 
-  commitIngredientImportJob(_id: string) {
-    return this.unsupportedImport<IngredientImportCommitResult>();
+  async commitIngredientImportJob(id: string) {
+    const current = this.read();
+    const state = cloneBrowserState(current);
+    const job = this.findImportJob(state, id);
+    if (job.status !== "drafts_ready" && job.status !== "partially_completed") {
+      throw new DesktopApiError("invalid_state", "当前任务还不能保存");
+    }
+    const drafts = Object.values(state.importDrafts)
+      .filter(
+        (draft) =>
+          draft.jobId === id &&
+          draft.status !== "imported" &&
+          draft.status !== "discarded",
+      )
+      .sort((left, right) => left.position - right.position);
+    const variants = drafts.map((draft) =>
+      this.materializeImportDraft(state, draft, draft.review),
+    );
+    const attachmentCount = new Set(
+      drafts.flatMap((draft) => draft.attachments.map((attachment) => attachment.id)),
+    ).size;
+    this.write(state);
+    return { jobId: id, variants, attachmentCount };
   }
 
-  commitReviewedIngredientImportDraft(
-    _id: string,
-    _review: ReviewedIngredientImportDraft,
+  async commitReviewedIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
   ) {
-    return this.unsupportedImport<IngredientVariant>();
+    const state = cloneBrowserState(this.read());
+    const draft = this.findImportDraft(state, id);
+    const variant = this.materializeImportDraft(state, draft, review);
+    this.write(state);
+    return variant;
   }
 
   exportIngredientTemplate(
@@ -229,7 +499,26 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   cleanupOrphanAttachments() {
-    return Promise.resolve(0);
+    const state = this.read();
+    const referenced = new Set(
+      Object.values(state.importDrafts).flatMap((draft) =>
+        draft.attachments.map((attachment) => attachment.id),
+      ),
+    );
+    for (const group of state.materialGroups) {
+      for (const variant of group.variants) {
+        for (const attachment of variant.sourceAttachments) referenced.add(attachment.id);
+      }
+    }
+    let removed = 0;
+    for (const id of Object.keys(state.attachments)) {
+      if (!referenced.has(id)) {
+        delete state.attachments[id];
+        removed += 1;
+      }
+    }
+    if (removed > 0) this.write(state);
+    return Promise.resolve(removed);
   }
 
   async listCategories() {
@@ -807,7 +1096,7 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private write(state: BrowserStateV2) {
+  private write(state: BrowserStateV3) {
     try {
       writeBrowserState(this.storage, state);
     } catch {
@@ -840,7 +1129,7 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private findCategory(state: BrowserStateV2, id: string) {
+  private findCategory(state: BrowserStateV3, id: string) {
     const category = state.categories.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -848,7 +1137,7 @@ export class BrowserDemoApi implements DesktopApi {
     return category;
   }
 
-  private findSupplier(state: BrowserStateV2, id: string) {
+  private findSupplier(state: BrowserStateV3, id: string) {
     const supplier = state.suppliers.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -856,7 +1145,7 @@ export class BrowserDemoApi implements DesktopApi {
     return supplier;
   }
 
-  private findGroup(state: BrowserStateV2, id: string) {
+  private findGroup(state: BrowserStateV3, id: string) {
     const group = state.materialGroups.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -864,7 +1153,7 @@ export class BrowserDemoApi implements DesktopApi {
     return group;
   }
 
-  private findVariant(state: BrowserStateV2, id: string) {
+  private findVariant(state: BrowserStateV3, id: string) {
     for (const group of state.materialGroups) {
       const variant = group.variants.find(
         (candidate) => candidate.id === id && candidate.archivedAt === null,
@@ -872,6 +1161,188 @@ export class BrowserDemoApi implements DesktopApi {
       if (variant) return { group, variant };
     }
     throw new DesktopApiError("not_found", "找不到该供应商版本");
+  }
+
+  private findImportJob(state: BrowserStateV3, id: string) {
+    const job = state.importJobs[id];
+    if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
+    return job;
+  }
+
+  private findImportDraft(state: BrowserStateV3, id: string) {
+    const draft = state.importDrafts[id];
+    if (!draft) throw new DesktopApiError("not_found", "找不到该导入草稿");
+    return draft;
+  }
+
+  private materializeImportDraft(
+    state: BrowserStateV3,
+    draft: IngredientImportDraft,
+    requestedReview: ReviewedIngredientImportDraft,
+  ) {
+    if (draft.status === "imported" || draft.status === "discarded") {
+      throw new DesktopApiError("invalid_state", "该草稿不能再导入");
+    }
+    const review = normalizeImportReview(requestedReview);
+    const issues = importIssues(review);
+    const blocking = issues.find((issue) => issue.severity === "error");
+    if (blocking) {
+      throw new DesktopApiError("import_failure", blocking.message, blocking.fieldPath ?? undefined);
+    }
+    const timestamp = this.now();
+
+    let category = review.categoryId === null
+      ? null
+      : this.findCategory(state, review.categoryId);
+    if (category === null && review.categoryName !== null) {
+      category = state.categories.find(
+        (candidate) =>
+          candidate.archivedAt === null &&
+          normalize(candidate.name) === normalize(review.categoryName ?? ""),
+      ) ?? null;
+      if (category === null) {
+        category = {
+          id: this.createId(),
+          name: review.categoryName,
+          sortOrder: state.categories.length,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          archivedAt: null,
+        };
+        state.categories.push(category);
+      }
+    }
+
+    let supplier = review.supplierId === null
+      ? null
+      : this.findSupplier(state, review.supplierId);
+    supplier ??= state.suppliers.find(
+      (candidate) =>
+        candidate.archivedAt === null &&
+        normalize(candidate.name) === normalize(review.supplierName),
+    ) ?? null;
+    if (supplier === null) {
+      supplier = {
+        id: this.createId(),
+        name: review.supplierName,
+        notes: "",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        archivedAt: null,
+      };
+      state.suppliers.push(supplier);
+    }
+
+    let group = review.materialGroupId === null
+      ? null
+      : this.findGroup(state, review.materialGroupId);
+    group ??= state.materialGroups.find(
+      (candidate) =>
+        candidate.archivedAt === null &&
+        normalize(candidate.name) === normalize(review.materialName),
+    ) ?? null;
+    if (group === null) {
+      group = {
+        id: this.createId(),
+        name: review.materialName,
+        categoryId: category?.id ?? null,
+        categoryName: category?.name ?? null,
+        variants: [],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        archivedAt: null,
+      };
+      state.materialGroups.push(group);
+    }
+
+    const nutritionValues = review.nutrients.map((nutrient) => {
+      let definition = nutrient.definitionId === null
+        ? null
+        : state.nutrientDefinitions.find((candidate) => candidate.id === nutrient.definitionId) ?? null;
+      definition ??= state.nutrientDefinitions.find(
+        (candidate) =>
+          normalize(candidate.name) === normalize(nutrient.name) &&
+          candidate.unit === nutrient.unit,
+      ) ?? null;
+      if (definition === null) {
+        definition = {
+          id: this.createId(),
+          code: `custom:${this.createId()}`,
+          name: nutrient.name,
+          unit: nutrient.unit,
+          builtIn: false,
+          sortOrder: state.nutrientDefinitions.length,
+        };
+        state.nutrientDefinitions.push(definition);
+      }
+      return { nutrientDefinitionId: definition.id, value: nutrient.value };
+    });
+    const input: IngredientVariantInput = {
+      materialGroupId: group.id,
+      supplierId: supplier.id,
+      modelOrSpecification: review.modelOrSpecification,
+      internalCode: null,
+      currentPrice: review.currentPrice,
+      priceUnit: review.priceUnit ?? "kg",
+      densityGPerMl: review.densityGPerMl,
+      source: review.source,
+      researchNotes: review.researchNotes,
+      nutrition: {
+        basis: review.nutritionBasis ?? "per_100g",
+        values: nutritionValues,
+      },
+      allergens: {
+        contains: review.containsAllergens,
+        mayContain: review.mayContainAllergens,
+      },
+      duplicateConfirmed: review.duplicateConfirmed,
+    };
+    this.assertUniqueVariant(state, input);
+    const variant: IngredientVariant = {
+      id: this.createId(),
+      materialGroupId: group.id,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      modelOrSpecification: input.modelOrSpecification,
+      internalCode: null,
+      currentPrice: input.currentPrice,
+      priceUnit: input.priceUnit,
+      densityGPerMl: input.densityGPerMl,
+      source: input.source,
+      researchNotes: input.researchNotes,
+      nutrition: input.nutrition,
+      allergens: input.allergens ?? { contains: [], mayContain: [] },
+      sourceAttachments: draft.attachments.map((attachment) => ({ ...attachment })),
+      completeness: calculateCompleteness(input, state.nutrientDefinitions),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+    };
+    group.variants.push(variant);
+    group.updatedAt = timestamp;
+    state.importDrafts[draft.id] = {
+      ...draft,
+      review,
+      issues: [],
+      status: "imported",
+      importedVariantId: variant.id,
+      updatedAt: timestamp,
+    };
+    const remaining = Object.values(state.importDrafts).some(
+      (candidate) =>
+        candidate.jobId === draft.jobId &&
+        (candidate.status === "ready" || candidate.status === "needs_review"),
+    );
+    if (remaining && state.importJobs[draft.jobId]?.status === "drafts_ready") {
+      const job = state.importJobs[draft.jobId];
+      if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
+      state.importJobs[draft.jobId] = {
+        ...job,
+        status: "partially_completed",
+        updatedAt: timestamp,
+      };
+    }
+    return variant;
   }
 
   private validateVariantInput(input: IngredientVariantInput) {
@@ -894,7 +1365,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueVariant(
-    state: BrowserStateV2,
+    state: BrowserStateV3,
     input: IngredientVariantInput,
   ) {
     if (input.duplicateConfirmed) return;
@@ -917,7 +1388,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueInternalCode(
-    state: BrowserStateV2,
+    state: BrowserStateV3,
     internalCode: string | null,
     exceptId?: string,
   ) {
@@ -942,7 +1413,7 @@ export class BrowserDemoApi implements DesktopApi {
     this.requiredName(input.internalCode, "请填写内部编号");
   }
 
-  private ensureLegacySupplier(state: BrowserStateV2, timestamp: string) {
+  private ensureLegacySupplier(state: BrowserStateV3, timestamp: string) {
     const existing = state.suppliers.find(
       (supplier) => supplier.id === LEGACY_SUPPLIER_ID,
     );
@@ -960,7 +1431,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private ensureLegacyCategory(
-    state: BrowserStateV2,
+    state: BrowserStateV3,
     name: string,
     timestamp: string,
   ) {

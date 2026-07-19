@@ -6,6 +6,7 @@ import { DesktopApiError } from "./types";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
+  writeCount = 0;
 
   get length() {
     return this.values.size;
@@ -28,6 +29,7 @@ class MemoryStorage implements Storage {
   }
 
   setItem(key: string, value: string) {
+    this.writeCount += 1;
     this.values.set(key, value);
   }
 }
@@ -69,6 +71,63 @@ describe("BrowserDemoApi", () => {
         files: [{ kind: "native_path", value: "/private/source.xlsx" }],
       }),
     ).rejects.toMatchObject({ code: "unsupported_file" });
+  });
+
+  it("creates deterministic demo drafts without native file access", async () => {
+    const job = await api.createIngredientImportJob({
+      sourceKind: "spreadsheet",
+      files: [{ kind: "browser_demo", value: "演示原料.xlsx" }],
+    });
+    const drafts = await api.listIngredientImportDrafts(job.id);
+
+    expect(job.status).toBe("drafts_ready");
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.attachments[0]?.originalName).toBe("演示原料.xlsx");
+    expect(drafts[0]?.review).toMatchObject({
+      materialName: "演示原料",
+      supplierName: "演示供应商",
+    });
+  });
+
+  it("migrates v2 storage to v3 without changing ingredient data", async () => {
+    const v2 = emptyV2Storage();
+    const migrated = new BrowserDemoApi({ storage: v2 });
+
+    expect(await migrated.listMaterialGroups()).toEqual([]);
+    const stored = JSON.parse(
+      v2.getItem("food-rd.browser-demo.v3") ?? "null",
+    ) as Record<string, unknown>;
+    expect(stored).toMatchObject({
+      schemaVersion: 3,
+      categories: [],
+      suppliers: [],
+      materialGroups: [],
+      importJobs: {},
+      importDrafts: {},
+      attachments: {},
+    });
+  });
+
+  it("commits every ready demo draft with one atomic browser write", async () => {
+    let sequence = 0;
+    const atomicApi = new BrowserDemoApi({
+      storage,
+      createId: () => `import-${++sequence}`,
+      now: () => "2026-07-19T10:00:00.000Z",
+    });
+    const job = await atomicApi.createIngredientImportJob({
+      sourceKind: "spreadsheet",
+      files: [
+        { kind: "browser_demo", value: "演示原料A.xlsx" },
+        { kind: "browser_demo", value: "演示原料B.xlsx" },
+      ],
+    });
+    const writesBeforeCommit = storage.writeCount;
+
+    const result = await atomicApi.commitIngredientImportJob(job.id);
+
+    expect(result.variants).toHaveLength(2);
+    expect(storage.writeCount - writesBeforeCommit).toBe(1);
   });
 
   it("starts with realistic Chinese demonstration ingredients", async () => {
@@ -170,7 +229,7 @@ describe("BrowserDemoApi", () => {
       sourceAttachments: [],
       updatedAt: "2026-07-12T01:15:00.000Z",
     });
-    expect(storage.getItem("food-rd.browser-demo.v2")).not.toBeNull();
+    expect(storage.getItem("food-rd.browser-demo.v3")).not.toBeNull();
     expect(await migrated.getSetting("appearance.compact")).toBe(true);
   });
 

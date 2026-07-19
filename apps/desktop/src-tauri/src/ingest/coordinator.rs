@@ -14,13 +14,13 @@ use super::{
     IngestError,
     attachment_store::AttachmentStore,
     model::{
-        ImportFileReferenceKind, ImportIssueSeverity, IngredientImportCommitResult,
-        IngredientImportDraft, IngredientImportDraftStatus, IngredientImportJob,
-        IngredientImportJobRequest, IngredientImportJobStatus, IngredientImportSourceKind,
-        ReviewedIngredientImportDraft,
+        ImportFileReferenceKind, ImportIssueSeverity, ImportedNutrientValue,
+        IngredientExchangeFormat, IngredientImportCommitResult, IngredientImportDraft,
+        IngredientImportDraftStatus, IngredientImportJob, IngredientImportJobRequest,
+        IngredientImportJobStatus, IngredientImportSourceKind, ReviewedIngredientImportDraft,
     },
     repository::{self, NewImportDraft},
-    spreadsheet::parse_ingredient_table,
+    spreadsheet::{parse_ingredient_table, write_library_export, write_template},
     validation::{normalize_review, validate_review},
 };
 
@@ -292,6 +292,86 @@ impl IngredientIngestCoordinator {
             variants,
             attachment_count: attachment_ids.len() as u64,
         })
+    }
+
+    pub fn export_template(
+        &self,
+        destination: &Path,
+        format: IngredientExchangeFormat,
+    ) -> Result<(), IngestError> {
+        write_template(destination, format)
+    }
+
+    pub fn export_library(
+        &self,
+        destination: &Path,
+        format: IngredientExchangeFormat,
+    ) -> Result<(), IngestError> {
+        let definitions = self
+            .ingredients
+            .list_nutrient_definitions()?
+            .into_iter()
+            .map(|definition| (definition.id.clone(), definition))
+            .collect::<std::collections::HashMap<_, _>>();
+        let reviews = self
+            .ingredients
+            .list_material_groups("")?
+            .into_iter()
+            .flat_map(|group| {
+                group.variants.into_iter().map({
+                    let definitions = &definitions;
+                    let group_id = group.id.clone();
+                    let group_name = group.name.clone();
+                    let category_id = group.category_id.clone();
+                    let category_name = group.category_name.clone();
+                    move |variant| ReviewedIngredientImportDraft {
+                        material_group_id: Some(group_id.clone()),
+                        material_name: group_name.clone(),
+                        category_id: category_id.clone(),
+                        category_name: category_name.clone(),
+                        supplier_id: Some(variant.supplier_id),
+                        supplier_name: variant.supplier_name,
+                        model_or_specification: variant.model_or_specification,
+                        current_price: variant.current_price,
+                        price_unit: Some(variant.price_unit),
+                        density_g_per_ml: variant.density_g_per_ml,
+                        nutrition_basis: Some(variant.nutrition.basis),
+                        nutrients: variant
+                            .nutrition
+                            .values
+                            .into_iter()
+                            .filter_map(|value| {
+                                definitions
+                                    .get(&value.nutrient_definition_id)
+                                    .map(|definition| ImportedNutrientValue {
+                                        definition_id: Some(definition.id.clone()),
+                                        name: definition.name.clone(),
+                                        unit: definition.unit.clone(),
+                                        value: value.value,
+                                    })
+                            })
+                            .collect(),
+                        contains_allergens: variant.allergens.contains,
+                        may_contain_allergens: variant.allergens.may_contain,
+                        source: variant.source,
+                        research_notes: variant.research_notes,
+                        duplicate_confirmed: false,
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        write_library_export(destination, format, &reviews)
+    }
+
+    pub fn cleanup_orphan_attachments(&self) -> Result<usize, IngestError> {
+        let mut statement = self
+            .ingredients
+            .connection
+            .prepare("SELECT sha256 FROM source_attachments")?;
+        let hashes = statement
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<HashSet<_>, _>>()?;
+        self.attachment_store.remove_orphans(&hashes)
     }
 
     fn process_job(&mut self, job_id: &str) -> Result<IngredientImportJob, IngestError> {

@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 24);
+    assert_eq!(REGISTERED_COMMANDS.len(), 36);
     for command in [
         "list_categories",
         "create_supplier",
@@ -67,6 +67,26 @@ fn every_grouped_desktop_api_method_is_registered() {
         "compare_ingredient_variants",
         "save_draft",
         "database_status",
+    ] {
+        assert!(REGISTERED_COMMANDS.contains(&command));
+    }
+}
+
+#[test]
+fn every_import_command_is_registered() {
+    for command in [
+        "create_ingredient_import_job",
+        "get_ingredient_import_job",
+        "list_ingredient_import_drafts",
+        "update_ingredient_import_draft",
+        "discard_ingredient_import_draft",
+        "cancel_ingredient_import_job",
+        "retry_ingredient_import_job",
+        "commit_ingredient_import_job",
+        "commit_reviewed_ingredient_import_draft",
+        "export_ingredient_template",
+        "export_ingredient_library",
+        "cleanup_orphan_attachments",
     ] {
         assert!(REGISTERED_COMMANDS.contains(&command));
     }

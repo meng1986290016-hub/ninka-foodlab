@@ -7,10 +7,16 @@ import type {
   NutrientDefinition,
   Supplier,
 } from "./types";
+import type {
+  IngredientImportDraft,
+  IngredientImportJob,
+  SourceAttachment,
+} from "./import-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
-export const BROWSER_SCHEMA_VERSION = 2;
+export const BROWSER_V3_KEY = "food-rd.browser-demo.v3";
+export const BROWSER_SCHEMA_VERSION = 3;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -27,6 +33,19 @@ export interface BrowserStateV2 {
   nutrientDefinitions: NutrientDefinition[];
   settings: Record<string, unknown>;
   drafts: Record<string, DraftRecord>;
+}
+
+export interface BrowserStateV3 {
+  schemaVersion: 3;
+  categories: Category[];
+  suppliers: Supplier[];
+  materialGroups: MaterialGroup[];
+  nutrientDefinitions: NutrientDefinition[];
+  settings: Record<string, unknown>;
+  drafts: Record<string, DraftRecord>;
+  importJobs: Record<string, IngredientImportJob>;
+  importDrafts: Record<string, IngredientImportDraft>;
+  attachments: Record<string, SourceAttachment>;
 }
 
 export interface MigrationContext {
@@ -141,7 +160,7 @@ export function migrateV1ToV2(
   });
 
   return {
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 2,
     categories,
     suppliers: [supplier],
     materialGroups,
@@ -151,18 +170,39 @@ export function migrateV1ToV2(
   };
 }
 
+export function migrateV2ToV3(state: BrowserStateV2): BrowserStateV3 {
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    importJobs: {},
+    importDrafts: {},
+    attachments: {},
+  };
+}
+
 export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV2 {
-  const v2 = storage.getItem(BROWSER_V2_KEY);
-  if (v2 !== null) {
-    const parsed = JSON.parse(v2) as BrowserStateV2;
+): BrowserStateV3 {
+  const v3 = storage.getItem(BROWSER_V3_KEY);
+  if (v3 !== null) {
+    const parsed = JSON.parse(v3) as BrowserStateV3;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+
+  const v2 = storage.getItem(BROWSER_V2_KEY);
+  if (v2 !== null) {
+    const parsed = JSON.parse(v2) as BrowserStateV2;
+    if (parsed.schemaVersion !== 2) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV2ToV3(parsed);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v1 = storage.getItem(BROWSER_V1_KEY);
@@ -172,11 +212,11 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV1ToV2(legacy, context);
+  const migrated = migrateV2ToV3(migrateV1ToV2(legacy, context));
   writeBrowserState(storage, migrated);
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV2) {
-  storage.setItem(BROWSER_V2_KEY, JSON.stringify(state));
+export function writeBrowserState(storage: Storage, state: BrowserStateV3) {
+  storage.setItem(BROWSER_V3_KEY, JSON.stringify(state));
 }

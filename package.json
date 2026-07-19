@@ -9,8 +9,11 @@
   "scripts": {
     "brand:generate": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/generate_all.py",
     "brand:verify": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/verify_assets.py",
-    "build": "pnpm --filter @food-rd/core build",
-    "typecheck": "pnpm --filter @food-rd/core typecheck",
-    "test": "pnpm --filter @food-rd/core test"
+    "build": "pnpm -r --if-present build",
+    "dev:desktop": "pnpm --filter @food-rd/desktop dev",
+    "tauri:build": "pnpm --filter @food-rd/desktop tauri:build",
+    "tauri:dev": "pnpm --filter @food-rd/desktop tauri:dev",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
   }
 }

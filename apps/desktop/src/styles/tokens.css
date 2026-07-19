@@ -1,0 +1,45 @@
+:root {
+  --color-canvas: #ffffff;
+  --color-sidebar: #f6f8f7;
+  --color-table-header: #f5f7f6;
+  --color-surface-muted: #f8faf9;
+  --color-ink: #17211c;
+  --color-ink-soft: #4f5d55;
+  --color-ink-muted: #78837d;
+  --color-border: #d9e0dc;
+  --color-border-strong: #c4cec8;
+  --color-accent: #087a43;
+  --color-accent-hover: #066b3a;
+  --color-accent-soft: #e9f4ee;
+  --color-warning: #b96a05;
+  --color-danger: #b42318;
+  --color-focus: #0b8350;
+
+  --font-ui: "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", system-ui,
+    -apple-system, sans-serif;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-control: 14px;
+  --font-size-title: 24px;
+  --line-height-body: 1.5;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --control-height: 42px;
+  --table-row-height: 52px;
+  --sidebar-width: 168px;
+  --drawer-width: 400px;
+  --statusbar-height: 36px;
+  --shadow-drawer: -12px 0 24px rgb(20 35 27 / 8%);
+  --motion-fast: 140ms;
+  --motion-standard: 220ms;
+}

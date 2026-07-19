@@ -6,6 +6,9 @@ node_modules/
 .pnpm-store/
 dist/
 coverage/
+.playwright-cli/
+output/playwright/
 .DS_Store
 *.log
-src-tauri/target/
+**/src-tauri/target/
+**/src-tauri/gen/

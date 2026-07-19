@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "食研工作台主窗口的基础权限，不包含 shell 与任意文件系统访问。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

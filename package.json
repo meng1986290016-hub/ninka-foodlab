@@ -7,6 +7,8 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "brand:generate": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/generate_all.py",
+    "brand:verify": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/verify_assets.py",
     "build": "pnpm --filter @food-rd/core build",
     "typecheck": "pnpm --filter @food-rd/core typecheck",
     "test": "pnpm --filter @food-rd/core test"

@@ -81,3 +81,9 @@ export class BrowserImportFilePicker implements ImportFilePicker {
     return null;
   }
 }
+
+export function createImportFilePicker(): ImportFilePicker {
+  return window.__TAURI_INTERNALS__ === undefined
+    ? new BrowserImportFilePicker()
+    : new TauriImportFilePicker();
+}

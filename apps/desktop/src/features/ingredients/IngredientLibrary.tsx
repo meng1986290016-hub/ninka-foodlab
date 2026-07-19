@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
+import { createImportFilePicker } from "../../api/import-file-picker";
 import type {
   IngredientVariant,
   MaterialGroup,
@@ -8,6 +9,8 @@ import type {
   VariantComparison,
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import { IngredientExchangeMenu } from "../imports/IngredientExchangeMenu";
+import { IngredientImportDrawer } from "../imports/IngredientImportDrawer";
 import { IngredientTable } from "./IngredientTable";
 import { MaterialGroupEditor } from "./MaterialGroupEditor";
 import { useIngredients } from "./useIngredients";
@@ -39,6 +42,8 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
   const [selection, setSelection] = useState<VariantSelection | null>(null);
   const [comparison, setComparison] = useState<VariantComparison | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [filePicker] = useState(createImportFilePicker);
   const { archiveVariant, error, loading, materialGroups, refresh } =
     useIngredients(api, deferredQuery);
 
@@ -114,10 +119,19 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
     }
   }
 
+  function openImport() {
+    setEditor(null);
+    setComparison(null);
+    setComparisonError(null);
+    setImporting(true);
+  }
+
   const comparisonGroup = comparison
     ? materialGroups.find((group) => group.id === comparison.materialGroupId)
     : null;
-  const workspaceClass = comparison
+  const workspaceClass = importing
+    ? "ingredient-workspace is-editing is-importing"
+    : comparison
     ? "ingredient-workspace is-editing has-comparison"
     : editor
       ? "ingredient-workspace is-editing"
@@ -131,14 +145,21 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
             <h1>原料库</h1>
             <p>按通用原料归类，维护各供应商的价格、营养与研发记录。</p>
           </div>
-          <button
-            className="button button--primary new-ingredient-button"
-            onClick={() => openEditor({ kind: "material-group" })}
-            type="button"
-          >
-            <Icon name="plus" size={18} />
-            新建原料
-          </button>
+          <div className="library-header-actions">
+            <IngredientExchangeMenu
+              api={api}
+              filePicker={filePicker}
+              onImport={openImport}
+            />
+            <button
+              className="button button--primary new-ingredient-button"
+              onClick={() => openEditor({ kind: "material-group" })}
+              type="button"
+            >
+              <Icon name="plus" size={18} />
+              新建原料
+            </button>
+          </div>
         </div>
 
         <div className="library-toolbar">
@@ -217,6 +238,22 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
           comparison={comparison}
           materialName={comparisonGroup?.name ?? "原料"}
           onClose={() => setComparison(null)}
+        />
+      ) : null}
+      {importing ? (
+        <IngredientImportDrawer
+          api={api}
+          filePicker={filePicker}
+          onClose={() => setImporting(false)}
+          onCommitted={(result) => {
+            refresh();
+            setExpandedIds((current) => {
+              const next = new Set(current);
+              result.variants.forEach((variant) => next.add(variant.materialGroupId));
+              return next;
+            });
+            setImporting(false);
+          }}
         />
       ) : null}
     </section>

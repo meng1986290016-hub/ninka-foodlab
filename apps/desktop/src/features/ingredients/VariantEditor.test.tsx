@@ -159,4 +159,51 @@ describe("VariantEditor", () => {
       expect.objectContaining({ name: "乳糖", unit: "g" }),
     );
   });
+
+  it("edits allergens and shows linked source attachments without local paths", async () => {
+    const api = createApi();
+    const group = await getMilkGroup(api);
+    const base = group.variants[0];
+    if (base === undefined) throw new Error("missing demo variant");
+    const variant = {
+      ...base,
+      allergens: { contains: ["乳"], mayContain: ["大豆"] },
+      sourceAttachments: [
+        {
+          id: "attachment-1",
+          originalName: "供应商规格书.pdf",
+          mediaType: "application/pdf",
+          byteSize: 2048,
+          sha256: "private-hash",
+          createdAt: "2026-07-19T10:00:00.000Z",
+        },
+      ],
+    };
+    const save = vi.spyOn(api, "saveIngredientVariant");
+    const user = userEvent.setup();
+
+    render(
+      <VariantEditor
+        api={api}
+        group={group}
+        onCancel={() => undefined}
+        onSaved={() => undefined}
+        variant={variant}
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: "营养成分" }));
+
+    expect(screen.getByText("供应商规格书.pdf")).not.toBeNull();
+    expect(screen.queryByText("private-hash")).toBeNull();
+    const mayContain = screen.getByLabelText("可能含有的过敏原");
+    await user.clear(mayContain);
+    await user.type(mayContain, "花生、坚果");
+    await user.click(screen.getByRole("button", { name: "保存供应商版本" }));
+
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allergens: { contains: ["乳"], mayContain: ["花生", "坚果"] },
+      }),
+    );
+  });
 });

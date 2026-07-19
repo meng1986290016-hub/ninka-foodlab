@@ -8,6 +8,8 @@ import type {
   NutrientDefinition,
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import { AllergenEditor } from "../imports/AllergenEditor";
+import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { IngredientDraftNotice } from "./IngredientDraftNotice";
 import { NutritionEditor } from "./NutritionEditor";
 import { useIngredientDraft } from "./useIngredientDraft";
@@ -270,6 +272,13 @@ export function VariantEditor({
             }
             onDefinitionCreated={addDefinition}
           />
+          <AllergenEditor
+            onChange={(allergens) =>
+              changeInput({ ...input, allergens })
+            }
+            value={input.allergens ?? { contains: [], mayContain: [] }}
+          />
+          <SourceAttachmentList attachments={variant?.sourceAttachments ?? []} />
         </div>
 
         {dirty ? (

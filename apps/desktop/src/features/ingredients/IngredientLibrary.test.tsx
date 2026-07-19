@@ -189,6 +189,19 @@ describe("ingredient library supplier hierarchy", () => {
     expect(within(variantEditor).getByText("燕麦粉")).not.toBeNull();
   });
 
+  it("opens ingredient data exchange from the library toolbar", async () => {
+    const user = userEvent.setup();
+    render(<App api={api} />);
+    await screen.findByText("脱脂乳粉");
+
+    await user.click(screen.getByRole("button", { name: "数据交换" }));
+    await user.click(screen.getByRole("button", { name: "导入原料资料" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "导入原料资料" }),
+    ).not.toBeNull();
+  });
+
   it("adds or edits a supplier version from an expanded material group", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);

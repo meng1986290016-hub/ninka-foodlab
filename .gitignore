@@ -1,5 +1,7 @@
 .worktrees/
 .superpowers/
+.venv-branding/
+__pycache__/
 node_modules/
 .pnpm-store/
 dist/

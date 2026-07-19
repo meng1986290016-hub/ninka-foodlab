@@ -118,6 +118,8 @@ export function migrateV1ToV2(
           value: null,
         })),
       },
+      allergens: { contains: [], mayContain: [] },
+      sourceAttachments: [],
       completeness: {
         percent: ingredient.completeness,
         missingFields: [],

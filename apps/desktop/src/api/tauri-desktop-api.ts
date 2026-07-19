@@ -1,6 +1,14 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 import type { DesktopApi } from "./desktop-api";
+import type {
+  IngredientExchangeFormat,
+  IngredientImportCommitResult,
+  IngredientImportDraft,
+  IngredientImportJob,
+  IngredientImportJobRequest,
+  ReviewedIngredientImportDraft,
+} from "./import-types";
 import { DesktopApiError } from "./types";
 import type {
   Category,
@@ -33,6 +41,10 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "duplicate_variant",
   "reference_conflict",
   "conversion_unavailable",
+  "import_failure",
+  "attachment_failure",
+  "unsupported_file",
+  "invalid_state",
   "storage_failure",
   "unknown",
 ]);
@@ -64,6 +76,84 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
     });
+  }
+
+  createIngredientImportJob(request: IngredientImportJobRequest) {
+    return this.invoke<IngredientImportJob>("create_ingredient_import_job", {
+      request,
+    });
+  }
+
+  getIngredientImportJob(id: string) {
+    return this.invoke<IngredientImportJob>("get_ingredient_import_job", { id });
+  }
+
+  listIngredientImportDrafts(jobId: string) {
+    return this.invoke<IngredientImportDraft[]>("list_ingredient_import_drafts", {
+      jobId,
+    });
+  }
+
+  updateIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
+  ) {
+    return this.invoke<IngredientImportDraft>("update_ingredient_import_draft", {
+      id,
+      review,
+    });
+  }
+
+  discardIngredientImportDraft(id: string) {
+    return this.invoke<void>("discard_ingredient_import_draft", { id });
+  }
+
+  cancelIngredientImportJob(id: string) {
+    return this.invoke<IngredientImportJob>("cancel_ingredient_import_job", { id });
+  }
+
+  retryIngredientImportJob(id: string) {
+    return this.invoke<IngredientImportJob>("retry_ingredient_import_job", { id });
+  }
+
+  commitIngredientImportJob(id: string) {
+    return this.invoke<IngredientImportCommitResult>("commit_ingredient_import_job", {
+      id,
+    });
+  }
+
+  commitReviewedIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
+  ) {
+    return this.invoke<IngredientVariant>("commit_reviewed_ingredient_import_draft", {
+      id,
+      review,
+    });
+  }
+
+  exportIngredientTemplate(
+    format: IngredientExchangeFormat,
+    destinationPath: string,
+  ) {
+    return this.invoke<void>("export_ingredient_template", {
+      format,
+      destinationPath,
+    });
+  }
+
+  exportIngredientLibrary(
+    format: IngredientExchangeFormat,
+    destinationPath: string,
+  ) {
+    return this.invoke<void>("export_ingredient_library", {
+      format,
+      destinationPath,
+    });
+  }
+
+  cleanupOrphanAttachments() {
+    return this.invoke<number>("cleanup_orphan_attachments");
   }
 
   listCategories() {

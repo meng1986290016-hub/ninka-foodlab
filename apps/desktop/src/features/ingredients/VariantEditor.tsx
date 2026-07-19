@@ -33,6 +33,7 @@ function emptyInput(groupId: string): IngredientVariantInput {
     source: "",
     researchNotes: "",
     nutrition: { basis: "per_100g", values: [] },
+    allergens: { contains: [], mayContain: [] },
   };
 }
 
@@ -55,6 +56,10 @@ function toInput(
     nutrition: {
       basis: variant.nutrition.basis,
       values: variant.nutrition.values.map((value) => ({ ...value })),
+    },
+    allergens: {
+      contains: [...variant.allergens.contains],
+      mayContain: [...variant.allergens.mayContain],
     },
   };
 }

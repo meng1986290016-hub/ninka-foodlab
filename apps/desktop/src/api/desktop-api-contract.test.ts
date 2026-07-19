@@ -2,6 +2,13 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type { DesktopApi } from "./desktop-api";
 import type {
+  IngredientImportCommitResult,
+  IngredientImportDraft,
+  IngredientImportJob,
+  IngredientImportJobRequest,
+  ReviewedIngredientImportDraft,
+} from "./import-types";
+import type {
   IngredientVariantInput,
   MaterialGroup,
   NutritionBasis,
@@ -22,5 +29,23 @@ describe("supplier-specific DesktopApi contract", () => {
     expectTypeOf<NutritionBasis>().toEqualTypeOf<
       "per_100g" | "per_100ml"
     >();
+  });
+
+  it("exposes the model-independent ingredient import contract", () => {
+    expectTypeOf<
+      Parameters<DesktopApi["createIngredientImportJob"]>[0]
+    >().toEqualTypeOf<IngredientImportJobRequest>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["getIngredientImportJob"]>>
+    >().toEqualTypeOf<IngredientImportJob>();
+    expectTypeOf<
+      Parameters<DesktopApi["updateIngredientImportDraft"]>[1]
+    >().toEqualTypeOf<ReviewedIngredientImportDraft>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["commitIngredientImportJob"]>>
+    >().toEqualTypeOf<IngredientImportCommitResult>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["listIngredientImportDrafts"]>>
+    >().toEqualTypeOf<IngredientImportDraft[]>();
   });
 });

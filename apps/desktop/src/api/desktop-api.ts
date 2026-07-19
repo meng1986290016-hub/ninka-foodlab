@@ -1,4 +1,12 @@
 import type {
+  IngredientExchangeFormat,
+  IngredientImportCommitResult,
+  IngredientImportDraft,
+  IngredientImportJob,
+  IngredientImportJobRequest,
+  ReviewedIngredientImportDraft,
+} from "./import-types";
+import type {
   Category,
   DatabaseStatus,
   DraftRecord,
@@ -24,6 +32,34 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  createIngredientImportJob(
+    request: IngredientImportJobRequest,
+  ): Promise<IngredientImportJob>;
+  getIngredientImportJob(id: string): Promise<IngredientImportJob>;
+  listIngredientImportDrafts(jobId: string): Promise<IngredientImportDraft[]>;
+  updateIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
+  ): Promise<IngredientImportDraft>;
+  discardIngredientImportDraft(id: string): Promise<void>;
+  cancelIngredientImportJob(id: string): Promise<IngredientImportJob>;
+  retryIngredientImportJob(id: string): Promise<IngredientImportJob>;
+  commitIngredientImportJob(
+    id: string,
+  ): Promise<IngredientImportCommitResult>;
+  commitReviewedIngredientImportDraft(
+    id: string,
+    review: ReviewedIngredientImportDraft,
+  ): Promise<IngredientVariant>;
+  exportIngredientTemplate(
+    format: IngredientExchangeFormat,
+    destinationPath: string,
+  ): Promise<void>;
+  exportIngredientLibrary(
+    format: IngredientExchangeFormat,
+    destinationPath: string,
+  ): Promise<void>;
+  cleanupOrphanAttachments(): Promise<number>;
   listCategories(): Promise<Category[]>;
   createCategory(name: string): Promise<Category>;
   renameCategory(id: string, name: string): Promise<Category>;

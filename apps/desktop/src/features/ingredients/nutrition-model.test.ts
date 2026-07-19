@@ -49,6 +49,7 @@ function inputWith(
         value: "1",
       })),
     },
+    allergens: { contains: [], mayContain: [] },
     ...overrides,
   };
 }
@@ -73,6 +74,8 @@ function variant(
     createdAt: "2026-07-15T01:00:00.000Z",
     updatedAt: `2026-07-${id === "a" ? "15" : "16"}T01:00:00.000Z`,
     archivedAt: null,
+    allergens: { contains: [], mayContain: [] },
+    sourceAttachments: [],
   };
 }
 

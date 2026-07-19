@@ -44,6 +44,20 @@ export interface DataCompleteness {
   missingFields: string[];
 }
 
+export interface IngredientVariantAllergens {
+  contains: string[];
+  mayContain: string[];
+}
+
+export interface IngredientSourceAttachment {
+  id: EntityId;
+  originalName: string;
+  mediaType: string;
+  byteSize: number;
+  sha256: string;
+  createdAt: string;
+}
+
 export interface IngredientVariant {
   id: EntityId;
   materialGroupId: EntityId;
@@ -57,6 +71,8 @@ export interface IngredientVariant {
   source: string;
   researchNotes: string;
   nutrition: VariantNutrition;
+  allergens: IngredientVariantAllergens;
+  sourceAttachments: IngredientSourceAttachment[];
   completeness: DataCompleteness;
   createdAt: string;
   updatedAt: string;
@@ -91,6 +107,7 @@ export interface IngredientVariantInput {
   source: string;
   researchNotes: string;
   nutrition: VariantNutrition;
+  allergens?: IngredientVariantAllergens;
   duplicateConfirmed?: boolean;
 }
 
@@ -160,6 +177,10 @@ export type DesktopErrorCode =
   | "duplicate_variant"
   | "reference_conflict"
   | "conversion_unavailable"
+  | "import_failure"
+  | "attachment_failure"
+  | "unsupported_file"
+  | "invalid_state"
   | "storage_failure"
   | "unknown";
 

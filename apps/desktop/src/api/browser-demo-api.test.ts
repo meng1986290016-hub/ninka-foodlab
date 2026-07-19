@@ -62,6 +62,15 @@ describe("BrowserDemoApi", () => {
     });
   });
 
+  it("rejects native import paths instead of attempting filesystem access", async () => {
+    await expect(
+      api.createIngredientImportJob({
+        sourceKind: "spreadsheet",
+        files: [{ kind: "native_path", value: "/private/source.xlsx" }],
+      }),
+    ).rejects.toMatchObject({ code: "unsupported_file" });
+  });
+
   it("starts with realistic Chinese demonstration ingredients", async () => {
     const ingredients = await api.listIngredients();
 
@@ -153,10 +162,12 @@ describe("BrowserDemoApi", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.variants[0]).toMatchObject({
+      allergens: { contains: [], mayContain: [] },
       currentPrice: "18.20",
       densityGPerMl: "1.16",
       source: "演示供应商规格书",
       researchNotes: "浏览器演示原料；原标签：需冷藏",
+      sourceAttachments: [],
       updatedAt: "2026-07-12T01:15:00.000Z",
     });
     expect(storage.getItem("food-rd.browser-demo.v2")).not.toBeNull();
@@ -188,9 +199,12 @@ describe("BrowserDemoApi", () => {
       source: "供应商规格书",
       researchNotes: "溶解性好",
       nutrition: { basis: "per_100g", values: [] },
+      allergens: { contains: ["乳"], mayContain: [] },
     });
 
     expect(variant.supplierName).toBe("供应商A");
+    expect(variant.allergens).toEqual({ contains: ["乳"], mayContain: [] });
+    expect(variant.sourceAttachments).toEqual([]);
     expect((await groupedApi.listMaterialGroups("供应商A"))[0]?.variants).toHaveLength(1);
     expect((await groupedApi.listMaterialGroups("低热型"))[0]?.id).toBe(group.id);
     expect((await groupedApi.listMaterialGroups("溶解性好"))[0]?.id).toBe(group.id);

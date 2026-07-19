@@ -1,4 +1,12 @@
 import type { DesktopApi } from "./desktop-api";
+import type {
+  IngredientExchangeFormat,
+  IngredientImportCommitResult,
+  IngredientImportDraft,
+  IngredientImportJob,
+  IngredientImportJobRequest,
+  ReviewedIngredientImportDraft,
+} from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
   type BrowserStateV2,
@@ -153,6 +161,75 @@ export class BrowserDemoApi implements DesktopApi {
     this.storage = options.storage ?? defaultStorage();
     this.createId = options.createId ?? defaultId;
     this.now = options.now ?? (() => new Date().toISOString());
+  }
+
+  private unsupportedImport<T>(): Promise<T> {
+    return Promise.reject(
+      new DesktopApiError(
+        "unsupported_file",
+        "浏览器演示模式暂不读取本机文件",
+      ),
+    );
+  }
+
+  createIngredientImportJob(_request: IngredientImportJobRequest) {
+    return this.unsupportedImport<IngredientImportJob>();
+  }
+
+  getIngredientImportJob(_id: string) {
+    return this.unsupportedImport<IngredientImportJob>();
+  }
+
+  listIngredientImportDrafts(_jobId: string) {
+    return this.unsupportedImport<IngredientImportDraft[]>();
+  }
+
+  updateIngredientImportDraft(
+    _id: string,
+    _review: ReviewedIngredientImportDraft,
+  ) {
+    return this.unsupportedImport<IngredientImportDraft>();
+  }
+
+  discardIngredientImportDraft(_id: string) {
+    return this.unsupportedImport<void>();
+  }
+
+  cancelIngredientImportJob(_id: string) {
+    return this.unsupportedImport<IngredientImportJob>();
+  }
+
+  retryIngredientImportJob(_id: string) {
+    return this.unsupportedImport<IngredientImportJob>();
+  }
+
+  commitIngredientImportJob(_id: string) {
+    return this.unsupportedImport<IngredientImportCommitResult>();
+  }
+
+  commitReviewedIngredientImportDraft(
+    _id: string,
+    _review: ReviewedIngredientImportDraft,
+  ) {
+    return this.unsupportedImport<IngredientVariant>();
+  }
+
+  exportIngredientTemplate(
+    _format: IngredientExchangeFormat,
+    _destinationPath: string,
+  ) {
+    return this.unsupportedImport<void>();
+  }
+
+  exportIngredientLibrary(
+    _format: IngredientExchangeFormat,
+    _destinationPath: string,
+  ) {
+    return this.unsupportedImport<void>();
+  }
+
+  cleanupOrphanAttachments() {
+    return Promise.resolve(0);
   }
 
   async listCategories() {
@@ -410,6 +487,10 @@ export class BrowserDemoApi implements DesktopApi {
           value: nullableText(value.value),
         })),
       },
+      allergens: {
+        contains: [...(input.allergens?.contains ?? [])],
+        mayContain: [...(input.allergens?.mayContain ?? [])],
+      },
     };
     const completeness = calculateCompleteness(
       normalizedInput,
@@ -429,6 +510,8 @@ export class BrowserDemoApi implements DesktopApi {
       source: normalizedInput.source,
       researchNotes: normalizedInput.researchNotes,
       nutrition: normalizedInput.nutrition,
+      allergens: normalizedInput.allergens ?? { contains: [], mayContain: [] },
+      sourceAttachments: previous?.sourceAttachments ?? [],
       completeness,
       createdAt: previous?.createdAt ?? timestamp,
       updatedAt: timestamp,
@@ -460,6 +543,10 @@ export class BrowserDemoApi implements DesktopApi {
       source: source.source,
       researchNotes: source.researchNotes,
       nutrition: source.nutrition,
+      allergens: {
+        contains: [...source.allergens.contains],
+        mayContain: [...source.allergens.mayContain],
+      },
     });
   }
 
@@ -616,6 +703,8 @@ export class BrowserDemoApi implements DesktopApi {
         input.tags.length > 0 ? `原标签：${input.tags.join("、")}` : "",
       ].filter(Boolean).join("；"),
       nutrition: { basis: "per_100g", values: [] },
+      allergens: { contains: [], mayContain: [] },
+      sourceAttachments: [],
       completeness: {
         percent: legacyCompleteness(input),
         missingFields: [],

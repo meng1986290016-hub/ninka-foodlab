@@ -4,6 +4,23 @@ import { TauriDesktopApi } from "./tauri-desktop-api";
 import { DesktopApiError } from "./types";
 
 describe("TauriDesktopApi", () => {
+  it("creates an ingredient import job with the stable native command payload", async () => {
+    const invoke = vi.fn().mockResolvedValue({ id: "job-1" });
+    const api = new TauriDesktopApi(invoke);
+
+    await api.createIngredientImportJob({
+      sourceKind: "spreadsheet",
+      files: [{ kind: "native_path", value: "/selected/import.xlsx" }],
+    });
+
+    expect(invoke).toHaveBeenCalledWith("create_ingredient_import_job", {
+      request: {
+        sourceKind: "spreadsheet",
+        files: [{ kind: "native_path", value: "/selected/import.xlsx" }],
+      },
+    });
+  });
+
   it("uses the grouped material list command contract", async () => {
     const invoke = vi.fn().mockResolvedValue([]);
     const api = new TauriDesktopApi(invoke);

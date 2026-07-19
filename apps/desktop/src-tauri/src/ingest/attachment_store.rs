@@ -26,6 +26,30 @@ pub struct StagedAttachment {
     pub relative_path: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredAttachment {
+    pub id: String,
+    pub original_name: String,
+    pub media_type: String,
+    pub byte_size: u64,
+    pub sha256: String,
+    pub relative_path: String,
+}
+
+impl StoredAttachment {
+    pub fn from_staged(id: impl Into<String>, staged: StagedAttachment) -> Self {
+        Self {
+            id: id.into(),
+            original_name: staged.original_name,
+            media_type: staged.media_type,
+            byte_size: staged.byte_size,
+            sha256: staged.sha256,
+            relative_path: staged.relative_path,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AttachmentStore {
     root: PathBuf,

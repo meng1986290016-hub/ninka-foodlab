@@ -8,9 +8,14 @@ name = "food_rd_desktop"
 path = "src/lib.rs"
 
 [dependencies]
+calamine = "0.31"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+csv = "1"
 hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 mime_guess = "2"
+pdf-extract = "0.10"
+quick-xml = "0.38"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -18,6 +23,7 @@ sha2 = "0.10"
 tauri = "2.11.5"
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
+zip = { version = "4", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 tauri-build = "2"

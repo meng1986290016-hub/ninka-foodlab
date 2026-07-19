@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from html import escape
+from math import sqrt
 from pathlib import Path
 from typing import Optional
 
@@ -42,6 +43,15 @@ VARIANTS = {
 }
 
 
+_GAP_RATIO = .22
+_SEED_CORNER_RADIUS_RATIO = .16
+_VISUAL_EXTENT_RATIO = .57
+_MODULE_SIDE_RATIO = _VISUAL_EXTENT_RATIO * sqrt(2) / (
+    6 + 4 * _GAP_RATIO - 2 * _SEED_CORNER_RADIUS_RATIO
+)
+_BACKGROUND_RADIUS_RATIO = 220 / 1024
+
+
 def _module_fill(module: Module, variant: str) -> str:
     background, foreground = VARIANTS[variant]
     if foreground:
@@ -71,10 +81,10 @@ def _shape(module: Module, x: float, y: float, side: float, variant: str) -> str
         radius = side / 2
         return f'<circle {common} cx="{x + radius:.3f}" cy="{y + radius:.3f}" r="{radius:.3f}"/>'
     radii = {
-        "top-left": (side * .16, side / 2, side / 2, side / 2),
-        "top-right": (side / 2, side * .16, side / 2, side / 2),
-        "bottom-left": (side / 2, side / 2, side / 2, side * .16),
-        "bottom-right": (side / 2, side / 2, side * .16, side / 2),
+        "top-left": (side * _SEED_CORNER_RADIUS_RATIO, side / 2, side / 2, side / 2),
+        "top-right": (side / 2, side * _SEED_CORNER_RADIUS_RATIO, side / 2, side / 2),
+        "bottom-left": (side / 2, side / 2, side / 2, side * _SEED_CORNER_RADIUS_RATIO),
+        "bottom-right": (side / 2, side / 2, side * _SEED_CORNER_RADIUS_RATIO, side / 2),
     }
     path = _rounded_rect_path(x, y, side, radii[module.seed_corner])
     return f'<path {common} data-seed-corner="{module.seed_corner}" d="{path}"/>'
@@ -83,14 +93,17 @@ def _shape(module: Module, x: float, y: float, side: float, variant: str) -> str
 def symbol_svg(variant: str, size: int = 1024) -> str:
     if variant not in VARIANTS:
         raise ValueError(f"unknown variant: {variant}")
-    module_side = 142.0
-    gap = module_side * .22
+    module_side = size * _MODULE_SIDE_RATIO
+    gap = module_side * _GAP_RATIO
     grid_side = module_side * 3 + gap * 2
     origin = (size - grid_side) / 2
     background, _ = VARIANTS[variant]
     backdrop = ""
     if background:
-        backdrop = f'<rect width="{size}" height="{size}" rx="220" fill="{COLORS[background]}"/>'
+        backdrop = (
+            f'<rect width="{size}" height="{size}" '
+            f'rx="{size * _BACKGROUND_RADIUS_RATIO:.3f}" fill="{COLORS[background]}"/>'
+        )
     shapes = []
     for module in MODULES:
         x = origin + module.column * (module_side + gap)
@@ -99,7 +112,7 @@ def symbol_svg(variant: str, size: int = 1024) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
         f'width="{size}" height="{size}">{backdrop}'
-        f'<g transform="rotate(45 512 512)">{"".join(shapes)}</g></svg>\n'
+        f'<g transform="rotate(45 {size / 2:g} {size / 2:g})">{"".join(shapes)}</g></svg>\n'
     )
 
 

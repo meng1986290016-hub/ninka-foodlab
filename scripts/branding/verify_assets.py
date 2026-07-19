@@ -16,7 +16,8 @@ from export_icons import (
     render_preview_sheet,
     validate_icns,
 )
-from logo_geometry import COLORS
+from logo_geometry import COLORS, symbol_svg
+from wordmark import lockup_svg
 
 
 _APPROVED_COLORS = {value.upper() for value in COLORS.values()}
@@ -30,16 +31,22 @@ _FORBIDDEN_XML_DECLARATION = re.compile(
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 _ALLOWED_TAGS = {"svg", "rect", "g", "path", "circle"}
 _COLOR_ATTRIBUTES = {"fill", "stroke", "color", "stop-color", "flood-color"}
-_EXPECTED_SVGS = {
-    "ninka-symbol-color-dark.svg",
-    "ninka-symbol-color-light.svg",
-    "ninka-symbol-forest.svg",
-    "ninka-symbol-cream.svg",
-    "ninka-lockup-horizontal-dark.svg",
-    "ninka-lockup-horizontal-light.svg",
-    "ninka-lockup-stacked-dark.svg",
-    "ninka-lockup-stacked-light.svg",
-}
+
+
+def _expected_svgs() -> dict[str, str]:
+    """Return the canonical deterministic markup for every source SVG."""
+    expected = {
+        f"ninka-symbol-{variant}.svg": symbol_svg(variant)
+        for variant in ("color-dark", "color-light", "forest", "cream")
+    }
+    expected.update(
+        {
+            f"ninka-lockup-{layout}-{theme}.svg": lockup_svg(layout, theme)
+            for layout in ("horizontal", "stacked")
+            for theme in ("dark", "light")
+        }
+    )
+    return expected
 
 
 def _local_name(name: str) -> str:
@@ -107,18 +114,18 @@ def verify_assets(root: Path) -> None:
     """Validate and report every generated branding asset group."""
     branding = root / "assets" / "branding"
     source_dir = branding / "source"
+    expected_svgs = _expected_svgs()
     svg_paths = sorted(source_dir.glob("*.svg"))
     svg_names = {path.name for path in svg_paths}
-    if svg_names != _EXPECTED_SVGS:
-        missing = sorted(_EXPECTED_SVGS - svg_names)
-        extra = sorted(svg_names - _EXPECTED_SVGS)
+    expected_svg_names = set(expected_svgs)
+    if svg_names != expected_svg_names:
+        missing = sorted(expected_svg_names - svg_names)
+        extra = sorted(svg_names - expected_svg_names)
         raise ValueError(f"SVG asset set mismatch; missing={missing}, extra={extra}")
     for path in svg_paths:
         verify_svg(path)
-        if "lockup" in path.name:
-            document = ET.parse(path).getroot()
-            if document.attrib.get("data-brand-name") != "Ninka FoodLab":
-                raise ValueError(f"incorrect formal brand name metadata in {path}")
+        if path.read_text(encoding="utf-8") != expected_svgs[path.name]:
+            raise ValueError(f"SVG content mismatch: {path.name}")
     print(f"SVG assets: {len(svg_paths)} verified")
 
     png_dir = branding / "png"

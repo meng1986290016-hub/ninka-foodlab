@@ -16,6 +16,7 @@ from export_icons import (
     export_all,
     read_icns_representations,
     render_icon,
+    write_fallback_icns,
     write_icns,
 )
 
@@ -164,6 +165,31 @@ class ExportIconTests(unittest.TestCase):
                 platform_dir / "ninka-foodlab.icns"
             )
             self.assertEqual(len(representations), len(ICNS_REPRESENTATIONS))
+
+    def test_iconutil_success_with_incomplete_icns_recovers_with_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            platform_dir = Path(directory)
+            target = platform_dir / "ninka-foodlab.icns"
+
+            def write_incomplete_icns(command, **kwargs):
+                output = Path(command[command.index("-o") + 1])
+                output.write_bytes(b"icns\x00\x00\x00\x08")
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch("export_icons.platform.system", return_value="Darwin"), patch(
+                "export_icons.subprocess.run", side_effect=write_incomplete_icns
+            ), patch(
+                "export_icons.write_fallback_icns", wraps=write_fallback_icns
+            ) as fallback:
+                write_icns(platform_dir)
+
+            fallback.assert_called_once()
+            representations = read_icns_representations(target)
+            self.assertEqual(
+                set(representations),
+                {representation.chunk_type for representation in ICNS_REPRESENTATIONS},
+            )
+            self.assertEqual(list(platform_dir.glob(".*.iconset")), [])
 
     def test_invalid_fallback_is_removed_but_diagnostic_iconset_is_retained(self):
         with tempfile.TemporaryDirectory() as directory:

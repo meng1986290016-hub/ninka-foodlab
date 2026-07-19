@@ -149,6 +149,59 @@ class VerifyAssetsTests(unittest.TestCase):
             self.assertEqual(len(lines), 6)
             self.assertEqual(lines[-1], "Ninka FoodLab branding assets verified")
 
+    def test_forged_symbol_with_approved_palette_is_rejected(self):
+        with self._generated_assets() as root:
+            path = (
+                root
+                / "assets"
+                / "branding"
+                / "source"
+                / "ninka-symbol-color-dark.svg"
+            )
+            markup = path.read_text(encoding="utf-8")
+            forged = markup.replace('fill="#EFBD50"', 'fill="#DF6B45"', 1)
+            self.assertNotEqual(forged, markup)
+            path.write_text(forged, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "SVG content mismatch"):
+                verify_assets(root)
+
+    def test_forged_light_horizontal_lockup_path_is_rejected(self):
+        with self._generated_assets() as root:
+            path = (
+                root
+                / "assets"
+                / "branding"
+                / "source"
+                / "ninka-lockup-horizontal-light.svg"
+            )
+            markup = path.read_text(encoding="utf-8")
+            forged = markup.replace("M 799.127 748.165", "M 800.127 748.165", 1)
+            self.assertNotEqual(forged, markup)
+            path.write_text(forged, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "SVG content mismatch"):
+                verify_assets(root)
+
+    def test_forged_light_stacked_lockup_metadata_is_rejected(self):
+        with self._generated_assets() as root:
+            path = (
+                root
+                / "assets"
+                / "branding"
+                / "source"
+                / "ninka-lockup-stacked-light.svg"
+            )
+            markup = path.read_text(encoding="utf-8")
+            forged = markup.replace(
+                'data-layout="stacked"', 'data-layout="horizontal"', 1
+            )
+            self.assertNotEqual(forged, markup)
+            path.write_text(forged, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "SVG content mismatch"):
+                verify_assets(root)
+
     def test_corrupted_png_pixel_is_rejected(self):
         with self._generated_assets() as root:
             path = root / "assets" / "branding" / "png" / "ninka-icon-64.png"

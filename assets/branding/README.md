@@ -4,14 +4,21 @@ Ninka FoodLab 的图形标志是一枚“聚合种子”：九个代表原料、
 
 ## 重新生成与验证
 
-在仓库根目录中运行：
+从全新 checkout 开始时，需要 Python 3.12 或更高版本。在仓库根目录创建与 `package.json` 脚本约定一致的独立环境，并安装锁定的品牌生成依赖：
+
+```bash
+python3.12 -m venv .venv-branding
+.venv-branding/bin/python -m pip install -r scripts/branding/requirements.txt
+```
+
+然后使用仓库脚本生成和验证资产：
 
 ```bash
 pnpm brand:generate
 pnpm brand:verify
 ```
 
-`brand:generate` 依次生成图形 SVG、轮廓字标 SVG、PNG、ICO、ICNS 和预览表。`brand:verify` 会检查 SVG 根元素、标签白名单、安全性与色板，并将每个 PNG 像素、每个 ICO 帧、ICNS 内全部 10 个 PNG 表示和完整预览表与确定性渲染结果逐像素比较。只有尺寸或文件签名正确、但品牌内容被替换的文件不会通过验证。
+`brand:generate` 和 `brand:verify` 都会通过 `.venv-branding/bin/python` 运行，因此虚拟环境的目录名不得更改。`brand:generate` 依次生成图形 SVG、轮廓字标 SVG、PNG、ICO、ICNS 和预览表。`brand:verify` 会检查 SVG 根元素、标签白名单、安全性与色板，并将 8 个源 SVG 与确定性生成器输出逐字节比较；每个 PNG 像素、每个 ICO 帧、ICNS 内全部 10 个 PNG 表示和完整预览表也会与确定性渲染结果逐像素比较。只有尺寸或文件签名正确、但品牌内容被替换的文件不会通过验证。
 
 在 macOS 上，生成器先按 Apple 规定的十文件 `.iconset` 调用 `iconutil`。如 `iconutil` 拒绝 iconset，或它生成的 ICNS 缺少表示/像素不匹配，生成器会用同一组 PNG 写入标准 ICNS 数据块。在 Linux 等非 macOS 环境中，直接使用该平台无关后备路径，不依赖已有或过期 ICNS。
 

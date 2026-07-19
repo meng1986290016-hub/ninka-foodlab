@@ -7,6 +7,109 @@ from pathlib import Path
 from logo_geometry import COLORS, MODULES, symbol_svg, write_symbol_assets
 
 
+def _quadratic_extrema(start: float, control: float, end: float) -> list[float]:
+    values = [start, end]
+    denominator = start - 2 * control + end
+    if denominator:
+        t = (start - control) / denominator
+        if 0 < t < 1:
+            values.append(
+                (1 - t) ** 2 * start
+                + 2 * (1 - t) * t * control
+                + t**2 * end
+            )
+    return values
+
+
+def _rotated_symbol_bounds(
+    svg: str, size: int
+) -> tuple[float, float, float, float]:
+    """Measure the exact post-rotation bounds of circles and quadratic paths."""
+    center = size / 2
+    sine = cosine = math.sqrt(.5)
+
+    def rotate(point: tuple[float, float]) -> tuple[float, float]:
+        x, y = point
+        return (
+            center + (x - center) * cosine - (y - center) * sine,
+            center + (x - center) * sine + (y - center) * cosine,
+        )
+
+    bounds: list[tuple[float, float, float, float]] = []
+    for path_data in re.findall(r'<path [^>]*d="([^"]+)"', svg):
+        tokens = re.findall(r"[MHVQZ]|-?\d+(?:\.\d+)?", path_data)
+        index = 0
+        current = (0.0, 0.0)
+        start = current
+        xs: list[float] = []
+        ys: list[float] = []
+        while index < len(tokens):
+            command = tokens[index]
+            index += 1
+            if command == "M":
+                current = (float(tokens[index]), float(tokens[index + 1]))
+                index += 2
+                start = current
+                rotated = rotate(current)
+                xs.append(rotated[0])
+                ys.append(rotated[1])
+            elif command in {"H", "V"}:
+                if command == "H":
+                    end = (float(tokens[index]), current[1])
+                else:
+                    end = (current[0], float(tokens[index]))
+                index += 1
+                for point in (rotate(current), rotate(end)):
+                    xs.append(point[0])
+                    ys.append(point[1])
+                current = end
+            elif command == "Q":
+                control = (float(tokens[index]), float(tokens[index + 1]))
+                end = (float(tokens[index + 2]), float(tokens[index + 3]))
+                index += 4
+                rotated_start = rotate(current)
+                rotated_control = rotate(control)
+                rotated_end = rotate(end)
+                xs.extend(
+                    _quadratic_extrema(
+                        rotated_start[0], rotated_control[0], rotated_end[0]
+                    )
+                )
+                ys.extend(
+                    _quadratic_extrema(
+                        rotated_start[1], rotated_control[1], rotated_end[1]
+                    )
+                )
+                current = end
+            elif command == "Z":
+                current = start
+            else:  # pragma: no cover - generator paths use only this command subset
+                raise AssertionError(f"unsupported path command: {command}")
+        bounds.append((min(xs), min(ys), max(xs), max(ys)))
+
+    circles = re.findall(
+        r'<circle [^>]*cx="([^"]+)" cy="([^"]+)" r="([^"]+)"', svg
+    )
+    for cx, cy, radius in circles:
+        rotated_center = rotate((float(cx), float(cy)))
+        circle_radius = float(radius)
+        bounds.append(
+            (
+                rotated_center[0] - circle_radius,
+                rotated_center[1] - circle_radius,
+                rotated_center[0] + circle_radius,
+                rotated_center[1] + circle_radius,
+            )
+        )
+
+    return (
+        min(bound[0] for bound in bounds),
+        min(bound[1] for bound in bounds),
+        max(bound[2] for bound in bounds),
+        max(bound[3] for bound in bounds),
+    )
+
+
 class LogoGeometryTests(unittest.TestCase):
     def test_approved_palette_and_nine_modules(self):
         self.assertEqual(COLORS, {
@@ -47,26 +150,28 @@ class LogoGeometryTests(unittest.TestCase):
                 svg,
             )
             self.assertIsNotNone(circle)
-            cx, cy, radius = map(float, circle.groups())
+            cx, cy, _radius = map(float, circle.groups())
             self.assertAlmostEqual(cx, center, places=3)
             self.assertAlmostEqual(cy, center, places=3)
 
-            visual_extent = 2 * radius * (6 + 4 * .22 - 2 * .16) / math.sqrt(2)
-            self.assertAlmostEqual(visual_extent, size * .57, delta=.01)
-            self.assertGreaterEqual(center - visual_extent / 2, 0)
-            self.assertLessEqual(center + visual_extent / 2, size)
+            left, top, right, bottom = _rotated_symbol_bounds(svg, size)
+            self.assertAlmostEqual(right - left, size * .584, delta=size * .001)
+            self.assertAlmostEqual(bottom - top, size * .584, delta=size * .001)
+            self.assertGreaterEqual(
+                min(left, top, size - right, size - bottom), size * .18
+            )
 
             corner_radius = re.search(r'<rect [^>]* rx="([^"]+)"', svg)
             self.assertIsNotNone(corner_radius)
             self.assertAlmostEqual(float(corner_radius.group(1)), size * 220 / 1024, places=3)
 
-    def test_default_symbol_has_57_percent_visual_extent_and_18_percent_safety_area(self):
+    def test_default_symbol_has_58_4_percent_visual_extent_and_18_percent_safety_area(self):
         svg = symbol_svg("color-dark")
-        radius = float(re.search(r'data-module="1-1" fill="[^"]+" cx="[^"]+" cy="[^"]+" r="([^"]+)"', svg).group(1))
-        visual_extent = 2 * radius * (6 + 4 * .22 - 2 * .16) / math.sqrt(2)
-        safety = (1024 - visual_extent) / 2
+        left, top, right, bottom = _rotated_symbol_bounds(svg, 1024)
+        visual_extent = max(right - left, bottom - top)
+        safety = min(left, top, 1024 - right, 1024 - bottom)
 
-        self.assertAlmostEqual(visual_extent, 1024 * .57, delta=.01)
+        self.assertAlmostEqual(visual_extent, 1024 * .584, delta=.5)
         self.assertGreaterEqual(safety, 1024 * .18)
 
     def test_writer_outputs_each_complete_variant(self):

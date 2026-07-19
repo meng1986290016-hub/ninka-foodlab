@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod database;
+pub mod ingest;
 pub mod ingredients;
 
 use commands::ingredients::{

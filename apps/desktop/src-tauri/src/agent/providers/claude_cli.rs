@@ -14,18 +14,26 @@ use super::{
 };
 use crate::agent::{
     AgentError,
+    mcp::McpTaskLaunchConfig,
     model::{AgentProviderCapabilities, AgentProviderConfig, ReasoningEffort},
 };
 
 pub struct ClaudeCliProvider {
     runtime: CliRuntime,
+    mcp: Option<McpTaskLaunchConfig>,
 }
 
 impl ClaudeCliProvider {
     pub fn new(config: AgentProviderConfig) -> Result<Self, AgentError> {
         Ok(Self {
             runtime: CliRuntime::new(config, CliFlavor::Claude)?,
+            mcp: None,
         })
+    }
+
+    pub fn with_mcp(mut self, mcp: McpTaskLaunchConfig) -> Self {
+        self.mcp = Some(mcp);
+        self
     }
 
     pub async fn detect(&self) -> Result<CliDetectionResult, AgentError> {
@@ -96,6 +104,10 @@ impl AgentProvider for ClaudeCliProvider {
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
         let task = TaskDirectory::create(&request)?;
+        if let Some(mcp) = &self.mcp {
+            mcp.prepare(&task.directory)?
+                .write_claude_config(&task.mcp_config_path)?;
+        }
         let output = self
             .runtime
             .execute(&self.arguments(&task), &task.directory)

@@ -10,12 +10,22 @@ if [ "$1" = "login" ] && [ "$2" = "status" ]; then
   exit 0
 fi
 
+expect_mcp=0
+has_mcp_command=0
+has_mcp_token=0
 for argument in "$@"; do
   case "$argument" in
     *__HANG__*) exec sleep 30 ;;
     *UNSELECTED_SECRET*) printf '%s\n' 'unselected attachment leaked' >&2; exit 90 ;;
+    *__EXPECT_MCP__*) expect_mcp=1 ;;
+    mcp_servers.food_rd.command=*) has_mcp_command=1 ;;
+    *FOOD_RD_MCP_TOKEN*) has_mcp_token=1 ;;
   esac
 done
+if [ "$expect_mcp" = "1" ] && { [ "$has_mcp_command" != "1" ] || [ "$has_mcp_token" != "1" ]; }; then
+  printf '%s\n' 'missing task-scoped MCP config' >&2
+  exit 91
+fi
 
 printf '%s\n' '{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"{\"items\":[]}"}}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"call-codex","type":"mcp_tool_call","server":"food_rd","tool":"create_ingredient_import_draft","arguments":{"materialName":"脱脂乳粉"},"status":"completed"}}'

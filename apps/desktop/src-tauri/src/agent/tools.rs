@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::{
@@ -35,7 +35,8 @@ const TOOL_NAMES: &[&str] = &[
     "request_open_ingredient_review",
 ];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentToolContext {
     pub run_id: String,
     pub import_job_id: String,

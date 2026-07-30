@@ -279,6 +279,12 @@ impl TaskDirectory {
             .join(Uuid::new_v4().to_string());
         fs::create_dir_all(&directory)
             .map_err(|_| AgentError::provider_failure("无法创建 CLI 临时任务目录"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+                .map_err(|_| AgentError::provider_failure("无法限制 CLI 临时任务目录权限"))?;
+        }
 
         let schema_json = serde_json::to_string_pretty(&request.output_schema)
             .map_err(|_| AgentError::invalid_input("结构化输出规则无法序列化"))?;

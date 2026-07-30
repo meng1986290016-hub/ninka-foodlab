@@ -32,6 +32,16 @@ impl AgentRepository {
             database::open(path)?,
             Arc::new(|| Utc::now().to_rfc3339()),
             Arc::new(|| Uuid::new_v4().to_string()),
+            true,
+        )
+    }
+
+    pub fn open_for_runtime(path: &Path) -> Result<Self, RepositoryError> {
+        Self::from_connection(
+            database::open(path)?,
+            Arc::new(|| Utc::now().to_rfc3339()),
+            Arc::new(|| Uuid::new_v4().to_string()),
+            false,
         )
     }
 
@@ -44,6 +54,7 @@ impl AgentRepository {
             database::open_in_memory()?,
             Arc::new(clock),
             Arc::new(create_id),
+            true,
         )
     }
 
@@ -51,6 +62,7 @@ impl AgentRepository {
         mut connection: Connection,
         clock: Clock,
         create_id: IdGenerator,
+        recover_interrupted: bool,
     ) -> Result<Self, RepositoryError> {
         migrations::apply(&mut connection, &clock())?;
         let repository = Self {
@@ -58,7 +70,9 @@ impl AgentRepository {
             clock,
             create_id,
         };
-        repository.recover_interrupted()?;
+        if recover_interrupted {
+            repository.recover_interrupted()?;
+        }
         Ok(repository)
     }
 

@@ -2,10 +2,15 @@
 name = "food-rd-desktop"
 version = "0.1.0"
 edition = "2024"
+default-run = "food-rd-desktop"
 
 [lib]
 name = "food_rd_desktop"
 path = "src/lib.rs"
+
+[[bin]]
+name = "food_rd_mcp"
+path = "src/bin/food_rd_mcp.rs"
 
 [dependencies]
 async-trait = "0.1"
@@ -14,6 +19,7 @@ calamine = "0.31"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 csv = "1"
 futures-util = "0.3"
+getrandom = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
@@ -29,7 +35,7 @@ sha2 = "0.10"
 tauri = "2.11.5"
 tauri-plugin-dialog = "2"
 thiserror = "2"
-tokio = { version = "1", features = ["process", "io-util", "time", "sync", "rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["process", "io-std", "io-util", "time", "sync", "rt-multi-thread", "macros"] }
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "4", default-features = false, features = ["deflate"] }
 

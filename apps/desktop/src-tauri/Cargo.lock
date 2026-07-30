@@ -1104,6 +1104,7 @@ dependencies = [
  "chrono",
  "csv",
  "futures-util",
+ "getrandom 0.3.4",
  "hex",
  "image",
  "keyring",

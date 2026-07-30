@@ -1,10 +1,13 @@
 use std::{
+    collections::BTreeSet,
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
 
 use food_rd_desktop::agent::{
+    mcp::McpTaskLaunchConfig,
     model::{
         AgentMessage, AgentMessageRole, AgentMessageStatus, AgentProviderCapabilities,
         AgentProviderConfig, AgentProviderKind, AgentProviderProtocol, ReasoningEffort,
@@ -14,6 +17,7 @@ use food_rd_desktop::agent::{
         ProviderTestKind, ProviderTurnRequest, ProviderTurnResult, claude_cli::ClaudeCliProvider,
         cli::detect_cli, codex_cli::CodexCliProvider,
     },
+    tools::AgentToolContext,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -276,4 +280,44 @@ async fn user_prompt_is_passed_as_one_argument_without_shell_expansion() {
     provider.run(request(&prompt), sink()).await.unwrap();
 
     assert!(!marker.exists());
+}
+
+#[tokio::test]
+async fn both_cli_adapters_receive_the_same_task_scoped_mcp_context() {
+    let root = std::env::temp_dir().join(format!("food-rd-cli-mcp-{}", Uuid::new_v4()));
+    fs::create_dir_all(root.join("attachments")).unwrap();
+    fs::write(root.join("food-rd.sqlite3"), b"fixture").unwrap();
+    let launch = McpTaskLaunchConfig::new(
+        fixture("fake-codex"),
+        root.join("food-rd.sqlite3"),
+        root.join("attachments"),
+        AgentToolContext {
+            run_id: "run-cli-mcp".into(),
+            import_job_id: "job-cli-mcp".into(),
+            allowed_attachment_ids: BTreeSet::new(),
+            provider_kind: AgentProviderKind::CodexCli,
+            model: "test-model".into(),
+        },
+        Duration::from_secs(60),
+    );
+    let codex = CodexCliProvider::new(config(
+        AgentProviderKind::CodexCli,
+        AgentProviderProtocol::CodexCli,
+        fixture("fake-codex"),
+    ))
+    .unwrap()
+    .with_mcp(launch.clone());
+    let mut claude_launch = launch;
+    claude_launch.context.provider_kind = AgentProviderKind::ClaudeCodeCli;
+    let claude = ClaudeCliProvider::new(config(
+        AgentProviderKind::ClaudeCodeCli,
+        AgentProviderProtocol::ClaudeCodeCli,
+        fixture("fake-claude"),
+    ))
+    .unwrap()
+    .with_mcp(claude_launch);
+
+    assert_normalized(&codex.run(request("__EXPECT_MCP__"), sink()).await.unwrap());
+    assert_normalized(&claude.run(request("__EXPECT_MCP__"), sink()).await.unwrap());
+    fs::remove_dir_all(root).unwrap();
 }

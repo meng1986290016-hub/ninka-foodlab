@@ -14,25 +14,33 @@ use super::{
 };
 use crate::agent::{
     AgentError,
+    mcp::{McpTaskLaunchConfig, PreparedMcpTask},
     model::{AgentProviderCapabilities, AgentProviderConfig, ReasoningEffort},
 };
 
 pub struct CodexCliProvider {
     runtime: CliRuntime,
+    mcp: Option<McpTaskLaunchConfig>,
 }
 
 impl CodexCliProvider {
     pub fn new(config: AgentProviderConfig) -> Result<Self, AgentError> {
         Ok(Self {
             runtime: CliRuntime::new(config, CliFlavor::Codex)?,
+            mcp: None,
         })
+    }
+
+    pub fn with_mcp(mut self, mcp: McpTaskLaunchConfig) -> Self {
+        self.mcp = Some(mcp);
+        self
     }
 
     pub async fn detect(&self) -> Result<CliDetectionResult, AgentError> {
         self.runtime.detect().await
     }
 
-    fn arguments(&self, task: &TaskDirectory) -> Vec<String> {
+    fn arguments(&self, task: &TaskDirectory, mcp: Option<&PreparedMcpTask>) -> Vec<String> {
         let mut arguments = vec![
             "exec".into(),
             "--json".into(),
@@ -40,6 +48,8 @@ impl CodexCliProvider {
             "--sandbox".into(),
             "read-only".into(),
             "--skip-git-repo-check".into(),
+            "--ignore-user-config".into(),
+            "--ignore-rules".into(),
             "--output-schema".into(),
             task.schema_path.to_string_lossy().into_owned(),
             "-o".into(),
@@ -54,6 +64,18 @@ impl CodexCliProvider {
         if let Some(effort) = codex_effort(self.runtime.config.reasoning_effort) {
             arguments.push("-c".into());
             arguments.push(format!("model_reasoning_effort=\"{effort}\""));
+        }
+        if let Some(mcp) = mcp {
+            arguments.push("-c".into());
+            arguments.push(format!(
+                "mcp_servers.food_rd.command={}",
+                toml_string(&mcp.server_binary.to_string_lossy())
+            ));
+            arguments.push("-c".into());
+            arguments.push(format!(
+                "mcp_servers.food_rd.env={}",
+                toml_environment(&mcp.environment)
+            ));
         }
         for image in &task.image_paths {
             arguments.push("-i".into());
@@ -96,9 +118,14 @@ impl AgentProvider for CodexCliProvider {
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
         let task = TaskDirectory::create(&request)?;
+        let mcp = self
+            .mcp
+            .as_ref()
+            .map(|config| config.prepare(&task.directory))
+            .transpose()?;
         let output = self
             .runtime
-            .execute(&self.arguments(&task), &task.directory)
+            .execute(&self.arguments(&task, mcp.as_ref()), &task.directory)
             .await?;
         if !output.status.success() {
             return Err(failure_from_output(&output));
@@ -227,4 +254,17 @@ fn configured_model(model: &str) -> Vec<AgentModelOption> {
             label: model.into(),
         }]
     }
+}
+
+fn toml_environment(environment: &std::collections::BTreeMap<String, String>) -> String {
+    let entries = environment
+        .iter()
+        .map(|(key, value)| format!("{}={}", toml_string(key), toml_string(value)))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{{{entries}}}")
+}
+
+fn toml_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into())
 }

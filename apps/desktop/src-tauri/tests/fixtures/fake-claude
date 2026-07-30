@@ -10,12 +10,26 @@ if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
   exit 0
 fi
 
+expect_mcp=0
+mcp_config_path=
+previous=
 for argument in "$@"; do
+  if [ "$previous" = "--mcp-config" ]; then
+    mcp_config_path=$argument
+  fi
   case "$argument" in
     *__HANG__*) exec sleep 30 ;;
     *UNSELECTED_SECRET*) printf '%s\n' 'unselected attachment leaked' >&2; exit 90 ;;
+    *__EXPECT_MCP__*) expect_mcp=1 ;;
   esac
+  previous=$argument
 done
+if [ "$expect_mcp" = "1" ]; then
+  if [ -z "$mcp_config_path" ] || ! grep -q '"food_rd"' "$mcp_config_path" || ! grep -q 'FOOD_RD_MCP_TOKEN' "$mcp_config_path"; then
+    printf '%s\n' 'missing task-scoped MCP config' >&2
+    exit 91
+  fi
+fi
 
 printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"{\"items\":[]}"}}}'
 printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call-claude","name":"mcp__food_rd__create_ingredient_import_draft","input":{"materialName":"脱脂乳粉"}}]}}'

@@ -3,6 +3,7 @@ pub mod commands;
 pub mod database;
 pub mod ingest;
 pub mod ingredients;
+pub mod recipes;
 
 use commands::agent::{
     cancel_agent_run, clear_agent_provider_secret, create_agent_conversation,

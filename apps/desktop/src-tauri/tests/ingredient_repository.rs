@@ -323,7 +323,7 @@ fn settings_drafts_and_database_status_round_trip_json() {
 
     let status = fixture.repo.database_status().unwrap();
     assert_eq!(status.mode, "sqlite");
-    assert_eq!(status.schema_version, 4);
+    assert_eq!(status.schema_version, 5);
     assert!(status.healthy);
 }
 

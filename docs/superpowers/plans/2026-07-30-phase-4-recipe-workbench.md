@@ -65,12 +65,12 @@
 - 保存正式版本必须在一个事务中完成快照、计算结果、依赖和版本号写入。
 - 重启后恢复草稿；中断写入不产生半个版本。
 
-- [ ] **Step 1:** 写迁移、重启恢复、不可变和事务回滚测试。
-- [ ] **Step 2:** 建立 schema version 5 与外键/唯一约束。
-- [ ] **Step 3:** 实现草稿读写和正式版本事务。
-- [ ] **Step 4:** 实现版本引用保护与归档。
-- [ ] **Step 5:** 运行 Rust 存储测试。
-- [ ] **Step 6:** 提交 `feat(recipes): persist drafts and immutable versions`。
+- [x] **Step 1:** 写迁移、重启恢复、不可变和事务回滚测试。
+- [x] **Step 2:** 建立 schema version 5 与外键/唯一约束。
+- [x] **Step 3:** 实现草稿读写和正式版本事务。
+- [x] **Step 4:** 实现版本引用保护与归档。
+- [x] **Step 5:** 运行 Rust 存储测试。
+- [x] **Step 6:** 提交 `feat(recipes): persist drafts and immutable versions`。
 
 ---
 

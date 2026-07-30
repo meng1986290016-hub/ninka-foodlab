@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_agent_schema_version_four() {
+fn fresh_database_applies_recipe_schema_version_five() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 4);
+    assert_eq!(schema_version(&connection), 5);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -48,6 +48,10 @@ fn fresh_database_applies_agent_schema_version_four() {
         "agent_messages",
         "agent_message_attachments",
         "agent_tool_calls",
+        "recipes",
+        "recipe_drafts",
+        "recipe_versions",
+        "recipe_version_dependencies",
     ] {
         assert!(table_exists(&connection, table), "missing table {table}");
     }
@@ -90,7 +94,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 4);
+    assert_eq!(schema_version(&connection), 5);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -104,4 +108,5 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
     assert_eq!(saved_name, "脱脂乳粉");
     assert!(table_exists(&connection, "ingredient_import_jobs"));
     assert!(table_exists(&connection, "agent_provider_configs"));
+    assert!(table_exists(&connection, "recipe_versions"));
 }

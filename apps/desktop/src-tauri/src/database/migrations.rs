@@ -13,6 +13,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         4,
         include_str!("../../migrations/0004_china_provider_compatibility.sql"),
     ),
+    (
+        5,
+        include_str!("../../migrations/0005_recipe_workspace.sql"),
+    ),
 ];
 
 pub fn apply(connection: &mut Connection, applied_at: &str) -> Result<(), RepositoryError> {

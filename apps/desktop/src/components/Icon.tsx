@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 export type IconName =
   | "archive"
+  | "arrow-down"
+  | "arrow-up"
   | "check"
   | "chevron-down"
   | "close"
@@ -10,14 +12,21 @@ export type IconName =
   | "edit"
   | "flask"
   | "formula"
+  | "grip"
   | "ingredients"
+  | "lock"
   | "message"
+  | "more"
   | "paperclip"
   | "plus"
   | "search"
+  | "scale"
   | "send"
   | "settings"
-  | "trash";
+  | "trash"
+  | "trend"
+  | "unlock"
+  | "warning";
 
 const paths: Record<IconName, ReactNode> = {
   archive: (
@@ -25,6 +34,18 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M4 7h16" />
       <path d="M9 11v6m6-6v6" />
       <path d="m6 7 1 14h10l1-14M9 7l1-3h4l1 3" />
+    </>
+  ),
+  "arrow-down": (
+    <>
+      <path d="M12 5v14" />
+      <path d="m7 14 5 5 5-5" />
+    </>
+  ),
+  "arrow-up": (
+    <>
+      <path d="M12 19V5" />
+      <path d="m7 10 5-5 5 5" />
     </>
   ),
   check: <path d="m5 12 4 4L19 6" />,
@@ -61,16 +82,39 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M9 8h6M9 12h6M9 16h3" />
     </>
   ),
+  grip: (
+    <>
+      <circle cx="8" cy="6" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="6" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="12" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="12" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="18" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="18" r=".8" fill="currentColor" stroke="none" />
+    </>
+  ),
   ingredients: (
     <>
       <rect x="4" y="7" width="16" height="13" rx="2" />
       <path d="M7 7V4h10v3M8 12h8M8 16h5" />
     </>
   ),
+  lock: (
+    <>
+      <rect x="5" y="10" width="14" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+    </>
+  ),
   message: (
     <>
       <path d="M21 12a8 8 0 0 1-8 8H6l-4 2 1.5-4A9 9 0 1 1 21 12Z" />
       <path d="M8 12h.01M12 12h.01M16 12h.01" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
     </>
   ),
   paperclip: (
@@ -81,6 +125,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-4-4" />
+    </>
+  ),
+  scale: (
+    <>
+      <path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7Z" />
+      <path d="M8 21h8" />
     </>
   ),
   send: (
@@ -99,6 +149,24 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M4 7h16M9 11v6m6-6v6" />
       <path d="m6 7 1 14h10l1-14M9 7l1-3h4l1 3" />
+    </>
+  ),
+  trend: (
+    <>
+      <path d="M4 19V5M4 19h16" />
+      <path d="m7 15 4-4 3 2 5-6" />
+    </>
+  ),
+  unlock: (
+    <>
+      <rect x="5" y="10" width="14" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 7.5-2M12 14v3" />
+    </>
+  ),
+  warning: (
+    <>
+      <path d="M10.3 4.2 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4M12 17h.01" />
     </>
   ),
 };

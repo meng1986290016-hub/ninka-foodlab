@@ -16,6 +16,7 @@ import { AppShell, type AppPage } from "./components/AppShell";
 import { AgentPanel } from "./features/agent/AgentPanel";
 import { IngredientLibrary } from "./features/ingredients/IngredientLibrary";
 import { ImportedVariantReview } from "./features/ingredients/ImportedVariantReview";
+import { RecipeWorkbench } from "./features/recipes/RecipeWorkbench";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import "./styles/app.css";
 
@@ -99,6 +100,8 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
             api={desktopApi}
             refreshToken={ingredientRefreshToken}
           />
+        ) : activePage === "recipes" ? (
+          <RecipeWorkbench api={desktopApi} />
         ) : activePage === "settings" ? (
           <SettingsPage
             api={desktopApi}
@@ -107,7 +110,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
           />
         ) : (
           <section className="future-page">
-            <h1>{activePage === "recipes" ? "配方工作台" : "配方库"}</h1>
+            <h1>配方库</h1>
             <p>该功能将在后续阶段开放，当前原料库和设置可正常使用。</p>
           </section>
         )}

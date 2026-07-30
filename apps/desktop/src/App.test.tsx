@@ -6,7 +6,7 @@ import { BrowserDemoApi } from "./api/browser-demo-api";
 import { App } from "./App";
 
 describe("App navigation", () => {
-  it("opens model settings and keeps unfinished pages clearly separated", async () => {
+  it("opens model settings and the real recipe workbench", async () => {
     window.localStorage.clear();
     const user = userEvent.setup();
     render(<App api={new BrowserDemoApi({ storage: window.localStorage })} />);
@@ -25,7 +25,7 @@ describe("App navigation", () => {
     await user.click(screen.getByRole("button", { name: "配方工作台" }));
     expect(screen.getByRole("heading", { name: "配方工作台" })).toBeTruthy();
     expect(
-      screen.getByText("该功能将在后续阶段开放，当前原料库和设置可正常使用。"),
+      screen.getByRole("button", { name: "新建配方" }),
     ).toBeTruthy();
   });
 });

@@ -1,4 +1,7 @@
 pub mod anthropic;
+pub mod claude_cli;
+pub mod cli;
+pub mod codex_cli;
 pub mod gemini;
 pub mod http;
 pub mod openai;
@@ -98,6 +101,8 @@ pub type AgentEventSink = Arc<dyn Fn(ProviderEvent) + Send + Sync>;
 #[async_trait]
 pub trait AgentProvider: Send + Sync {
     fn capabilities(&self) -> AgentProviderCapabilities;
+
+    fn cancel(&self) {}
 
     async fn test(&self, kind: ProviderTestKind) -> Result<AgentProviderTestResult, AgentError>;
 

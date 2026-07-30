@@ -66,6 +66,13 @@ impl AgentError {
         }
     }
 
+    pub fn cancelled(message: impl Into<String>) -> Self {
+        Self::Domain {
+            code: "cancelled",
+            message: message.into(),
+        }
+    }
+
     pub fn tool_denied(name: &str) -> Self {
         Self::Domain {
             code: "tool_denied",
@@ -76,6 +83,14 @@ impl AgentError {
     pub fn provider_failure(message: impl Into<String>) -> Self {
         Self::Provider {
             code: "provider_failure",
+            message: message.into(),
+            retryable_once: false,
+        }
+    }
+
+    pub fn provider_timeout(message: impl Into<String>) -> Self {
+        Self::Provider {
+            code: "provider_timeout",
             message: message.into(),
             retryable_once: false,
         }

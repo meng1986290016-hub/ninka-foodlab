@@ -1,0 +1,22 @@
+#!/bin/sh
+
+if [ "$1" = "--version" ]; then
+  printf '%s\n' '2.1.0 (Claude Code)'
+  exit 0
+fi
+
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  printf '%s\n' '{"loggedIn":true,"authMethod":"test"}'
+  exit 0
+fi
+
+for argument in "$@"; do
+  case "$argument" in
+    *__HANG__*) exec sleep 30 ;;
+    *UNSELECTED_SECRET*) printf '%s\n' 'unselected attachment leaked' >&2; exit 90 ;;
+  esac
+done
+
+printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"{\"items\":[]}"}}}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call-claude","name":"mcp__food_rd__create_ingredient_import_draft","input":{"materialName":"脱脂乳粉"}}]}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"{\"items\":[]}","structured_output":{"items":[]},"usage":{"input_tokens":10,"output_tokens":5}}'

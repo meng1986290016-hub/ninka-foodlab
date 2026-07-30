@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 async-trait = "0.1"
+base64 = "0.22"
 calamine = "0.31"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 csv = "1"

@@ -357,6 +357,16 @@ export class BrowserDemoApi implements DesktopApi {
       updatedAt: this.now(),
     };
     state.agentProviderConfigs[input.id] = saved;
+    if (
+      input.kind === "custom" &&
+      (input.protocol === "openai_compatible" ||
+        input.protocol === "anthropic_messages")
+    ) {
+      state.settings[`agent.custom.${input.protocol}`] = {
+        endpoint: input.endpoint,
+        model: input.model,
+      };
+    }
     this.write(state);
     return saved;
   }
@@ -410,6 +420,23 @@ export class BrowserDemoApi implements DesktopApi {
     return [...new Set(ids)].map(
       (id): AgentModelOption => ({ id, label: id }),
     );
+  }
+
+  async getAgentCustomProviderSubconfig(
+    protocol: "openai_compatible" | "anthropic_messages",
+  ) {
+    const state = this.read();
+    const stored = state.settings[`agent.custom.${protocol}`] as
+      | { endpoint?: unknown; model?: unknown }
+      | undefined;
+    const current = state.agentProviderConfigs.custom;
+    if (current?.protocol === protocol) {
+      return { endpoint: current.endpoint, model: current.model };
+    }
+    return {
+      endpoint: typeof stored?.endpoint === "string" ? stored.endpoint : "",
+      model: typeof stored?.model === "string" ? stored.model : "",
+    };
   }
 
   async testAgentProvider(

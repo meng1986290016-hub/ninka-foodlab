@@ -1,4 +1,5 @@
 import type {
+  AgentCustomProviderSubconfig,
   AgentConversation,
   AgentMessage,
   AgentModelOption,
@@ -54,6 +55,9 @@ export interface DesktopApi extends LegacyIngredientApi {
   setAgentProviderSecret(input: AgentProviderSecretInput): Promise<void>;
   clearAgentProviderSecret(providerId: string): Promise<void>;
   listAgentProviderModels(providerId: string): Promise<AgentModelOption[]>;
+  getAgentCustomProviderSubconfig(
+    protocol: "openai_compatible" | "anthropic_messages",
+  ): Promise<AgentCustomProviderSubconfig>;
   testAgentProvider(
     providerId: string,
     kind: AgentProviderTestResult["kind"],

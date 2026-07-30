@@ -7,16 +7,25 @@ import { Icon, type IconName } from "./Icon";
 interface AppShellProps {
   children: ReactNode;
   databaseStatus: DatabaseStatus | null;
+  activePage: AppPage;
+  onNavigate(page: AppPage): void;
 }
 
-const navigation: Array<{ label: string; icon: IconName; active?: boolean }> = [
-  { label: "原料库", icon: "ingredients", active: true },
-  { label: "配方工作台", icon: "flask" },
-  { label: "配方库", icon: "formula" },
-  { label: "设置", icon: "settings" },
+export type AppPage = "ingredients" | "recipes" | "recipe-library" | "settings";
+
+const navigation: Array<{ id: AppPage; label: string; icon: IconName }> = [
+  { id: "ingredients", label: "原料库", icon: "ingredients" },
+  { id: "recipes", label: "配方工作台", icon: "flask" },
+  { id: "recipe-library", label: "配方库", icon: "formula" },
+  { id: "settings", label: "设置", icon: "settings" },
 ];
 
-export function AppShell({ children, databaseStatus }: AppShellProps) {
+export function AppShell({
+  children,
+  databaseStatus,
+  activePage,
+  onNavigate,
+}: AppShellProps) {
   const isBrowserDemo = databaseStatus?.mode !== "sqlite";
 
   return (
@@ -26,10 +35,12 @@ export function AppShell({ children, databaseStatus }: AppShellProps) {
         <nav aria-label="主导航" className="primary-nav">
           {navigation.map((item) => (
             <button
-              aria-current={item.active ? "page" : undefined}
-              className={item.active ? "nav-item nav-item--active" : "nav-item"}
-              disabled={!item.active}
+              aria-current={item.id === activePage ? "page" : undefined}
+              className={
+                item.id === activePage ? "nav-item nav-item--active" : "nav-item"
+              }
               key={item.label}
+              onClick={() => onNavigate(item.id)}
               type="button"
             >
               <Icon name={item.icon} />

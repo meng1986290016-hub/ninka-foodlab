@@ -1,6 +1,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 import type {
+  AgentCustomProviderSubconfig,
   AgentConversation,
   AgentMessage,
   AgentModelOption,
@@ -126,6 +127,15 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<AgentModelOption[]>("list_agent_provider_models", {
       providerId,
     });
+  }
+
+  getAgentCustomProviderSubconfig(
+    protocol: "openai_compatible" | "anthropic_messages",
+  ) {
+    return this.invoke<AgentCustomProviderSubconfig>(
+      "get_agent_custom_provider_subconfig",
+      { protocol },
+    );
   }
 
   testAgentProvider(

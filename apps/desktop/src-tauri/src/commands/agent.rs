@@ -12,11 +12,12 @@ use crate::{
         mcp::McpTaskLaunchConfig,
         model::{
             AgentConversation, AgentMessage, AgentPreferences, AgentProviderConfig,
-            AgentProviderConfigInput, AgentProviderKind, AgentProviderSecretInput, AgentRun,
-            AgentRunRequest, AgentRunStatus,
+            AgentProviderConfigInput, AgentProviderKind, AgentProviderProtocol,
+            AgentProviderSecretInput, AgentRun, AgentRunRequest, AgentRunStatus,
         },
         providers::{
-            AgentModelOption, AgentProviderTestResult, ProviderRegistry, ProviderTestKind,
+            AgentModelOption, AgentProviderTestResult, CustomProviderSubconfig, ProviderRegistry,
+            ProviderTestKind,
             cli::{CliDetectionResult, detect_cli},
             factory::build_provider,
         },
@@ -112,6 +113,16 @@ pub async fn list_agent_provider_models(
     build_provider(config, secret, None)?
         .list_models()
         .await
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_agent_custom_provider_subconfig(
+    protocol: AgentProviderProtocol,
+    state: State<'_, AppState>,
+) -> Result<CustomProviderSubconfig, CommandError> {
+    provider_registry(&state)?
+        .custom_subconfig(protocol)
         .map_err(Into::into)
 }
 

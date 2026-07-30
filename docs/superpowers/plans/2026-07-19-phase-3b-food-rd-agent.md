@@ -826,7 +826,7 @@ git commit -m "feat(agent): orchestrate persistent chat runs"
 - Consumes: provider/configuration desktop methods.
 - Produces: navigable Settings, Agent toggle, provider selection, connection tests, and custom/CLI configuration UI.
 
-- [ ] **Step 1: Write failing settings interaction tests**
+- [x] **Step 1: Write failing settings interaction tests**
 
 ```tsx
 it("shows one custom card with two protocol configurations", async () => {
@@ -846,29 +846,29 @@ it("enables one provider and keeps the previous provider configuration", async (
 });
 ```
 
-- [ ] **Step 2: Run settings tests and verify failure**
+- [x] **Step 2: Run settings tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/settings/ModelProviderSettings.test.tsx`
 
 Expected: FAIL because Settings navigation and provider cards do not exist.
 
-- [ ] **Step 3: Make application navigation stateful**
+- [x] **Step 3: Make application navigation stateful**
 
 Replace disabled navigation buttons with an `AppPage = "ingredients" | "recipes" | "library" | "settings"` state owned by `App`. Settings renders in the content area; existing unimplemented pages render a clear placeholder without changing ingredient behavior.
 
-- [ ] **Step 4: Implement provider cards independently from LLM Wiki code and visuals**
+- [x] **Step 4: Implement provider cards independently from LLM Wiki code and visuals**
 
 Each card shows provider name, endpoint summary, active state, capability chips, and expand control. Expanded fields include Endpoint, key, model/custom model, context window, reasoning, timeout, connection test, and structured-function test. API key inputs start blank with `已保存` status; saving a blank input does not clear an existing key.
 
-- [ ] **Step 5: Implement the single custom and CLI card variations**
+- [x] **Step 5: Implement the single custom and CLI card variations**
 
 The custom card has protocol tabs and preserves both sub-configurations. CLI cards show detected executable, manual path, version/login result, model, reasoning, maximum runtime, connection test, and structured test. `启用食品研发 Agent` defaults visually on and saves to `agent.enabled`.
 
-- [ ] **Step 6: Add provider capability warnings**
+- [x] **Step 6: Add provider capability warnings**
 
 If the active Chat provider lacks images, Settings requires a separate image provider before photo upload. If it lacks tools or structured output, it cannot be activated for ingredient ingestion and the UI explains the missing capability.
 
-- [ ] **Step 7: Run settings, navigation, typecheck, and build tests**
+- [x] **Step 7: Run settings, navigation, typecheck, and build tests**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/settings src/App.test.tsx`
 

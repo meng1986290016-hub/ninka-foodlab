@@ -16,7 +16,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 53] = [
+pub const REGISTERED_COMMANDS: [&str; 54] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -60,6 +60,7 @@ pub const REGISTERED_COMMANDS: [&str; 53] = [
     "set_agent_provider_secret",
     "clear_agent_provider_secret",
     "list_agent_provider_models",
+    "get_agent_custom_provider_subconfig",
     "test_agent_provider",
     "detect_cli_providers",
     "list_agent_conversations",

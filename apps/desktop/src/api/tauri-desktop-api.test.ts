@@ -107,6 +107,7 @@ describe("TauriDesktopApi", () => {
     await api.listAgentProviderConfigs();
     await api.clearAgentProviderSecret("provider-1");
     await api.listAgentProviderModels("provider-1");
+    await api.getAgentCustomProviderSubconfig("anthropic_messages");
     await api.detectCliProviders();
     await api.listAgentConversations();
     await api.createAgentConversation("乳粉资料分析");
@@ -122,6 +123,10 @@ describe("TauriDesktopApi", () => {
       ["list_agent_provider_configs", undefined],
       ["clear_agent_provider_secret", { providerId: "provider-1" }],
       ["list_agent_provider_models", { providerId: "provider-1" }],
+      [
+        "get_agent_custom_provider_subconfig",
+        { protocol: "anthropic_messages" },
+      ],
       ["detect_cli_providers", undefined],
       ["list_agent_conversations", undefined],
       ["create_agent_conversation", { title: "乳粉资料分析" }],

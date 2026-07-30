@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 53);
+    assert_eq!(REGISTERED_COMMANDS.len(), 54);
     for command in [
         "list_categories",
         "create_supplier",
@@ -82,6 +82,7 @@ fn every_agent_command_is_registered() {
         "set_agent_provider_secret",
         "clear_agent_provider_secret",
         "list_agent_provider_models",
+        "get_agent_custom_provider_subconfig",
         "test_agent_provider",
         "detect_cli_providers",
         "list_agent_conversations",

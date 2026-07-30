@@ -64,6 +64,11 @@ export interface AgentModelOption {
   label: string;
 }
 
+export interface AgentCustomProviderSubconfig {
+  endpoint: string;
+  model: string;
+}
+
 export interface AgentProviderSecretInput {
   providerId: string;
   apiKey: string;

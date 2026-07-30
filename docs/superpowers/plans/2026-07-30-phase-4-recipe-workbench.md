@@ -220,10 +220,10 @@
 - 任意一个未锁定项可设为补足项。
 - 负数、锁定总量超限、补足项锁定和零基数给出具体提示。
 
-- [ ] **Step 1:** 写交互与 core 一致性测试。
-- [ ] **Step 2:** 实现缩放、锁定和补足命令。
-- [ ] **Step 3:** 验证边界错误不会破坏草稿。
-- [ ] **Step 4:** 提交 `feat(recipes): rebalance locked formula items`。
+- [x] **Step 1:** 写交互与 core 一致性测试。
+- [x] **Step 2:** 实现缩放、锁定和补足命令。
+- [x] **Step 3:** 验证边界错误不会破坏草稿。
+- [x] **Step 4:** 提交 `feat(recipes): rebalance locked formula items`。
 
 ---
 

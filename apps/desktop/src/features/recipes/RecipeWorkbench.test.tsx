@@ -365,4 +365,112 @@ describe("RecipeWorkbench", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(addButton);
   });
+
+  it("scales unlocked items while preserving a locked amount", async () => {
+    const api = createApi();
+    await api.createRecipe({
+      name: "锁定缩放配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} />);
+    await screen.findByDisplayValue("锁定缩放配方");
+    await addIngredient(user, "脱脂乳粉");
+    await addIngredient(user, "白砂糖");
+
+    const milkAmount = screen.getByRole("textbox", {
+      name: "脱脂乳粉用量",
+    });
+    const sugarAmount = screen.getByRole("textbox", {
+      name: "白砂糖用量",
+    });
+    await user.clear(milkAmount);
+    await user.type(milkAmount, "20");
+    await user.clear(sugarAmount);
+    await user.type(sugarAmount, "30");
+    await user.click(
+      screen.getByRole("button", { name: "锁定脱脂乳粉" }),
+    );
+    const target = screen.getByRole("textbox", {
+      name: "目标批量",
+    });
+    await user.clear(target);
+    await user.type(target, "100");
+    await user.click(
+      screen.getByRole("button", { name: "按比例调整" }),
+    );
+
+    expect((milkAmount as HTMLInputElement).value).toBe("20");
+    expect((sugarAmount as HTMLInputElement).value).toBe("80");
+  });
+
+  it("keeps a designated item automatically filled to the target", async () => {
+    const api = createApi();
+    await api.createRecipe({
+      name: "自动补足配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} />);
+    await screen.findByDisplayValue("自动补足配方");
+    await addIngredient(user, "脱脂乳粉");
+    await addIngredient(user, "白砂糖");
+
+    const milkAmount = screen.getByRole("textbox", {
+      name: "脱脂乳粉用量",
+    });
+    const sugarAmount = screen.getByRole("textbox", {
+      name: "白砂糖用量",
+    });
+    await user.clear(milkAmount);
+    await user.type(milkAmount, "200");
+    await user.click(
+      screen.getByRole("button", { name: "设白砂糖为补足" }),
+    );
+    expect((sugarAmount as HTMLInputElement).value).toBe("800");
+
+    await user.clear(milkAmount);
+    await user.type(milkAmount, "250");
+    expect((sugarAmount as HTMLInputElement).value).toBe("750");
+  });
+
+  it("shows a rebalance error and preserves amounts when locked mass exceeds the target", async () => {
+    const api = createApi();
+    await api.createRecipe({
+      name: "缩放边界配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} />);
+    await screen.findByDisplayValue("缩放边界配方");
+    await addIngredient(user, "脱脂乳粉");
+
+    const amount = screen.getByRole("textbox", {
+      name: "脱脂乳粉用量",
+    });
+    await user.clear(amount);
+    await user.type(amount, "80");
+    await user.click(
+      screen.getByRole("button", { name: "锁定脱脂乳粉" }),
+    );
+    const target = screen.getByRole("textbox", {
+      name: "目标批量",
+    });
+    await user.clear(target);
+    await user.type(target, "50");
+    await user.click(
+      screen.getByRole("button", { name: "按比例调整" }),
+    );
+
+    expect(
+      screen.getByText("已锁定原料总量超过目标批量"),
+    ).toBeTruthy();
+    expect((amount as HTMLInputElement).value).toBe("80");
+  });
 });

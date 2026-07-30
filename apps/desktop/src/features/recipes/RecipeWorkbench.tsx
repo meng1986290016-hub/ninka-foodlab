@@ -25,6 +25,7 @@ import { calculateRecipeDraft } from "./recipe-calculation";
 import { RecipeHeader } from "./RecipeHeader";
 import { RecipeIngredientPicker } from "./RecipeIngredientPicker";
 import { RecipeItemTable } from "./RecipeItemTable";
+import { rebalanceDraftItems } from "./recipe-rebalance";
 import { useRecipeDraft } from "./useRecipeDraft";
 
 interface RecipeWorkbenchProps {
@@ -239,6 +240,8 @@ function RecipeEditor({
     useState(initialVersions);
   const [recipeName, setRecipeName] = useState(recipe.name);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [rebalanceError, setRebalanceError] =
+    useState<string | null>(null);
   const [narrowView, setNarrowView] =
     useState<NarrowView>("formula");
   const calculate = useCallback(
@@ -280,17 +283,6 @@ function RecipeEditor({
       type: "set_items",
       items: normalizePositions(items),
     });
-  }
-
-  function updateItem(
-    id: string,
-    updater: (item: RecipeDraftItem) => RecipeDraftItem,
-  ) {
-    setItems(
-      draft.items.map((item) =>
-        item.id === id ? updater(item) : item,
-      ),
-    );
   }
 
   function addIngredient(
@@ -359,6 +351,73 @@ function RecipeEditor({
     setItems(items);
   }
 
+  function updateWithAutoFill(
+    items: RecipeDraftItem[],
+    editedItemId: string | null = null,
+  ) {
+    const filler = items.find((item) => item.autoFill);
+    if (filler === undefined || filler.id === editedItemId) {
+      setRebalanceError(null);
+      setItems(items);
+      return;
+    }
+    const result = rebalanceDraftItems(
+      items,
+      draft.targetBatchGrams,
+      { type: "auto-fill", itemId: filler.id },
+    );
+    if (!result.ok) {
+      setRebalanceError(result.message);
+      setItems(items);
+      return;
+    }
+    setRebalanceError(null);
+    setItems(result.items);
+  }
+
+  function scaleToTarget() {
+    const result = rebalanceDraftItems(
+      draft.items,
+      draft.targetBatchGrams,
+      { type: "proportional" },
+    );
+    if (!result.ok) {
+      setRebalanceError(result.message);
+      return;
+    }
+    setRebalanceError(null);
+    setItems(result.items);
+  }
+
+  function toggleAutoFill(id: string) {
+    const selected = draft.items.find((item) => item.id === id);
+    if (selected === undefined) return;
+    if (selected.autoFill) {
+      setRebalanceError(null);
+      setItems(
+        draft.items.map((item) =>
+          item.id === id ? { ...item, autoFill: false } : item,
+        ),
+      );
+      return;
+    }
+    const prepared = draft.items.map((item) => ({
+      ...item,
+      autoFill: item.id === id,
+    }));
+    const result = rebalanceDraftItems(
+      prepared,
+      draft.targetBatchGrams,
+      { type: "auto-fill", itemId: id },
+    );
+    if (!result.ok) {
+      setRebalanceError(result.message);
+      return;
+    }
+    setRebalanceError(null);
+    setItems(result.items);
+  }
+
   const inputMass = formulaInputMass(draft.items);
   const visibleIssues = draft.calculationIssues.filter(
     (issue) =>
@@ -405,14 +464,15 @@ function RecipeEditor({
               <input
                 aria-label="目标批量"
                 inputMode="decimal"
-                onChange={(event) =>
+                onChange={(event) => {
+                  setRebalanceError(null);
                   dispatch({
                     type: "patch",
                     patch: {
                       targetBatchGrams: event.target.value,
                     },
-                  })
-                }
+                  });
+                }}
                 value={draft.targetBatchGrams}
               />
               <small>g</small>
@@ -449,14 +509,21 @@ function RecipeEditor({
             </span>
             <button
               className="button button--secondary recipe-scale-button"
-              disabled
-              title="批量缩放功能将在下一步启用"
+              disabled={draft.items.length === 0}
+              onClick={scaleToTarget}
               type="button"
             >
               <Icon name="scale" size={17} />
               按比例调整
             </button>
           </div>
+
+          {rebalanceError ? (
+            <p className="recipe-rebalance-error" role="alert">
+              <Icon name="warning" size={16} />
+              {rebalanceError}
+            </p>
+          ) : null}
 
           <NarrowTabs
             completeness={calculation?.completeness.percent ?? null}
@@ -468,32 +535,39 @@ function RecipeEditor({
             issues={draft.calculationIssues}
             items={draft.items}
             onAdd={() => setPickerOpen(true)}
-            onAmountChange={(id, amount) =>
-              updateItem(id, (item) => ({ ...item, amount }))
-            }
-            onAutoFillChange={(id) =>
-              setItems(
-                draft.items.map((item) => ({
-                  ...item,
-                  autoFill:
-                    item.id === id ? !item.autoFill : false,
-                })),
-              )
-            }
-            onLockChange={(id) =>
-              updateItem(id, (item) => ({
-                ...item,
-                locked: !item.locked,
-                autoFill: !item.locked ? false : item.autoFill,
-              }))
-            }
+            onAmountChange={(id, amount) => {
+              const items = draft.items.map((item) =>
+                item.id === id ? { ...item, amount } : item,
+              );
+              updateWithAutoFill(items, id);
+            }}
+            onAutoFillChange={toggleAutoFill}
+            onLockChange={(id) => {
+              const items = draft.items.map((item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      locked: !item.locked,
+                      autoFill: !item.locked
+                        ? false
+                        : item.autoFill,
+                    }
+                  : item,
+              );
+              updateWithAutoFill(items);
+            }}
             onMove={moveItem}
             onRemove={(id) =>
-              setItems(draft.items.filter((item) => item.id !== id))
+              updateWithAutoFill(
+                draft.items.filter((item) => item.id !== id),
+              )
             }
-            onUnitChange={(id, unit) =>
-              updateItem(id, (item) => ({ ...item, unit }))
-            }
+            onUnitChange={(id, unit) => {
+              const items = draft.items.map((item) =>
+                item.id === id ? { ...item, unit } : item,
+              );
+              updateWithAutoFill(items);
+            }}
             targetBatchGrams={draft.targetBatchGrams}
           />
 

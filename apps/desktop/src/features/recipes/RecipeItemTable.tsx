@@ -140,6 +140,12 @@ export function RecipeItemTable({
                         onChange={(event) =>
                           onAmountChange(item.id, event.target.value)
                         }
+                        readOnly={item.autoFill}
+                        title={
+                          item.autoFill
+                            ? "取消补足后可手动编辑"
+                            : undefined
+                        }
                         value={item.amount}
                       />
                       {itemIssues[0] ? (

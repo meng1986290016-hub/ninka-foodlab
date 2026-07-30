@@ -149,10 +149,10 @@
 - 自动保存防抖；退出或重启后恢复。
 - 正式版本复制为新草稿，并保留来源版本 ID。
 
-- [ ] **Step 1:** 写恢复、防抖、无效输入和复制草稿测试。
-- [ ] **Step 2:** 实现 reducer 与草稿 hook。
-- [ ] **Step 3:** 验证崩溃恢复和并发保存顺序。
-- [ ] **Step 4:** 提交 `feat(recipes): autosave recipe drafts`。
+- [x] **Step 1:** 写恢复、防抖、无效输入和复制草稿测试。
+- [x] **Step 2:** 实现 reducer 与草稿 hook。
+- [x] **Step 3:** 验证崩溃恢复和并发保存顺序。
+- [x] **Step 4:** 提交 `feat(recipes): autosave recipe drafts`。
 
 ---
 

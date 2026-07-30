@@ -240,11 +240,11 @@
 - 只有一个 Markdown 研发备注框。
 - 计算失败与缺失数据定位到具体原料行。
 
-- [ ] **Step 1:** 写实时结果、目标、成本和过敏原测试。
-- [ ] **Step 2:** 实现结果侧栏和目标编辑。
-- [ ] **Step 3:** 实现包材/其他成本和备注。
-- [ ] **Step 4:** 完成浏览器视觉与交互验收。
-- [ ] **Step 5:** 提交 `feat(recipes): show live nutrition and cost`。
+- [x] **Step 1:** 写实时结果、目标、成本和过敏原测试。
+- [x] **Step 2:** 实现结果侧栏和目标编辑。
+- [x] **Step 3:** 实现包材/其他成本和备注。
+- [x] **Step 4:** 完成浏览器视觉与交互验收。
+- [x] **Step 5:** 提交 `feat(recipes): show live nutrition and cost`。
 
 ---
 

@@ -10,6 +10,7 @@ import { Icon } from "../../components/Icon";
 interface RecipeItemTableProps {
   issues: RecipeCalculationIssue[];
   items: RecipeDraftItem[];
+  missingData: Record<string, string[]>;
   targetBatchGrams: string;
   onAdd(): void;
   onAmountChange(id: string, amount: string): void;
@@ -25,6 +26,7 @@ const units: RecipeItemUnit[] = ["mg", "g", "kg", "mL", "L"];
 export function RecipeItemTable({
   issues,
   items,
+  missingData,
   targetBatchGrams,
   onAdd,
   onAmountChange,
@@ -195,7 +197,12 @@ export function RecipeItemTable({
                         {item.autoFill ? "补足" : "—"}
                       </button>
                     </td>
-                    <td>{completeness(item)}</td>
+                    <td>
+                      {completeness(
+                        item,
+                        missingData[item.id] ?? [],
+                      )}
+                    </td>
                     <td className="recipe-row-actions">
                       <button
                         aria-label={`删除${label}`}
@@ -260,25 +267,45 @@ function percentage(
   }
 }
 
-function completeness(item: RecipeDraftItem) {
+function completeness(
+  item: RecipeDraftItem,
+  missingData: string[],
+) {
   if (item.kind === "recipe_version") {
     return <span className="recipe-data-status is-complete">版本固定</span>;
   }
   const percent = item.ingredientVariant.completeness.percent;
   return (
-    <span
-      className={
-        percent >= 100
-          ? "recipe-data-status is-complete"
-          : "recipe-data-status has-warning"
-      }
-      title={item.ingredientVariant.completeness.missingFields.join("、")}
-    >
-      <Icon
-        name={percent >= 100 ? "check" : "warning"}
-        size={15}
-      />
-      {percent >= 100 ? "完整" : `${percent}%`}
+    <span className="recipe-data-cell">
+      <span
+        className={
+          missingData.length === 0 && percent >= 100
+            ? "recipe-data-status is-complete"
+            : "recipe-data-status has-warning"
+        }
+        title={[
+          ...missingData,
+          ...item.ingredientVariant.completeness.missingFields,
+        ].join("、")}
+      >
+        <Icon
+          name={
+            missingData.length === 0 && percent >= 100
+              ? "check"
+              : "warning"
+          }
+          size={15}
+        />
+        {missingData.length === 0 && percent >= 100
+          ? "完整"
+          : `${percent}%`}
+      </span>
+      {missingData.length > 0 ? (
+        <small>
+          缺少：{missingData.slice(0, 3).join("、")}
+          {missingData.length > 3 ? `等${missingData.length}项` : ""}
+        </small>
+      ) : null}
     </span>
   );
 }

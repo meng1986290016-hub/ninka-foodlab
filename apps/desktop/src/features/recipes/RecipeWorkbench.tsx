@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import Decimal from "decimal.js";
@@ -10,9 +9,12 @@ import { toGrams } from "@food-rd/core";
 import type { DesktopApi } from "../../api/desktop-api";
 import type {
   Recipe,
+  RecipeCalculation,
+  RecipeCalculationIssue,
   RecipeDraftItem,
   RecipeItemUnit,
   RecipeSummary,
+  RecipeTarget,
   RecipeVersion,
 } from "../../api/recipe-types";
 import type {
@@ -22,10 +24,12 @@ import type {
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
 import { calculateRecipeDraft } from "./recipe-calculation";
+import { RecipeCostEditor } from "./RecipeCostEditor";
 import { RecipeHeader } from "./RecipeHeader";
 import { RecipeIngredientPicker } from "./RecipeIngredientPicker";
 import { RecipeItemTable } from "./RecipeItemTable";
 import { rebalanceDraftItems } from "./recipe-rebalance";
+import { RecipeTargetEditor } from "./RecipeTargetEditor";
 import { useRecipeDraft } from "./useRecipeDraft";
 
 interface RecipeWorkbenchProps {
@@ -424,6 +428,7 @@ function RecipeEditor({
       issue.code !== "non_positive_value" || inputMass !== "0",
   );
   const calculation = draft.calculation;
+  const missingData = collectMissingData(calculation, visibleIssues);
   const yieldLabel =
     calculation?.yieldPercent === null ||
     calculation?.yieldPercent === undefined
@@ -534,6 +539,7 @@ function RecipeEditor({
           <RecipeItemTable
             issues={draft.calculationIssues}
             items={draft.items}
+            missingData={missingData}
             onAdd={() => setPickerOpen(true)}
             onAmountChange={(id, amount) => {
               const items = draft.items.map((item) =>
@@ -572,17 +578,23 @@ function RecipeEditor({
           />
 
           <div className="recipe-lower-grid">
-            <section className="recipe-supplemental-section">
-              <header>
-                <h2>成本附加项</h2>
-                <span>
-                  {draft.packagingCosts.length +
-                    draft.additionalCosts.length}{" "}
-                  项
-                </span>
-              </header>
-              <p>尚未添加包材或其他成本。</p>
-            </section>
+            <RecipeCostEditor
+              additionalCosts={draft.additionalCosts}
+              issues={draft.calculationIssues}
+              onAdditionalCostsChange={(costs) =>
+                dispatch({
+                  type: "set_additional_costs",
+                  costs,
+                })
+              }
+              onPackagingCostsChange={(costs) =>
+                dispatch({
+                  type: "set_packaging_costs",
+                  costs,
+                })
+              }
+              packagingCosts={draft.packagingCosts}
+            />
             <section className="recipe-notes-section">
               <h2>研发备注</h2>
               <textarea
@@ -605,6 +617,11 @@ function RecipeEditor({
           activeView={narrowView}
           calculation={calculation}
           issues={visibleIssues}
+          nutrientDefinitions={nutrientDefinitions}
+          onTargetsChange={(targets) =>
+            dispatch({ type: "set_targets", targets })
+          }
+          targets={draft.targets}
         />
       </div>
 
@@ -691,12 +708,18 @@ interface RecipeResultsInspectorProps {
   activeView: NarrowView;
   calculation: ReturnType<typeof useRecipeDraft>["draft"]["calculation"];
   issues: ReturnType<typeof useRecipeDraft>["draft"]["calculationIssues"];
+  nutrientDefinitions: NutrientDefinition[];
+  targets: RecipeTarget[];
+  onTargetsChange(targets: RecipeTarget[]): void;
 }
 
 function RecipeResultsInspector({
   activeView,
   calculation,
   issues,
+  nutrientDefinitions,
+  targets,
+  onTargetsChange,
 }: RecipeResultsInspectorProps) {
   const visibleClass =
     activeView === "formula"
@@ -724,7 +747,12 @@ function RecipeResultsInspector({
         </div>
       ) : activeView === "targets" ? (
         <>
-          <ResultTargets calculation={calculation} />
+          <RecipeTargetEditor
+            evaluations={calculation.targets}
+            nutrientDefinitions={nutrientDefinitions}
+            onChange={onTargetsChange}
+            targets={targets}
+          />
           <ResultAllergens calculation={calculation} />
         </>
       ) : (
@@ -739,14 +767,8 @@ function RecipeResultsInspector({
             {calculation.nutrients.slice(0, 8).map((nutrient) => (
               <div className="recipe-nutrition-row" key={nutrient.nutrientDefinitionId}>
                 <span>{nutrient.name}</span>
-                <span>
-                  {displayNumber(nutrient.per100gKnownAmount)}
-                  {nutrient.unit}
-                </span>
-                <span>
-                  {displayNumber(nutrient.totalKnownAmount)}
-                  {nutrient.unit}
-                </span>
+                <span>{nutrientValue(nutrient, "per100g")}</span>
+                <span>{nutrientValue(nutrient, "batch")}</span>
               </div>
             ))}
           </section>
@@ -773,37 +795,22 @@ function RecipeResultsInspector({
                 <dt>每100g</dt>
                 <dd>{displayCurrency(calculation.cost.per100g)}</dd>
               </div>
+              <div>
+                <dt>每 kg</dt>
+                <dd>{displayCurrency(calculation.cost.perKg)}</dd>
+              </div>
             </dl>
           </section>
-          <ResultTargets calculation={calculation} />
+          <RecipeTargetEditor
+            evaluations={calculation.targets}
+            nutrientDefinitions={nutrientDefinitions}
+            onChange={onTargetsChange}
+            targets={targets}
+          />
           <ResultAllergens calculation={calculation} />
         </>
       )}
     </aside>
-  );
-}
-
-function ResultTargets({
-  calculation,
-}: {
-  calculation: NonNullable<
-    ReturnType<typeof useRecipeDraft>["draft"]["calculation"]
-  >;
-}) {
-  return (
-    <section className="recipe-result-section">
-      <h3>目标</h3>
-      {calculation.targets.length === 0 ? (
-        <p className="recipe-result-muted">尚未设置营养或成本目标。</p>
-      ) : (
-        calculation.targets.map((target) => (
-          <p key={target.targetId}>
-            {target.targetId}
-            <strong>{target.status === "met" ? "已达到" : target.status}</strong>
-          </p>
-        ))
-      )}
-    </section>
   );
 }
 
@@ -853,6 +860,49 @@ function formulaInputMass(items: RecipeDraftItem[]) {
     total = total.add(converted.value);
   }
   return displayNumber(total.toString());
+}
+
+function collectMissingData(
+  calculation: RecipeCalculation | null,
+  issues: RecipeCalculationIssue[],
+) {
+  const result: Record<string, string[]> = {};
+  const append = (itemId: string, label: string) => {
+    const current = result[itemId] ?? [];
+    if (!current.includes(label)) current.push(label);
+    result[itemId] = current;
+  };
+  if (calculation !== null) {
+    for (const itemId of calculation.cost.missingItemIds) {
+      append(itemId, "价格");
+    }
+    for (const nutrient of calculation.nutrients) {
+      for (const itemId of nutrient.missingItemIds) {
+        append(itemId, nutrient.name);
+      }
+    }
+  }
+  for (const issue of issues) {
+    if (issue.itemId === null) continue;
+    if (issue.code === "missing_price") {
+      append(issue.itemId, "价格");
+    } else if (issue.code === "missing_density") {
+      append(issue.itemId, "密度");
+    }
+  }
+  return result;
+}
+
+function nutrientValue(
+  nutrient: RecipeCalculation["nutrients"][number],
+  basis: "per100g" | "batch",
+) {
+  if (nutrient.status === "unknown") return "—";
+  const value =
+    basis === "per100g"
+      ? nutrient.per100gKnownAmount
+      : nutrient.totalKnownAmount;
+  return `${nutrient.status === "partial" ? "≈" : ""}${displayNumber(value)}${nutrient.unit}`;
 }
 
 function displayNumber(value: string) {

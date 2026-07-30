@@ -529,4 +529,80 @@ describe("recipe calculation adapter", () => {
       }),
     ]);
   });
+
+  it("evaluates nutrition and all supported cost target bases", () => {
+    const result = calculate(
+      draft([ingredientItem(variant())], {
+        targetBatchGrams: "100",
+        targets: [
+          {
+            id: "protein-target",
+            metric: {
+              kind: "nutrition_per_100g",
+              nutrientDefinitionId: "protein",
+              nutrientName: "蛋白质",
+              unit: "g",
+            },
+            minimum: "30",
+            maximum: "40",
+          },
+          {
+            id: "batch-cost-target",
+            metric: {
+              kind: "cost",
+              basis: "batch",
+              unit: "CNY",
+            },
+            minimum: null,
+            maximum: "4",
+          },
+          {
+            id: "kg-cost-target",
+            metric: {
+              kind: "cost",
+              basis: "per_kg",
+              unit: "CNY",
+            },
+            minimum: null,
+            maximum: "30",
+          },
+          {
+            id: "100g-cost-target",
+            metric: {
+              kind: "cost",
+              basis: "per_100g",
+              unit: "CNY",
+            },
+            minimum: null,
+            maximum: "4",
+          },
+        ],
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.calculation.targets).toEqual([
+      expect.objectContaining({
+        targetId: "protein-target",
+        status: "met",
+        observed: "34",
+      }),
+      expect.objectContaining({
+        targetId: "batch-cost-target",
+        status: "met",
+        observed: "3.15",
+      }),
+      expect.objectContaining({
+        targetId: "kg-cost-target",
+        status: "above",
+        observed: "31.5",
+      }),
+      expect.objectContaining({
+        targetId: "100g-cost-target",
+        status: "met",
+        observed: "3.15",
+      }),
+    ]);
+  });
 });

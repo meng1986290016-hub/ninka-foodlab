@@ -13,7 +13,8 @@ use crate::{
 
 use super::model::{
     AgentConversation, AgentMessage, AgentMessageInput, AgentMessageRole, AgentMessageStatus,
-    AgentPreferences, AgentProviderConfig, AgentProviderConfigInput, AgentRun, AgentRunInput,
+    AgentPreferences, AgentProviderConfig, AgentProviderConfigInput, AgentProviderKind, AgentRun,
+    AgentRunInput, AgentToolCall, AgentToolCallStatus,
 };
 
 type Clock = Arc<dyn Fn() -> String + Send + Sync>;
@@ -376,6 +377,73 @@ impl AgentRepository {
             .ok_or_else(|| not_found("找不到该 Agent 任务"))
     }
 
+    pub fn start_tool_call(
+        &mut self,
+        run_id: &str,
+        provider_kind: AgentProviderKind,
+        model: &str,
+        tool_name: &str,
+    ) -> Result<AgentToolCall, RepositoryError> {
+        self.get_run(run_id)?;
+        let id = (self.create_id)();
+        let timestamp = (self.clock)();
+        self.connection.execute(
+            "INSERT INTO agent_tool_calls (
+               id, run_id, provider_kind, model, tool_name, status,
+               error_summary, started_at, completed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, 'started', NULL, ?6, NULL)",
+            params![
+                id,
+                run_id,
+                enum_string(provider_kind)?,
+                model.trim(),
+                tool_name,
+                timestamp,
+            ],
+        )?;
+        self.get_tool_call(&id)
+    }
+
+    pub fn finish_tool_call(
+        &mut self,
+        id: &str,
+        status: AgentToolCallStatus,
+        error_summary: Option<&str>,
+    ) -> Result<AgentToolCall, RepositoryError> {
+        if status == AgentToolCallStatus::Started {
+            return Err(RepositoryError::Domain {
+                code: "invalid_input",
+                message: "工具调用结束状态无效".into(),
+                field: None,
+            });
+        }
+        let error_summary = error_summary
+            .map(|message| message.chars().take(240).collect::<String>())
+            .filter(|message| !message.trim().is_empty());
+        let updated = self.connection.execute(
+            "UPDATE agent_tool_calls
+             SET status = ?1, error_summary = ?2, completed_at = ?3
+             WHERE id = ?4 AND status = 'started'",
+            params![enum_string(status)?, error_summary, (self.clock)(), id,],
+        )?;
+        if updated == 0 {
+            return Err(not_found("找不到进行中的工具调用"));
+        }
+        self.get_tool_call(id)
+    }
+
+    pub fn list_tool_calls(&self, run_id: &str) -> Result<Vec<AgentToolCall>, RepositoryError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, run_id, provider_kind, model, tool_name, status,
+                    error_summary, started_at, completed_at
+             FROM agent_tool_calls WHERE run_id = ?1 ORDER BY started_at, rowid",
+        )?;
+        statement
+            .query_map([run_id], map_tool_call)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
     fn get_conversation(&self, id: &str) -> Result<AgentConversation, RepositoryError> {
         self.connection
             .query_row(
@@ -400,6 +468,19 @@ impl AgentRepository {
             .optional()?
             .ok_or_else(|| not_found("找不到该消息"))?;
         self.hydrate_message(row)
+    }
+
+    fn get_tool_call(&self, id: &str) -> Result<AgentToolCall, RepositoryError> {
+        self.connection
+            .query_row(
+                "SELECT id, run_id, provider_kind, model, tool_name, status,
+                        error_summary, started_at, completed_at
+                 FROM agent_tool_calls WHERE id = ?1",
+                [id],
+                map_tool_call,
+            )
+            .optional()?
+            .ok_or_else(|| not_found("找不到该工具调用"))
     }
 
     fn hydrate_message(&self, row: MessageRow) -> Result<AgentMessage, RepositoryError> {
@@ -556,6 +637,20 @@ fn map_run(row: &Row<'_>) -> rusqlite::Result<AgentRun> {
         error_summary: row.get(6)?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+    })
+}
+
+fn map_tool_call(row: &Row<'_>) -> rusqlite::Result<AgentToolCall> {
+    Ok(AgentToolCall {
+        id: row.get(0)?,
+        run_id: row.get(1)?,
+        provider_kind: parse_enum(row.get(2)?)?,
+        model: row.get(3)?,
+        tool_name: row.get(4)?,
+        status: parse_enum(row.get(5)?)?,
+        error_summary: row.get(6)?,
+        started_at: row.get(7)?,
+        completed_at: row.get(8)?,
     })
 }
 

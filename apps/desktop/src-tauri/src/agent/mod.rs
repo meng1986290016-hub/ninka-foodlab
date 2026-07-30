@@ -2,6 +2,7 @@ pub mod model;
 pub mod providers;
 pub mod repository;
 pub mod secrets;
+pub mod tools;
 
 use thiserror::Error;
 
@@ -62,6 +63,20 @@ impl AgentError {
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::Domain {
             code: "invalid_input",
+            message: message.into(),
+        }
+    }
+
+    pub fn scope_violation(message: impl Into<String>) -> Self {
+        Self::Domain {
+            code: "scope_violation",
+            message: message.into(),
+        }
+    }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self::Domain {
+            code: "unauthorized",
             message: message.into(),
         }
     }

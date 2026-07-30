@@ -1,4 +1,8 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
@@ -140,6 +144,167 @@ impl IngredientIngestCoordinator {
 
     pub fn get_draft(&self, id: &str) -> Result<IngredientImportDraft, IngestError> {
         repository::get_draft(&self.ingredients.connection, id)
+    }
+
+    pub fn read_job_extractions(
+        &self,
+        job_id: &str,
+        attachment_ids: &[String],
+    ) -> Result<Vec<super::extractors::ExtractedDocument>, IngestError> {
+        repository::read_job_extractions(&self.ingredients.connection, job_id, attachment_ids)
+    }
+
+    pub fn create_agent_draft(
+        &mut self,
+        job_id: &str,
+        review: ReviewedIngredientImportDraft,
+        attachment_ids: Vec<String>,
+    ) -> Result<IngredientImportDraft, IngestError> {
+        let job = repository::get_job(&self.ingredients.connection, job_id)?;
+        if job.source_kind != IngredientImportSourceKind::Agent {
+            return Err(IngestError::domain(
+                "scope_violation",
+                "当前任务不是 Agent 原料导入任务",
+            ));
+        }
+        if !matches!(
+            job.status,
+            IngredientImportJobStatus::Recognizing
+                | IngredientImportJobStatus::Grouping
+                | IngredientImportJobStatus::DraftsReady
+                | IngredientImportJobStatus::PartiallyCompleted
+        ) {
+            return Err(IngestError::domain(
+                "invalid_state",
+                "当前任务状态不能创建原料草稿",
+            ));
+        }
+
+        let issues = validate_review(&review);
+        let timestamp = (self.ingredients.clock)();
+        let create_id = Arc::clone(&self.ingredients.create_id);
+        let transaction = self.ingredients.connection.transaction()?;
+        if job.status == IngredientImportJobStatus::Recognizing {
+            repository::transition_job(
+                &transaction,
+                job_id,
+                IngredientImportJobStatus::Grouping,
+                None,
+                &timestamp,
+            )?;
+        }
+        let id = repository::insert_draft(
+            &transaction,
+            job_id,
+            NewImportDraft {
+                attachment_ids,
+                issues,
+                review,
+            },
+            &timestamp,
+            create_id.as_ref(),
+        )?;
+        if matches!(
+            job.status,
+            IngredientImportJobStatus::Recognizing | IngredientImportJobStatus::Grouping
+        ) {
+            repository::transition_job(
+                &transaction,
+                job_id,
+                IngredientImportJobStatus::DraftsReady,
+                None,
+                &timestamp,
+            )?;
+        }
+        transaction.commit()?;
+        repository::get_draft(&self.ingredients.connection, &id)
+    }
+
+    pub fn merge_agent_drafts(
+        &mut self,
+        job_id: &str,
+        draft_ids: &[String],
+        review: ReviewedIngredientImportDraft,
+    ) -> Result<IngredientImportDraft, IngestError> {
+        if draft_ids.len() < 2 {
+            return Err(IngestError::domain(
+                "invalid_input",
+                "合并时至少选择两个草稿",
+            ));
+        }
+        let timestamp = (self.ingredients.clock)();
+        let create_id = Arc::clone(&self.ingredients.create_id);
+        let transaction = self.ingredients.connection.transaction()?;
+        let mut attachment_ids = BTreeSet::new();
+        for draft_id in draft_ids {
+            let draft = repository::get_draft(&transaction, draft_id)?;
+            require_agent_draft_scope(&draft, job_id)?;
+            attachment_ids.extend(
+                draft
+                    .attachments
+                    .into_iter()
+                    .map(|attachment| attachment.id),
+            );
+        }
+        let id = repository::insert_draft(
+            &transaction,
+            job_id,
+            NewImportDraft {
+                attachment_ids: attachment_ids.into_iter().collect(),
+                issues: validate_review(&review),
+                review,
+            },
+            &timestamp,
+            create_id.as_ref(),
+        )?;
+        for draft_id in draft_ids {
+            repository::discard_draft(&transaction, draft_id, &timestamp)?;
+        }
+        transaction.commit()?;
+        repository::get_draft(&self.ingredients.connection, &id)
+    }
+
+    pub fn split_agent_draft(
+        &mut self,
+        job_id: &str,
+        draft_id: &str,
+        reviews: Vec<ReviewedIngredientImportDraft>,
+    ) -> Result<Vec<IngredientImportDraft>, IngestError> {
+        if reviews.len() < 2 {
+            return Err(IngestError::domain(
+                "invalid_input",
+                "拆分时至少提供两个草稿",
+            ));
+        }
+        let timestamp = (self.ingredients.clock)();
+        let create_id = Arc::clone(&self.ingredients.create_id);
+        let transaction = self.ingredients.connection.transaction()?;
+        let source = repository::get_draft(&transaction, draft_id)?;
+        require_agent_draft_scope(&source, job_id)?;
+        let attachment_ids = source
+            .attachments
+            .into_iter()
+            .map(|attachment| attachment.id)
+            .collect::<Vec<_>>();
+        let mut ids = Vec::with_capacity(reviews.len());
+        for review in reviews {
+            ids.push(repository::insert_draft(
+                &transaction,
+                job_id,
+                NewImportDraft {
+                    attachment_ids: attachment_ids.clone(),
+                    issues: validate_review(&review),
+                    review,
+                },
+                &timestamp,
+                create_id.as_ref(),
+            )?);
+        }
+        repository::discard_draft(&transaction, draft_id, &timestamp)?;
+        transaction.commit()?;
+        ids.into_iter()
+            .map(|id| repository::get_draft(&self.ingredients.connection, &id))
+            .collect()
     }
 
     pub fn update_draft(
@@ -501,6 +666,25 @@ impl IngredientIngestCoordinator {
         }
         Ok(())
     }
+}
+
+fn require_agent_draft_scope(
+    draft: &IngredientImportDraft,
+    job_id: &str,
+) -> Result<(), IngestError> {
+    if draft.job_id != job_id {
+        return Err(IngestError::domain(
+            "scope_violation",
+            "草稿不属于当前 Agent 导入任务",
+        ));
+    }
+    if matches!(
+        draft.status,
+        IngredientImportDraftStatus::Imported | IngredientImportDraftStatus::Discarded
+    ) {
+        return Err(IngestError::domain("invalid_state", "该草稿不能再修改"));
+    }
+    Ok(())
 }
 
 fn materialize_review(

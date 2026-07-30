@@ -357,6 +357,98 @@ pub fn replace_drafts(
     Ok(())
 }
 
+pub fn insert_draft(
+    connection: &Connection,
+    job_id: &str,
+    draft: NewImportDraft,
+    updated_at: &str,
+    create_id: &dyn Fn() -> String,
+) -> Result<String, IngestError> {
+    get_job(connection, job_id)?;
+    for attachment_id in &draft.attachment_ids {
+        let belongs_to_job = connection.query_row(
+            "SELECT EXISTS(
+               SELECT 1 FROM ingredient_import_job_attachments
+               WHERE job_id = ?1 AND attachment_id = ?2
+             )",
+            params![job_id, attachment_id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if !belongs_to_job {
+            return Err(IngestError::domain(
+                "scope_violation",
+                "附件不属于当前导入任务",
+            ));
+        }
+    }
+    let id = create_id();
+    let position = connection.query_row(
+        "SELECT COALESCE(MAX(position), -1) + 1
+         FROM ingredient_import_drafts WHERE job_id = ?1",
+        [job_id],
+        |row| row.get::<_, i64>(0),
+    )?;
+    let review_json = serde_json::to_string(&draft.review)?;
+    let issues_json = serde_json::to_string(&draft.issues)?;
+    let status = if draft
+        .issues
+        .iter()
+        .any(|issue| issue.severity == super::model::ImportIssueSeverity::Error)
+    {
+        IngredientImportDraftStatus::NeedsReview
+    } else {
+        IngredientImportDraftStatus::Ready
+    };
+    connection.execute(
+        "INSERT INTO ingredient_import_drafts (
+           id, job_id, position, status, review_json, issues_json,
+           imported_variant_id, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?7)",
+        params![
+            id,
+            job_id,
+            position,
+            draft_status_str(status),
+            review_json,
+            issues_json,
+            updated_at,
+        ],
+    )?;
+    for attachment_id in draft.attachment_ids {
+        connection.execute(
+            "INSERT INTO import_draft_attachments (draft_id, attachment_id)
+             VALUES (?1, ?2)",
+            params![id, attachment_id],
+        )?;
+    }
+    Ok(id)
+}
+
+pub fn read_job_extractions(
+    connection: &Connection,
+    job_id: &str,
+    attachment_ids: &[String],
+) -> Result<Vec<ExtractedDocument>, IngestError> {
+    let mut documents = Vec::with_capacity(attachment_ids.len());
+    for attachment_id in attachment_ids {
+        let content = connection
+            .query_row(
+                "SELECT e.content_json
+                 FROM ingredient_import_job_attachments ja
+                 JOIN attachment_extractions e ON e.attachment_id = ja.attachment_id
+                 WHERE ja.job_id = ?1 AND ja.attachment_id = ?2",
+                params![job_id, attachment_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .ok_or_else(|| {
+                IngestError::domain("scope_violation", "附件不属于当前任务或尚未完成内容提取")
+            })?;
+        documents.push(serde_json::from_str(&content)?);
+    }
+    Ok(documents)
+}
+
 pub fn list_drafts(
     connection: &Connection,
     job_id: &str,

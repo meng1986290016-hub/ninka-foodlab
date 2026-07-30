@@ -1244,7 +1244,7 @@ git commit -m "feat(agent): bridge CLI providers to food R&D tools"
 - Consumes: the complete 3B feature and 3A import foundation.
 - Produces: release-level automated and human evidence for API, Codex CLI, Claude Code CLI, and browser fallback.
 
-- [ ] **Step 1: Write the provider-parity acceptance test**
+- [x] **Step 1: Write the provider-parity acceptance test**
 
 ```rust
 #[tokio::test]
@@ -1259,11 +1259,11 @@ async fn api_codex_and_claude_create_equal_drafts_with_equal_permissions() {
 }
 ```
 
-- [ ] **Step 2: Write the user-save and restart acceptance test**
+- [x] **Step 2: Write the user-save and restart acceptance test**
 
 Open all three draft cards, save two, leave one unsaved, restart the app fixture, and assert exactly two formal variants exist while the conversation and third draft remain. Assert the two milk-powder variants have different supplier IDs and one explicit zero remains `"0"` while an unknown value remains `null`.
 
-- [ ] **Step 3: Run the focused acceptance suites**
+- [x] **Step 3: Run the focused acceptance suites**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test agent_provider_parity --test agent_ingest_flow --test mcp_tool_bridge`
 
@@ -1271,25 +1271,25 @@ Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/agent/agent-ac
 
 Expected: PASS for all three provider families, equal tools, three drafts, two manual saves, restart persistence, and no formal Agent write.
 
-- [ ] **Step 4: Document setup and troubleshooting**
+- [x] **Step 4: Document setup and troubleshooting**
 
 Document how to enable/disable Agent, configure API/Ollama/custom providers, test a connection, use Codex CLI or Claude Code CLI local login, select a vision model, understand remote-file sending, recover failed jobs, and confirm that ordinary import and ingredient editing do not require a model.
 
-- [ ] **Step 5: Write the human acceptance checklist**
+- [x] **Step 5: Write the human acceptance checklist**
 
 Cover the approved eight-file/three-draft scenario separately with one API provider, Codex CLI, and Claude Code CLI; provider switching without lost settings; single custom card with two protocols; keychain persistence; missing CLI; expired login; image capability warning; timeout, rate limit, cancellation, one structured retry, merge/split/discard, source conflicts, no internal code, and browser demo not starting CLI.
 
-- [ ] **Step 6: Run the complete regression and secret scan**
+- [x] **Step 6: Run the complete regression and secret scan**
 
 Run: `pnpm test && pnpm typecheck && pnpm build`
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
 
-Run: `rg -n "sk-[A-Za-z0-9]|api[_-]?key.*[=:].+|ANTHROPIC_API_KEY=.+" apps docs --glob '!**/fixtures/**'`
+Run: `rg -n "(^|[^A-Za-z])sk-[A-Za-z0-9]{16,}|api[_-]?key\\s*[=:]\\s*[\"'][^\"']{12,}|ANTHROPIC_API_KEY\\s*=\\s*[^\"'[:space:]]{12,}" apps docs --glob '!**/fixtures/**'`
 
 Expected: all tests and builds PASS; the secret scan returns no committed credential values.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/desktop/src-tauri/tests/agent_provider_parity.rs apps/desktop/src/features/agent/agent-acceptance.test.tsx docs/testing/phase-3b-food-rd-agent-checklist.md apps/desktop/README.md

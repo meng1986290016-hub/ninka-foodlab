@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::ingest::model::ImportFileReference;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentProviderKind {
     #[serde(rename = "openai")]
@@ -119,6 +121,13 @@ pub struct AgentProviderConfigInput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentProviderSecretInput {
+    pub provider_id: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentPreferences {
     pub enabled: bool,
     pub vision_provider_config_id: Option<String>,
@@ -202,6 +211,15 @@ pub struct AgentRunInput {
     pub provider_config_id: String,
     pub import_job_id: Option<String>,
     pub status: AgentRunStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRunRequest {
+    pub conversation_id: String,
+    pub content: String,
+    #[serde(default)]
+    pub files: Vec<ImportFileReference>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

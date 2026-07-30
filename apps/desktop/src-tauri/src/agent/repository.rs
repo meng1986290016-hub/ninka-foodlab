@@ -14,7 +14,7 @@ use crate::{
 use super::model::{
     AgentConversation, AgentMessage, AgentMessageInput, AgentMessageRole, AgentMessageStatus,
     AgentPreferences, AgentProviderConfig, AgentProviderConfigInput, AgentProviderKind, AgentRun,
-    AgentRunInput, AgentToolCall, AgentToolCallStatus,
+    AgentRunInput, AgentRunStatus, AgentToolCall, AgentToolCallStatus,
 };
 
 type Clock = Arc<dyn Fn() -> String + Send + Sync>;
@@ -391,6 +391,52 @@ impl AgentRepository {
             .ok_or_else(|| not_found("找不到该 Agent 任务"))
     }
 
+    pub fn update_run(
+        &mut self,
+        id: &str,
+        status: AgentRunStatus,
+        error_code: Option<&str>,
+        error_summary: Option<&str>,
+    ) -> Result<AgentRun, RepositoryError> {
+        let error_summary = error_summary
+            .map(|message| message.chars().take(240).collect::<String>())
+            .filter(|message| !message.trim().is_empty());
+        let updated = self.connection.execute(
+            "UPDATE agent_runs
+             SET status = ?1, error_code = ?2, error_summary = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![
+                enum_string(status)?,
+                error_code,
+                error_summary,
+                (self.clock)(),
+                id,
+            ],
+        )?;
+        if updated == 0 {
+            return Err(not_found("找不到该 Agent 任务"));
+        }
+        self.get_run(id)
+    }
+
+    pub fn update_message(
+        &mut self,
+        id: &str,
+        content: &str,
+        status: AgentMessageStatus,
+    ) -> Result<AgentMessage, RepositoryError> {
+        let updated = self.connection.execute(
+            "UPDATE agent_messages
+             SET content = ?1, status = ?2, created_at = ?3
+             WHERE id = ?4",
+            params![content, enum_string(status)?, (self.clock)(), id],
+        )?;
+        if updated == 0 {
+            return Err(not_found("找不到该消息"));
+        }
+        self.get_message(id)
+    }
+
     pub fn start_tool_call(
         &mut self,
         run_id: &str,
@@ -458,7 +504,7 @@ impl AgentRepository {
             .map_err(Into::into)
     }
 
-    fn get_conversation(&self, id: &str) -> Result<AgentConversation, RepositoryError> {
+    pub fn get_conversation(&self, id: &str) -> Result<AgentConversation, RepositoryError> {
         self.connection
             .query_row(
                 "SELECT id, title, created_at, updated_at

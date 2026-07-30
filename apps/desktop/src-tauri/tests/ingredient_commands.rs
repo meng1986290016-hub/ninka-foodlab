@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 36);
+    assert_eq!(REGISTERED_COMMANDS.len(), 53);
     for command in [
         "list_categories",
         "create_supplier",
@@ -67,6 +67,31 @@ fn every_grouped_desktop_api_method_is_registered() {
         "compare_ingredient_variants",
         "save_draft",
         "database_status",
+    ] {
+        assert!(REGISTERED_COMMANDS.contains(&command));
+    }
+}
+
+#[test]
+fn every_agent_command_is_registered() {
+    for command in [
+        "get_agent_preferences",
+        "save_agent_preferences",
+        "list_agent_provider_configs",
+        "save_agent_provider_config",
+        "set_agent_provider_secret",
+        "clear_agent_provider_secret",
+        "list_agent_provider_models",
+        "test_agent_provider",
+        "detect_cli_providers",
+        "list_agent_conversations",
+        "create_agent_conversation",
+        "delete_agent_conversation",
+        "list_agent_messages",
+        "start_agent_run",
+        "cancel_agent_run",
+        "get_agent_run",
+        "list_agent_import_drafts",
     ] {
         assert!(REGISTERED_COMMANDS.contains(&command));
     }

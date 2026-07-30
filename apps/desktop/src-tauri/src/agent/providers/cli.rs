@@ -34,6 +34,7 @@ const DIAGNOSTIC_TIMEOUT: Duration = Duration::from_secs(8);
 #[serde(rename_all = "camelCase")]
 pub struct CliDetectionResult {
     pub kind: AgentProviderKind,
+    #[serde(rename = "executablePath")]
     pub path: String,
     pub version: Option<String>,
     pub installed: bool,

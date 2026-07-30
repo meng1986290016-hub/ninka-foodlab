@@ -4,6 +4,13 @@ pub mod database;
 pub mod ingest;
 pub mod ingredients;
 
+use commands::agent::{
+    cancel_agent_run, clear_agent_provider_secret, create_agent_conversation,
+    delete_agent_conversation, detect_cli_providers, get_agent_preferences, get_agent_run,
+    list_agent_conversations, list_agent_import_drafts, list_agent_messages,
+    list_agent_provider_configs, list_agent_provider_models, save_agent_preferences,
+    save_agent_provider_config, set_agent_provider_secret, start_agent_run, test_agent_provider,
+};
 use commands::ingest::{
     cancel_ingredient_import_job, cleanup_orphan_attachments, commit_ingredient_import_job,
     commit_reviewed_ingredient_import_draft, create_ingredient_import_job,
@@ -32,7 +39,12 @@ pub fn run() {
                 &database_path,
                 &attachment_root,
             )?;
-            app.manage(commands::AppState::new(coordinator));
+            agent::repository::AgentRepository::open(&database_path)?;
+            app.manage(commands::AppState::new(
+                coordinator,
+                database_path,
+                attachment_root,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -72,6 +84,23 @@ pub fn run() {
             export_ingredient_template,
             export_ingredient_library,
             cleanup_orphan_attachments,
+            get_agent_preferences,
+            save_agent_preferences,
+            list_agent_provider_configs,
+            save_agent_provider_config,
+            set_agent_provider_secret,
+            clear_agent_provider_secret,
+            list_agent_provider_models,
+            test_agent_provider,
+            detect_cli_providers,
+            list_agent_conversations,
+            create_agent_conversation,
+            delete_agent_conversation,
+            list_agent_messages,
+            start_agent_run,
+            cancel_agent_run,
+            get_agent_run,
+            list_agent_import_drafts,
         ])
         .run(tauri::generate_context!())
         .expect("食研工作台启动失败");

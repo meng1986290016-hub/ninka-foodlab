@@ -1,4 +1,5 @@
 import type {
+  AgentEvent,
   AgentConversation,
   AgentMessage,
   AgentModelOption,
@@ -11,6 +12,7 @@ import type {
   AgentRunRequest,
   CliDetectionResult,
 } from "./agent-types";
+import type { BrowserAgentEventSource } from "./agent-event-source";
 import type { DesktopApi } from "./desktop-api";
 import type {
   IngredientExchangeFormat,
@@ -24,7 +26,7 @@ import type {
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV3,
+  type BrowserStateV4,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
@@ -54,6 +56,7 @@ interface BrowserDemoApiOptions {
   storage?: Storage;
   createId?: () => string;
   now?: () => string;
+  agentEvents?: BrowserAgentEventSource;
 }
 
 const seedIngredients: Ingredient[] = [
@@ -178,8 +181,8 @@ function legacyCompleteness(input: IngredientInput) {
   return Math.round((present.length / values.length) * 100);
 }
 
-function cloneBrowserState(state: BrowserStateV3): BrowserStateV3 {
-  return JSON.parse(JSON.stringify(state)) as BrowserStateV3;
+function cloneBrowserState(state: BrowserStateV4): BrowserStateV4 {
+  return JSON.parse(JSON.stringify(state)) as BrowserStateV4;
 }
 
 function demoMediaType(extension: string) {
@@ -304,11 +307,13 @@ export class BrowserDemoApi implements DesktopApi {
   private readonly storage: Storage;
   private readonly createId: () => string;
   private readonly now: () => string;
+  private readonly agentEvents: BrowserAgentEventSource | undefined;
 
   constructor(options: BrowserDemoApiOptions = {}) {
     this.storage = options.storage ?? defaultStorage();
     this.createId = options.createId ?? defaultId;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.agentEvents = options.agentEvents;
   }
 
   private unsupportedImport<T>(): Promise<T> {
@@ -320,86 +325,313 @@ export class BrowserDemoApi implements DesktopApi {
     );
   }
 
-  private unsupportedAgent<T>(): Promise<T> {
-    return Promise.reject(
-      new DesktopApiError(
-        "provider_not_configured",
-        "食品研发 Agent 运行时尚未接入浏览器演示模式",
-      ),
+  async getAgentPreferences(): Promise<AgentPreferences> {
+    return { ...this.read().agentPreferences };
+  }
+
+  async saveAgentPreferences(input: AgentPreferences) {
+    const state = this.read();
+    state.agentPreferences = { ...input };
+    this.write(state);
+    return { ...state.agentPreferences };
+  }
+
+  async listAgentProviderConfigs() {
+    return Object.values(this.read().agentProviderConfigs);
+  }
+
+  async saveAgentProviderConfig(input: AgentProviderConfigInput) {
+    const state = this.read();
+    const current = state.agentProviderConfigs[input.id];
+    if (!current) {
+      throw new DesktopApiError("not_found", "找不到该模型配置");
+    }
+    if (input.enabled) {
+      for (const provider of Object.values(state.agentProviderConfigs)) {
+        provider.enabled = false;
+      }
+    }
+    const saved: AgentProviderConfig = {
+      ...input,
+      hasSecret: current.hasSecret,
+      updatedAt: this.now(),
+    };
+    state.agentProviderConfigs[input.id] = saved;
+    this.write(state);
+    return saved;
+  }
+
+  async setAgentProviderSecret(input: AgentProviderSecretInput) {
+    if (input.apiKey.trim() === "") {
+      throw new DesktopApiError("invalid_input", "API 密钥不能为空");
+    }
+    const state = this.read();
+    const provider = state.agentProviderConfigs[input.providerId];
+    if (!provider) {
+      throw new DesktopApiError("not_found", "找不到该模型配置");
+    }
+    provider.hasSecret = true;
+    provider.updatedAt = this.now();
+    this.write(state);
+  }
+
+  async clearAgentProviderSecret(providerId: string) {
+    const state = this.read();
+    const provider = state.agentProviderConfigs[providerId];
+    if (!provider) {
+      throw new DesktopApiError("not_found", "找不到该模型配置");
+    }
+    provider.hasSecret = false;
+    provider.updatedAt = this.now();
+    this.write(state);
+  }
+
+  async listAgentProviderModels(providerId: string) {
+    const provider = this.read().agentProviderConfigs[providerId];
+    if (!provider) {
+      throw new DesktopApiError("not_found", "找不到该模型配置");
+    }
+    const defaults: Record<string, string[]> = {
+      openai: ["gpt-5.5", "gpt-5.4-mini"],
+      anthropic: ["claude-sonnet-4.6", "claude-opus-4.6"],
+      gemini: ["gemini-3.5-flash", "gemini-3.5-pro"],
+      deepseek: ["deepseek-v4-pro", "deepseek-v4-flash"],
+      kimi_cn: ["kimi-k3", "kimi-k2.6"],
+      zhipu_glm: ["glm-5.2", "glm-5v-turbo"],
+      minimax_cn: ["MiniMax-M3", "MiniMax-M2.7"],
+      bailian: ["qwen3.7-max", "qwen3-vl-plus"],
+      volcengine_ark: ["doubao-seed-2-0-lite-260215"],
+      ollama: ["food-rd-demo"],
+    };
+    const ids = [
+      ...(provider.model.trim() ? [provider.model.trim()] : []),
+      ...(defaults[provider.kind] ?? []),
+    ];
+    return [...new Set(ids)].map(
+      (id): AgentModelOption => ({ id, label: id }),
     );
   }
 
-  getAgentPreferences(): Promise<AgentPreferences> {
-    return this.unsupportedAgent();
+  async testAgentProvider(
+    providerId: string,
+    kind: AgentProviderTestResult["kind"],
+  ) {
+    const provider = this.read().agentProviderConfigs[providerId];
+    if (!provider) {
+      throw new DesktopApiError("not_found", "找不到该模型配置");
+    }
+    return {
+      ok: true,
+      kind,
+      latencyMs: 0,
+      message: "浏览器演示模型测试通过（未发起网络请求）",
+    };
   }
 
-  saveAgentPreferences(_input: AgentPreferences): Promise<AgentPreferences> {
-    return this.unsupportedAgent();
+  async detectCliProviders(): Promise<CliDetectionResult[]> {
+    return [
+      {
+        kind: "codex_cli",
+        executablePath: null,
+        version: null,
+        installed: false,
+        authenticated: false,
+        message: "浏览器演示模式不访问本机 CLI",
+      },
+      {
+        kind: "claude_code_cli",
+        executablePath: null,
+        version: null,
+        installed: false,
+        authenticated: false,
+        message: "浏览器演示模式不访问本机 CLI",
+      },
+    ];
   }
 
-  listAgentProviderConfigs(): Promise<AgentProviderConfig[]> {
-    return this.unsupportedAgent();
+  async listAgentConversations() {
+    return Object.values(this.read().agentConversations).sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt),
+    );
   }
 
-  saveAgentProviderConfig(
-    _input: AgentProviderConfigInput,
-  ): Promise<AgentProviderConfig> {
-    return this.unsupportedAgent();
+  async createAgentConversation(title = "新对话") {
+    const state = this.read();
+    const timestamp = this.now();
+    const conversation: AgentConversation = {
+      id: this.createId(),
+      title: title.trim() || "新对话",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.agentConversations[conversation.id] = conversation;
+    this.write(state);
+    return conversation;
   }
 
-  setAgentProviderSecret(_input: AgentProviderSecretInput): Promise<void> {
-    return this.unsupportedAgent();
+  async deleteAgentConversation(id: string) {
+    const state = this.read();
+    if (!state.agentConversations[id]) {
+      throw new DesktopApiError("not_found", "找不到该对话");
+    }
+    delete state.agentConversations[id];
+    for (const [messageId, message] of Object.entries(state.agentMessages)) {
+      if (message.conversationId === id) delete state.agentMessages[messageId];
+    }
+    for (const [runId, run] of Object.entries(state.agentRuns)) {
+      if (run.conversationId === id) delete state.agentRuns[runId];
+    }
+    this.write(state);
   }
 
-  clearAgentProviderSecret(_providerId: string): Promise<void> {
-    return this.unsupportedAgent();
+  async listAgentMessages(conversationId: string) {
+    const state = this.read();
+    if (!state.agentConversations[conversationId]) {
+      throw new DesktopApiError("not_found", "找不到该对话");
+    }
+    return Object.values(state.agentMessages)
+      .filter((message) => message.conversationId === conversationId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
-  listAgentProviderModels(_providerId: string): Promise<AgentModelOption[]> {
-    return this.unsupportedAgent();
+  async startAgentRun(request: AgentRunRequest) {
+    let state = this.read();
+    if (!state.agentPreferences.enabled) {
+      throw new DesktopApiError("invalid_state", "食品研发 Agent 已关闭");
+    }
+    if (!state.agentConversations[request.conversationId]) {
+      throw new DesktopApiError("not_found", "找不到该对话");
+    }
+    if (
+      !Object.values(state.agentProviderConfigs).some(
+        (provider) => provider.enabled,
+      )
+    ) {
+      throw new DesktopApiError(
+        "provider_not_configured",
+        "请先启用一个模型服务",
+      );
+    }
+    if (request.content.trim() === "" && request.files.length === 0) {
+      throw new DesktopApiError("invalid_input", "请输入问题或选择原料资料");
+    }
+
+    let job: IngredientImportJob;
+    if (request.files.length > 0) {
+      job = await this.createIngredientImportJob({
+        sourceKind: "agent",
+        files: request.files,
+      });
+      state = this.read();
+    } else {
+      const timestamp = this.now();
+      job = {
+        id: this.createId(),
+        sourceKind: "agent",
+        status: "drafts_ready",
+        progressCurrent: 0,
+        progressTotal: 0,
+        errorSummary: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      state.importJobs[job.id] = job;
+    }
+
+    const timestamp = this.now();
+    const runId = this.createId();
+    const attachmentIds = Object.values(state.importDrafts)
+      .filter((draft) => draft.jobId === job.id)
+      .flatMap((draft) => draft.attachments.map((attachment) => attachment.id));
+    const userMessage: AgentMessage = {
+      id: this.createId(),
+      conversationId: request.conversationId,
+      runId,
+      role: "user",
+      content: request.content.trim() || "请识别所选原料资料",
+      attachmentIds,
+      status: "complete",
+      createdAt: timestamp,
+    };
+    const draftCount = Object.values(state.importDrafts).filter(
+      (draft) => draft.jobId === job.id,
+    ).length;
+    const finalText =
+      draftCount > 0
+        ? `已分别识别 ${request.files.length} 份原料资料，并生成 ${draftCount} 张待人工复核草稿。`
+        : "这是浏览器离线演示模型。你可以上传演示原料资料，我会生成待人工复核草稿。";
+    const assistantMessage: AgentMessage = {
+      id: this.createId(),
+      conversationId: request.conversationId,
+      runId,
+      role: "assistant",
+      content: finalText,
+      attachmentIds: [],
+      status: "complete",
+      createdAt: timestamp,
+    };
+    const run: AgentRun = {
+      id: runId,
+      conversationId: request.conversationId,
+      providerConfigId:
+        Object.values(state.agentProviderConfigs).find(
+          (provider) => provider.enabled,
+        )?.id ?? "ollama",
+      importJobId: job.id,
+      status: "completed",
+      errorCode: null,
+      errorSummary: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.agentRuns[run.id] = run;
+    state.agentMessages[userMessage.id] = userMessage;
+    state.agentMessages[assistantMessage.id] = assistantMessage;
+    state.agentConversations[request.conversationId]!.updatedAt = timestamp;
+    this.write(state);
+
+    this.emitAgentEvent({ type: "message_delta", runId, text: finalText });
+    if (draftCount > 0) {
+      this.emitAgentEvent({
+        type: "drafts_changed",
+        runId,
+        importJobId: job.id,
+      });
+    }
+    this.emitAgentEvent({ type: "run_completed", runId });
+    return run;
   }
 
-  testAgentProvider(
-    _providerId: string,
-    _kind: AgentProviderTestResult["kind"],
-  ): Promise<AgentProviderTestResult> {
-    return this.unsupportedAgent();
+  async cancelAgentRun(id: string) {
+    const state = this.read();
+    const run = state.agentRuns[id];
+    if (!run) throw new DesktopApiError("not_found", "找不到该 Agent 任务");
+    if (run.status === "queued" || run.status === "running") {
+      run.status = "cancelled";
+      run.errorCode = "cancelled";
+      run.errorSummary = "用户已取消本次 Agent 任务";
+      run.updatedAt = this.now();
+      this.write(state);
+      this.emitAgentEvent({
+        type: "run_failed",
+        runId: id,
+        code: "cancelled",
+        message: run.errorSummary,
+      });
+    }
+    return run;
   }
 
-  detectCliProviders(): Promise<CliDetectionResult[]> {
-    return this.unsupportedAgent();
+  async getAgentRun(id: string) {
+    const run = this.read().agentRuns[id];
+    if (!run) throw new DesktopApiError("not_found", "找不到该 Agent 任务");
+    return run;
   }
 
-  listAgentConversations(): Promise<AgentConversation[]> {
-    return this.unsupportedAgent();
-  }
-
-  createAgentConversation(_title?: string): Promise<AgentConversation> {
-    return this.unsupportedAgent();
-  }
-
-  deleteAgentConversation(_id: string): Promise<void> {
-    return this.unsupportedAgent();
-  }
-
-  listAgentMessages(_conversationId: string): Promise<AgentMessage[]> {
-    return this.unsupportedAgent();
-  }
-
-  startAgentRun(_request: AgentRunRequest): Promise<AgentRun> {
-    return this.unsupportedAgent();
-  }
-
-  cancelAgentRun(_id: string): Promise<AgentRun> {
-    return this.unsupportedAgent();
-  }
-
-  getAgentRun(_id: string): Promise<AgentRun> {
-    return this.unsupportedAgent();
-  }
-
-  listAgentImportDrafts(_runId: string): Promise<IngredientImportDraft[]> {
-    return this.unsupportedAgent();
+  async listAgentImportDrafts(runId: string) {
+    const run = await this.getAgentRun(runId);
+    if (!run.importJobId) return [];
+    return this.listIngredientImportDrafts(run.importJobId);
   }
 
   async createIngredientImportJob(request: IngredientImportJobRequest) {
@@ -1211,12 +1443,16 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private write(state: BrowserStateV3) {
+  private write(state: BrowserStateV4) {
     try {
       writeBrowserState(this.storage, state);
     } catch {
       throw new DesktopApiError("storage_failure", "浏览器演示数据无法保存");
     }
+  }
+
+  private emitAgentEvent(event: AgentEvent) {
+    this.agentEvents?.emit(event);
   }
 
   private requiredName(value: string, message: string) {
@@ -1244,7 +1480,7 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private findCategory(state: BrowserStateV3, id: string) {
+  private findCategory(state: BrowserStateV4, id: string) {
     const category = state.categories.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1252,7 +1488,7 @@ export class BrowserDemoApi implements DesktopApi {
     return category;
   }
 
-  private findSupplier(state: BrowserStateV3, id: string) {
+  private findSupplier(state: BrowserStateV4, id: string) {
     const supplier = state.suppliers.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1260,7 +1496,7 @@ export class BrowserDemoApi implements DesktopApi {
     return supplier;
   }
 
-  private findGroup(state: BrowserStateV3, id: string) {
+  private findGroup(state: BrowserStateV4, id: string) {
     const group = state.materialGroups.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1268,7 +1504,7 @@ export class BrowserDemoApi implements DesktopApi {
     return group;
   }
 
-  private findVariant(state: BrowserStateV3, id: string) {
+  private findVariant(state: BrowserStateV4, id: string) {
     for (const group of state.materialGroups) {
       const variant = group.variants.find(
         (candidate) => candidate.id === id && candidate.archivedAt === null,
@@ -1278,20 +1514,20 @@ export class BrowserDemoApi implements DesktopApi {
     throw new DesktopApiError("not_found", "找不到该供应商版本");
   }
 
-  private findImportJob(state: BrowserStateV3, id: string) {
+  private findImportJob(state: BrowserStateV4, id: string) {
     const job = state.importJobs[id];
     if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
     return job;
   }
 
-  private findImportDraft(state: BrowserStateV3, id: string) {
+  private findImportDraft(state: BrowserStateV4, id: string) {
     const draft = state.importDrafts[id];
     if (!draft) throw new DesktopApiError("not_found", "找不到该导入草稿");
     return draft;
   }
 
   private materializeImportDraft(
-    state: BrowserStateV3,
+    state: BrowserStateV4,
     draft: IngredientImportDraft,
     requestedReview: ReviewedIngredientImportDraft,
   ) {
@@ -1480,7 +1716,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueVariant(
-    state: BrowserStateV3,
+    state: BrowserStateV4,
     input: IngredientVariantInput,
   ) {
     if (input.duplicateConfirmed) return;
@@ -1503,7 +1739,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueInternalCode(
-    state: BrowserStateV3,
+    state: BrowserStateV4,
     internalCode: string | null,
     exceptId?: string,
   ) {
@@ -1528,7 +1764,7 @@ export class BrowserDemoApi implements DesktopApi {
     this.requiredName(input.internalCode, "请填写内部编号");
   }
 
-  private ensureLegacySupplier(state: BrowserStateV3, timestamp: string) {
+  private ensureLegacySupplier(state: BrowserStateV4, timestamp: string) {
     const existing = state.suppliers.find(
       (supplier) => supplier.id === LEGACY_SUPPLIER_ID,
     );
@@ -1546,7 +1782,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private ensureLegacyCategory(
-    state: BrowserStateV3,
+    state: BrowserStateV4,
     name: string,
     timestamp: string,
   ) {

@@ -89,22 +89,29 @@ describe("BrowserDemoApi", () => {
     });
   });
 
-  it("migrates v2 storage to v3 without changing ingredient data", async () => {
+  it("migrates v2 storage to v4 without changing ingredient data", async () => {
     const v2 = emptyV2Storage();
     const migrated = new BrowserDemoApi({ storage: v2 });
 
     expect(await migrated.listMaterialGroups()).toEqual([]);
     const stored = JSON.parse(
-      v2.getItem("food-rd.browser-demo.v3") ?? "null",
+      v2.getItem("food-rd.browser-demo.v4") ?? "null",
     ) as Record<string, unknown>;
     expect(stored).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       categories: [],
       suppliers: [],
       materialGroups: [],
       importJobs: {},
       importDrafts: {},
       attachments: {},
+      agentPreferences: {
+        enabled: true,
+        visionProviderConfigId: null,
+      },
+      agentConversations: {},
+      agentMessages: {},
+      agentRuns: {},
     });
   });
 
@@ -229,7 +236,7 @@ describe("BrowserDemoApi", () => {
       sourceAttachments: [],
       updatedAt: "2026-07-12T01:15:00.000Z",
     });
-    expect(storage.getItem("food-rd.browser-demo.v3")).not.toBeNull();
+    expect(storage.getItem("food-rd.browser-demo.v4")).not.toBeNull();
     expect(await migrated.getSetting("appearance.compact")).toBe(true);
   });
 

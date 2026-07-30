@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod claude_cli;
 pub mod cli;
 pub mod codex_cli;
+pub mod factory;
 pub mod gemini;
 pub mod http;
 pub mod openai;

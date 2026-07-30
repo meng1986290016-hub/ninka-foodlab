@@ -743,7 +743,7 @@ git commit -m "feat(agent): enforce unified food R&D tools"
 - Consumes: provider registry, repository, tool registry, and 3A import coordinator.
 - Produces: persistent runs, `agent-event` window events, commands, and browser fake-provider parity.
 
-- [ ] **Step 1: Write failing run-loop tests**
+- [x] **Step 1: Write failing run-loop tests**
 
 ```rust
 #[tokio::test]
@@ -768,29 +768,29 @@ async fn invalid_structured_output_retries_once_then_preserves_failed_job() {
 }
 ```
 
-- [ ] **Step 2: Run runtime tests and verify failure**
+- [x] **Step 2: Run runtime tests and verify failure**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test agent_runtime`
 
 Expected: FAIL because the runtime and commands do not exist.
 
-- [ ] **Step 3: Implement the run lifecycle**
+- [x] **Step 3: Implement the run lifecycle**
 
 `start` verifies `agent.enabled`, stages selected files through 3A, creates the user message and run, builds the minimized provider request, executes at most 12 tool turns, validates every tool call, emits events, appends one final assistant message, and updates run/import-job states. Cancellation uses a Tokio cancellation token and never deletes completed drafts.
 
-- [ ] **Step 4: Persist streaming text without excessive SQLite writes**
+- [x] **Step 4: Persist streaming text without excessive SQLite writes**
 
 Keep deltas in memory, emit each delta to the window, and checkpoint the assistant message at most once per second plus once at completion/failure. Do not persist hidden reasoning events.
 
-- [ ] **Step 5: Add commands and event names**
+- [x] **Step 5: Add commands and event names**
 
 Register provider configuration, secret, model-list, test, CLI detection, conversation, run, cancel, and message commands. Emit only `food-rd://agent-event` with the exact `AgentEvent` payload. Add an `AgentEventSource` interface with `subscribe(listener) -> Promise<Unsubscribe>`; the Tauri source wraps `@tauri-apps/api/event.listen`, and the browser source uses an in-memory listener set. Structured command errors never include request bodies, keys, or local paths.
 
-- [ ] **Step 6: Implement browser fake-provider parity**
+- [x] **Step 6: Implement browser fake-provider parity**
 
 Browser schema v4 stores provider configs, conversations, runs, and messages. Its default fake provider recognizes a selected `browser_demo` file and creates deterministic import drafts through the existing browser 3A methods; it never calls `fetch`, native dialog, keyring, CLI, or MCP.
 
-- [ ] **Step 7: Run Rust, frontend adapter, browser, and type tests**
+- [x] **Step 7: Run Rust, frontend adapter, browser, and type tests**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test agent_runtime --test ingredient_commands`
 
@@ -798,7 +798,7 @@ Run: `pnpm --filter @food-rd/desktop exec vitest run src/api && pnpm --filter @f
 
 Expected: PASS for runtime persistence, cancellation, one retry, events, browser parity, and command registration.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/desktop/src-tauri/src/agent apps/desktop/src-tauri/src/commands apps/desktop/src-tauri/src/lib.rs apps/desktop/src-tauri/tests apps/desktop/src/api

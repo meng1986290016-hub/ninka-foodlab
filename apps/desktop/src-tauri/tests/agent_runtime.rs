@@ -1,0 +1,449 @@
+use std::{
+    collections::VecDeque,
+    fs,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
+use async_trait::async_trait;
+use food_rd_desktop::{
+    agent::{
+        AgentError,
+        model::{
+            AgentProviderCapabilities, AgentProviderConfig, AgentProviderKind,
+            AgentProviderProtocol, AgentRunRequest, AgentRunStatus, ReasoningEffort,
+        },
+        providers::{
+            AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult,
+            ProviderEvent, ProviderTestKind, ProviderToolCall, ProviderTurnRequest,
+            ProviderTurnResult,
+        },
+        repository::AgentRepository,
+        runtime::{AgentRuntime, AgentRuntimeEvent},
+        tools::AgentToolRegistry,
+    },
+    ingest::{
+        coordinator::IngredientIngestCoordinator,
+        model::{ImportFileReference, ImportFileReferenceKind},
+    },
+};
+use serde_json::json;
+use uuid::Uuid;
+
+struct SequenceProvider {
+    responses: Mutex<VecDeque<Result<ProviderTurnResult, AgentError>>>,
+    calls: AtomicUsize,
+    delay: Duration,
+}
+
+impl SequenceProvider {
+    fn new(responses: Vec<Result<ProviderTurnResult, AgentError>>) -> Self {
+        Self {
+            responses: Mutex::new(responses.into()),
+            calls: AtomicUsize::new(0),
+            delay: Duration::ZERO,
+        }
+    }
+
+    fn with_delay(mut self, delay: Duration) -> Self {
+        self.delay = delay;
+        self
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait]
+impl AgentProvider for SequenceProvider {
+    fn capabilities(&self) -> AgentProviderCapabilities {
+        AgentProviderCapabilities::all()
+    }
+
+    async fn test(&self, kind: ProviderTestKind) -> Result<AgentProviderTestResult, AgentError> {
+        Ok(AgentProviderTestResult {
+            ok: true,
+            kind,
+            latency_ms: Some(0),
+            message: "ok".into(),
+        })
+    }
+
+    async fn run(
+        &self,
+        _request: ProviderTurnRequest,
+        sink: AgentEventSink,
+    ) -> Result<ProviderTurnResult, AgentError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        tokio::time::sleep(self.delay).await;
+        let response = self.responses.lock().unwrap().pop_front().unwrap();
+        if let Ok(result) = &response {
+            for event in &result.events {
+                sink(event.clone());
+            }
+        }
+        response
+    }
+
+    async fn list_models(&self) -> Result<Vec<AgentModelOption>, AgentError> {
+        Ok(vec![])
+    }
+}
+
+struct Fixture {
+    root: PathBuf,
+    database_path: PathBuf,
+    attachment_root: PathBuf,
+    source_path: PathBuf,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        let root = std::env::temp_dir().join(format!("food-rd-runtime-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let source_path = root.join("milk-powder.txt");
+        fs::write(&source_path, "脱脂乳粉\n供应商 A\n蛋白质 34.0g").unwrap();
+        Self {
+            database_path: root.join("food-rd.sqlite3"),
+            attachment_root: root.join("attachments"),
+            source_path,
+            root,
+        }
+    }
+
+    fn runtime(
+        &self,
+        provider: Arc<dyn AgentProvider>,
+        events: Arc<Mutex<Vec<AgentRuntimeEvent>>>,
+    ) -> AgentRuntime {
+        self.runtime_with_config(provider, events, provider_config())
+    }
+
+    fn runtime_with_config(
+        &self,
+        provider: Arc<dyn AgentProvider>,
+        events: Arc<Mutex<Vec<AgentRuntimeEvent>>>,
+        config: AgentProviderConfig,
+    ) -> AgentRuntime {
+        let coordinator =
+            IngredientIngestCoordinator::open(&self.database_path, &self.attachment_root).unwrap();
+        let repository = AgentRepository::open_for_runtime(&self.database_path).unwrap();
+        let audit = AgentRepository::open_for_runtime(&self.database_path).unwrap();
+        AgentRuntime::new(
+            repository,
+            AgentToolRegistry::with_audit(coordinator, audit),
+            provider,
+            config,
+            Arc::new(move |event| events.lock().unwrap().push(event)),
+        )
+    }
+
+    fn request(&self, conversation_id: String) -> AgentRunRequest {
+        AgentRunRequest {
+            conversation_id,
+            content: "读取这份资料并建立原料草稿".into(),
+            files: vec![ImportFileReference {
+                kind: ImportFileReferenceKind::NativePath,
+                value: self.source_path.to_string_lossy().into_owned(),
+                media_type: Some("text/plain".into()),
+            }],
+        }
+    }
+
+    fn conversation(&self) -> String {
+        let mut repository = AgentRepository::open_for_runtime(&self.database_path).unwrap();
+        repository.create_conversation("原料识别").unwrap().id
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn runtime_events_match_the_frontend_camel_case_contract() {
+    assert_eq!(
+        serde_json::to_value(AgentRuntimeEvent::ToolStarted {
+            run_id: "run-1".into(),
+            call_id: "call-1".into(),
+            tool_name: "search_categories".into(),
+        })
+        .unwrap(),
+        json!({
+            "type": "tool_started",
+            "runId": "run-1",
+            "callId": "call-1",
+            "toolName": "search_categories"
+        })
+    );
+}
+
+#[tokio::test]
+async fn tool_calls_continue_until_final_message_and_persist_progress() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已创建 1 张原料草稿，请人工复核后保存。")),
+    ]));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::clone(&events));
+
+    let run = runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap();
+
+    assert_eq!(run.status, AgentRunStatus::Completed);
+    assert_eq!(provider.call_count(), 2);
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let messages = repository.list_messages(&conversation_id).unwrap();
+    assert_eq!(
+        messages.last().unwrap().content,
+        "已创建 1 张原料草稿，请人工复核后保存。"
+    );
+    let drafts = runtime
+        .tools()
+        .coordinator()
+        .list_drafts(run.import_job_id.as_deref().unwrap())
+        .unwrap();
+    assert_eq!(drafts.len(), 1);
+    assert!(
+        runtime
+            .tools()
+            .coordinator()
+            .ingredients()
+            .list_material_groups("")
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| matches!(event, AgentRuntimeEvent::DraftsChanged { .. }))
+    );
+}
+
+#[tokio::test]
+async fn invalid_model_output_retries_once_then_preserves_failed_job() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Err(AgentError::invalid_model_output("第一次格式错误")),
+        Err(AgentError::invalid_model_output("第二次格式错误")),
+    ]));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut runtime = fixture.runtime(provider.clone(), events);
+
+    let error = runtime
+        .start(fixture.request(conversation_id))
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "invalid_model_output");
+    assert_eq!(provider.call_count(), 2);
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let run = repository
+        .list_conversations()
+        .unwrap()
+        .into_iter()
+        .flat_map(|conversation| repository.list_messages(&conversation.id).unwrap())
+        .find_map(|message| message.run_id)
+        .and_then(|run_id| repository.get_run(&run_id).ok())
+        .unwrap();
+    assert_eq!(run.status, AgentRunStatus::Failed);
+    assert!(run.import_job_id.is_some());
+    assert!(
+        runtime
+            .tools()
+            .coordinator()
+            .get_job(run.import_job_id.as_deref().unwrap())
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn empty_model_output_retries_once_before_failing() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(final_turn("")),
+        Ok(final_turn("")),
+    ]));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut runtime = fixture.runtime(provider.clone(), events);
+
+    let error = runtime
+        .start(AgentRunRequest {
+            conversation_id,
+            content: "帮我分析原料库".into(),
+            files: vec![],
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "invalid_model_output");
+    assert_eq!(provider.call_count(), 2);
+}
+
+#[tokio::test]
+async fn cli_tool_observations_are_not_executed_twice_by_runtime() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let mut turn = tool_turn();
+    turn.final_text = r#"{"message":"CLI 已完成任务"}"#.into();
+    turn.structured_output = Some(json!({ "message": "CLI 已完成任务" }));
+    turn.events.push(ProviderEvent::TextDelta(
+        r#"{"message":"CLI 已完成任务"}"#.into(),
+    ));
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(turn)]));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut config = provider_config();
+    config.kind = AgentProviderKind::CodexCli;
+    config.protocol = AgentProviderProtocol::CodexCli;
+    let mut runtime = fixture.runtime_with_config(provider.clone(), Arc::clone(&events), config);
+
+    let run = runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap();
+
+    assert_eq!(run.status, AgentRunStatus::Completed);
+    assert_eq!(provider.call_count(), 1);
+    let messages = AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .list_messages(&conversation_id)
+        .unwrap();
+    assert_eq!(messages.last().unwrap().content, "CLI 已完成任务");
+    assert!(
+        runtime
+            .tools()
+            .coordinator()
+            .list_drafts(run.import_job_id.as_deref().unwrap())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| matches!(event, AgentRuntimeEvent::ToolCompleted { .. }))
+    );
+}
+
+#[tokio::test]
+async fn cancellation_marks_the_run_cancelled_without_deleting_its_job() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(
+        SequenceProvider::new(vec![Ok(final_turn("不应保存为完成"))])
+            .with_delay(Duration::from_millis(50)),
+    );
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut runtime = fixture.runtime(provider, events);
+    let control = runtime.control();
+    let cancel = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        control.cancel();
+    });
+
+    let error = runtime
+        .start(fixture.request(conversation_id))
+        .await
+        .unwrap_err();
+    cancel.await.unwrap();
+
+    assert_eq!(error.code(), "cancelled");
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let run = repository
+        .list_conversations()
+        .unwrap()
+        .into_iter()
+        .flat_map(|conversation| repository.list_messages(&conversation.id).unwrap())
+        .find_map(|message| message.run_id)
+        .and_then(|run_id| repository.get_run(&run_id).ok())
+        .unwrap();
+    assert_eq!(run.status, AgentRunStatus::Cancelled);
+    assert!(
+        runtime
+            .tools()
+            .coordinator()
+            .get_job(run.import_job_id.as_deref().unwrap())
+            .is_ok()
+    );
+}
+
+fn provider_config() -> AgentProviderConfig {
+    AgentProviderConfig {
+        id: "openai".into(),
+        kind: AgentProviderKind::OpenAi,
+        display_name: "OpenAI".into(),
+        protocol: AgentProviderProtocol::OpenAiResponses,
+        endpoint: String::new(),
+        model: "test-model".into(),
+        context_window: 128_000,
+        reasoning_effort: ReasoningEffort::Auto,
+        timeout_seconds: 30,
+        executable_path: Some("/fake/codex".into()),
+        enabled: true,
+        has_secret: false,
+        capabilities: AgentProviderCapabilities::all(),
+        updated_at: "2026-07-30T00:00:00Z".into(),
+    }
+}
+
+fn tool_turn() -> ProviderTurnResult {
+    ProviderTurnResult {
+        final_text: String::new(),
+        structured_output: None,
+        events: vec![ProviderEvent::ToolCall(ProviderToolCall {
+            id: "call-create-draft".into(),
+            name: "create_ingredient_import_draft".into(),
+            arguments: json!({
+                "review": {
+                    "materialGroupId": null,
+                    "materialName": "脱脂乳粉",
+                    "categoryId": null,
+                    "categoryName": "乳制品",
+                    "supplierId": null,
+                    "supplierName": "供应商 A",
+                    "modelOrSpecification": "",
+                    "currentPrice": null,
+                    "priceUnit": "kg",
+                    "densityGPerMl": null,
+                    "nutritionBasis": "每100g",
+                    "nutrients": [{
+                        "definitionId": "protein",
+                        "name": "蛋白质",
+                        "unit": "g",
+                        "value": "34.0"
+                    }],
+                    "containsAllergens": ["乳及乳制品"],
+                    "mayContainAllergens": [],
+                    "source": "供应商标签",
+                    "researchNotes": "",
+                    "duplicateConfirmed": false
+                },
+                "attachmentIds": []
+            }),
+        })],
+    }
+}
+
+fn final_turn(message: &str) -> ProviderTurnResult {
+    ProviderTurnResult {
+        final_text: message.into(),
+        structured_output: None,
+        events: vec![ProviderEvent::TextDelta(message.into())],
+    }
+}

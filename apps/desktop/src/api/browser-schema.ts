@@ -12,11 +12,21 @@ import type {
   IngredientImportJob,
   SourceAttachment,
 } from "./import-types";
+import type {
+  AgentConversation,
+  AgentMessage,
+  AgentPreferences,
+  AgentProviderConfig,
+  AgentProviderKind,
+  AgentProviderProtocol,
+  AgentRun,
+} from "./agent-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
 export const BROWSER_V3_KEY = "food-rd.browser-demo.v3";
-export const BROWSER_SCHEMA_VERSION = 3;
+export const BROWSER_V4_KEY = "food-rd.browser-demo.v4";
+export const BROWSER_SCHEMA_VERSION = 4;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -46,6 +56,16 @@ export interface BrowserStateV3 {
   importJobs: Record<string, IngredientImportJob>;
   importDrafts: Record<string, IngredientImportDraft>;
   attachments: Record<string, SourceAttachment>;
+}
+
+export interface BrowserStateV4
+  extends Omit<BrowserStateV3, "schemaVersion"> {
+  schemaVersion: 4;
+  agentPreferences: AgentPreferences;
+  agentProviderConfigs: Record<string, AgentProviderConfig>;
+  agentConversations: Record<string, AgentConversation>;
+  agentMessages: Record<string, AgentMessage>;
+  agentRuns: Record<string, AgentRun>;
 }
 
 export interface MigrationContext {
@@ -173,10 +193,28 @@ export function migrateV1ToV2(
 export function migrateV2ToV3(state: BrowserStateV2): BrowserStateV3 {
   return {
     ...state,
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 3,
     importJobs: {},
     importDrafts: {},
     attachments: {},
+  };
+}
+
+export function migrateV3ToV4(
+  state: BrowserStateV3,
+  context: MigrationContext,
+): BrowserStateV4 {
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    agentPreferences: {
+      enabled: true,
+      visionProviderConfigId: null,
+    },
+    agentProviderConfigs: browserAgentProviderConfigs(context.now()),
+    agentConversations: {},
+    agentMessages: {},
+    agentRuns: {},
   };
 }
 
@@ -184,14 +222,25 @@ export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV3 {
-  const v3 = storage.getItem(BROWSER_V3_KEY);
-  if (v3 !== null) {
-    const parsed = JSON.parse(v3) as BrowserStateV3;
+): BrowserStateV4 {
+  const v4 = storage.getItem(BROWSER_V4_KEY);
+  if (v4 !== null) {
+    const parsed = JSON.parse(v4) as BrowserStateV4;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+
+  const v3 = storage.getItem(BROWSER_V3_KEY);
+  if (v3 !== null) {
+    const parsed = JSON.parse(v3) as BrowserStateV3;
+    if (parsed.schemaVersion !== 3) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV3ToV4(parsed, context);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v2 = storage.getItem(BROWSER_V2_KEY);
@@ -200,7 +249,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 2) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV2ToV3(parsed);
+    const migrated = migrateV3ToV4(migrateV2ToV3(parsed), context);
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -212,11 +261,74 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV2ToV3(migrateV1ToV2(legacy, context));
+  const migrated = migrateV3ToV4(
+    migrateV2ToV3(migrateV1ToV2(legacy, context)),
+    context,
+  );
   writeBrowserState(storage, migrated);
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV3) {
-  storage.setItem(BROWSER_V3_KEY, JSON.stringify(state));
+export function writeBrowserState(storage: Storage, state: BrowserStateV4) {
+  storage.setItem(BROWSER_V4_KEY, JSON.stringify(state));
+}
+
+function browserAgentProviderConfigs(
+  updatedAt: string,
+): Record<string, AgentProviderConfig> {
+  const definitions: Array<
+    [
+      string,
+      AgentProviderKind,
+      string,
+      AgentProviderProtocol,
+      string,
+      string,
+      boolean,
+    ]
+  > = [
+    ["openai", "openai", "OpenAI", "openai_responses", "https://api.openai.com/v1", "", true],
+    ["anthropic", "anthropic", "Anthropic (Claude)", "anthropic_messages", "https://api.anthropic.com", "", true],
+    ["gemini", "gemini", "Google (Gemini)", "gemini_generate_content", "https://generativelanguage.googleapis.com/v1beta", "", true],
+    ["azure_openai", "azure_openai", "Azure OpenAI", "openai_responses", "", "", true],
+    ["deepseek", "deepseek", "DeepSeek", "openai_compatible", "https://api.deepseek.com", "", false],
+    ["kimi_cn", "kimi_cn", "Kimi (Moonshot 中国)", "openai_compatible", "https://api.moonshot.cn/v1", "", true],
+    ["zhipu_glm", "zhipu_glm", "智谱 GLM", "openai_compatible", "https://open.bigmodel.cn/api/paas/v4", "", true],
+    ["minimax_cn", "minimax_cn", "MiniMax (中国)", "openai_compatible", "https://api.minimaxi.com/v1", "", true],
+    ["bailian", "bailian", "阿里百炼", "openai_compatible", "https://dashscope.aliyuncs.com/compatible-mode/v1", "", true],
+    ["volcengine_ark", "volcengine_ark", "火山引擎 Ark", "openai_responses", "https://ark.cn-beijing.volces.com/api/v3", "", true],
+    ["ollama", "ollama", "Ollama（浏览器演示模型）", "openai_compatible", "http://127.0.0.1:11434/v1", "food-rd-demo", false],
+    ["custom", "custom", "自定义模型服务", "openai_compatible", "", "", false],
+    ["codex_cli", "codex_cli", "Codex CLI（本地）", "codex_cli", "", "", true],
+    ["claude_code_cli", "claude_code_cli", "Claude Code CLI（本地）", "claude_code_cli", "", "", true],
+  ];
+  return Object.fromEntries(
+    definitions.map(
+      ([id, kind, displayName, protocol, endpoint, model, images]) => [
+        id,
+        {
+          id,
+          kind,
+          displayName,
+          protocol,
+          endpoint,
+          model,
+          contextWindow: kind === "claude_code_cli" ? 200_000 : 128_000,
+          reasoningEffort: "auto",
+          timeoutSeconds: 120,
+          executablePath: null,
+          enabled: id === "ollama",
+          hasSecret: false,
+          capabilities: {
+            text: true,
+            images,
+            tools: true,
+            structuredOutput: true,
+            streaming: true,
+          },
+          updatedAt,
+        } satisfies AgentProviderConfig,
+      ],
+    ),
+  );
 }

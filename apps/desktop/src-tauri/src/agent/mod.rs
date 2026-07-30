@@ -2,6 +2,7 @@ pub mod mcp;
 pub mod model;
 pub mod providers;
 pub mod repository;
+pub mod runtime;
 pub mod secrets;
 pub mod tools;
 

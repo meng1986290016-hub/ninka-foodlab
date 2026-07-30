@@ -1,16 +1,22 @@
+pub mod agent;
 pub mod ingest;
 pub mod ingredients;
 
-use std::sync::Mutex;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use serde::Serialize;
 
 use crate::{
+    agent::{AgentError, runtime::AgentRuntimeControl},
     ingest::{IngestError, coordinator::IngredientIngestCoordinator},
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 36] = [
+pub const REGISTERED_COMMANDS: [&str; 53] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -47,16 +53,43 @@ pub const REGISTERED_COMMANDS: [&str; 36] = [
     "export_ingredient_template",
     "export_ingredient_library",
     "cleanup_orphan_attachments",
+    "get_agent_preferences",
+    "save_agent_preferences",
+    "list_agent_provider_configs",
+    "save_agent_provider_config",
+    "set_agent_provider_secret",
+    "clear_agent_provider_secret",
+    "list_agent_provider_models",
+    "test_agent_provider",
+    "detect_cli_providers",
+    "list_agent_conversations",
+    "create_agent_conversation",
+    "delete_agent_conversation",
+    "list_agent_messages",
+    "start_agent_run",
+    "cancel_agent_run",
+    "get_agent_run",
+    "list_agent_import_drafts",
 ];
 
 pub struct AppState {
     pub(crate) coordinator: Mutex<IngredientIngestCoordinator>,
+    pub(crate) database_path: PathBuf,
+    pub(crate) attachment_root: PathBuf,
+    pub(crate) active_agent_runs: Arc<Mutex<HashMap<String, AgentRuntimeControl>>>,
 }
 
 impl AppState {
-    pub fn new(coordinator: IngredientIngestCoordinator) -> Self {
+    pub fn new(
+        coordinator: IngredientIngestCoordinator,
+        database_path: PathBuf,
+        attachment_root: PathBuf,
+    ) -> Self {
         Self {
             coordinator: Mutex::new(coordinator),
+            database_path,
+            attachment_root,
+            active_agent_runs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -99,6 +132,16 @@ impl From<IngestError> for CommandError {
             code: error.code().to_string(),
             message: error.message().to_string(),
             field,
+        }
+    }
+}
+
+impl From<AgentError> for CommandError {
+    fn from(error: AgentError) -> Self {
+        Self {
+            code: error.code().to_string(),
+            message: error.message().to_string(),
+            field: None,
         }
     }
 }

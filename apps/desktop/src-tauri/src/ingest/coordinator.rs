@@ -16,7 +16,7 @@ use crate::ingredients::{
 
 use super::{
     IngestError,
-    attachment_store::AttachmentStore,
+    attachment_store::{AttachmentStore, StoredAttachment},
     model::{
         ImportFileReferenceKind, ImportIssueSeverity, ImportedNutrientValue,
         IngredientExchangeFormat, IngredientImportCommitResult, IngredientImportDraft,
@@ -134,6 +134,45 @@ impl IngredientIngestCoordinator {
         self.process_job(&job.id)
     }
 
+    pub fn create_agent_job(
+        &mut self,
+        files: Vec<super::model::ImportFileReference>,
+    ) -> Result<IngredientImportJob, IngestError> {
+        if !files.is_empty() {
+            return self.create_job(IngredientImportJobRequest {
+                files,
+                source_kind: IngredientImportSourceKind::Agent,
+            });
+        }
+
+        let timestamp = (self.ingredients.clock)();
+        let job = IngredientImportJob {
+            id: (self.ingredients.create_id)(),
+            source_kind: IngredientImportSourceKind::Agent,
+            status: IngredientImportJobStatus::Pending,
+            progress_current: 0,
+            progress_total: 0,
+            error_summary: None,
+            created_at: timestamp.clone(),
+            updated_at: timestamp.clone(),
+        };
+        repository::insert_job(&self.ingredients.connection, &job)?;
+        repository::transition_job(
+            &self.ingredients.connection,
+            &job.id,
+            IngredientImportJobStatus::Extracting,
+            None,
+            &timestamp,
+        )?;
+        repository::transition_job(
+            &self.ingredients.connection,
+            &job.id,
+            IngredientImportJobStatus::Recognizing,
+            None,
+            &timestamp,
+        )
+    }
+
     pub fn get_job(&self, id: &str) -> Result<IngredientImportJob, IngestError> {
         repository::get_job(&self.ingredients.connection, id)
     }
@@ -152,6 +191,20 @@ impl IngredientIngestCoordinator {
         attachment_ids: &[String],
     ) -> Result<Vec<super::extractors::ExtractedDocument>, IngestError> {
         repository::read_job_extractions(&self.ingredients.connection, job_id, attachment_ids)
+    }
+
+    pub fn list_job_attachments(&self, job_id: &str) -> Result<Vec<StoredAttachment>, IngestError> {
+        repository::list_job_attachments(&self.ingredients.connection, job_id)
+    }
+
+    pub fn read_attachment_bytes(
+        &self,
+        attachment: &StoredAttachment,
+    ) -> Result<Vec<u8>, IngestError> {
+        let path = self
+            .attachment_store
+            .open_for_extract(&attachment.relative_path)?;
+        std::fs::read(path).map_err(IngestError::attachment)
     }
 
     pub fn create_agent_draft(

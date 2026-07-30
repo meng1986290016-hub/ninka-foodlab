@@ -35,3 +35,9 @@ export class BrowserAgentEventSource implements AgentEventSource {
     for (const listener of this.listeners) listener(event);
   }
 }
+
+export function createAgentEventSource(): AgentEventSource {
+  return window.__TAURI_INTERNALS__ === undefined
+    ? new BrowserAgentEventSource()
+    : new TauriAgentEventSource();
+}

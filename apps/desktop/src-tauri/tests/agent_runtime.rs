@@ -14,8 +14,9 @@ use food_rd_desktop::{
     agent::{
         AgentError,
         model::{
-            AgentProviderCapabilities, AgentProviderConfig, AgentProviderKind,
-            AgentProviderProtocol, AgentRunRequest, AgentRunStatus, ReasoningEffort,
+            AgentMessageRole, AgentProviderCapabilities, AgentProviderConfig,
+            AgentProviderKind, AgentProviderProtocol, AgentRunRequest, AgentRunStatus,
+            ReasoningEffort,
         },
         providers::{
             AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult,
@@ -152,6 +153,7 @@ impl Fixture {
                 value: self.source_path.to_string_lossy().into_owned(),
                 media_type: Some("text/plain".into()),
             }],
+            retry_run_id: None,
         }
     }
 
@@ -287,12 +289,68 @@ async fn empty_model_output_retries_once_before_failing() {
             conversation_id,
             content: "帮我分析原料库".into(),
             files: vec![],
+            retry_run_id: None,
         })
         .await
         .unwrap_err();
 
     assert_eq!(error.code(), "invalid_model_output");
     assert_eq!(provider.call_count(), 2);
+}
+
+#[tokio::test]
+async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let failing_provider = Arc::new(SequenceProvider::new(vec![
+        Ok(final_turn("")),
+        Ok(final_turn("")),
+    ]));
+    let mut failing_runtime =
+        fixture.runtime(failing_provider, Arc::new(Mutex::new(Vec::new())));
+    failing_runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap_err();
+
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let first_user = repository
+        .list_messages(&conversation_id)
+        .unwrap()
+        .into_iter()
+        .find(|message| message.role == AgentMessageRole::User)
+        .unwrap();
+    let failed_run_id = first_user.run_id.clone().unwrap();
+    let failed_run = repository.get_run(&failed_run_id).unwrap();
+
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
+        "已重新完成识别，请继续人工复核。",
+    ))]));
+    let mut retry_runtime =
+        fixture.runtime(provider, Arc::new(Mutex::new(Vec::new())));
+    let retried = retry_runtime
+        .start(AgentRunRequest {
+            conversation_id: conversation_id.clone(),
+            content: String::new(),
+            files: vec![],
+            retry_run_id: Some(failed_run_id),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(retried.import_job_id, failed_run.import_job_id);
+    let messages = AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .list_messages(&conversation_id)
+        .unwrap();
+    let retried_user = messages
+        .iter()
+        .find(|message| {
+            message.run_id.as_deref() == Some(&retried.id)
+                && message.role == AgentMessageRole::User
+        })
+        .unwrap();
+    assert_eq!(retried_user.attachment_ids, first_user.attachment_ids);
 }
 
 #[tokio::test]

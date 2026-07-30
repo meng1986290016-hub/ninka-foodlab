@@ -11,9 +11,13 @@ export type IconName =
   | "flask"
   | "formula"
   | "ingredients"
+  | "message"
+  | "paperclip"
   | "plus"
   | "search"
-  | "settings";
+  | "send"
+  | "settings"
+  | "trash";
 
 const paths: Record<IconName, ReactNode> = {
   archive: (
@@ -63,6 +67,15 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M7 7V4h10v3M8 12h8M8 16h5" />
     </>
   ),
+  message: (
+    <>
+      <path d="M21 12a8 8 0 0 1-8 8H6l-4 2 1.5-4A9 9 0 1 1 21 12Z" />
+      <path d="M8 12h.01M12 12h.01M16 12h.01" />
+    </>
+  ),
+  paperclip: (
+    <path d="m20 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l9-9a3.5 3.5 0 0 1 5 5l-9.1 9.1a2 2 0 0 1-2.8-2.8l8.4-8.4" />
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   search: (
     <>
@@ -70,10 +83,22 @@ const paths: Record<IconName, ReactNode> = {
       <path d="m20 20-4-4" />
     </>
   ),
+  send: (
+    <>
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </>
+  ),
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16M9 11v6m6-6v6" />
+      <path d="m6 7 1 14h10l1-14M9 7l1-3h4l1 3" />
     </>
   ),
 };

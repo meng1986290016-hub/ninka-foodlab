@@ -876,7 +876,7 @@ Run: `pnpm --filter @food-rd/desktop typecheck && pnpm --filter @food-rd/desktop
 
 Expected: PASS with one custom card, mutually exclusive active provider, secure-key behavior, and responsive settings layout.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/desktop/src/features/settings apps/desktop/src/App.tsx apps/desktop/src/components/AppShell.tsx apps/desktop/src/styles/app.css
@@ -903,7 +903,7 @@ git commit -m "feat(agent): add model provider settings"
 - Consumes: conversations, messages, run commands, `food-rd://agent-event`, and 3A file picker.
 - Produces: a global open/close Chat experience that persists across pages and restarts.
 
-- [ ] **Step 1: Write failing panel tests**
+- [x] **Step 1: Write failing panel tests**
 
 ```tsx
 it("keeps the same conversation after closing, navigating, and reopening", async () => {
@@ -924,29 +924,29 @@ it("shows a configuration action without breaking manual features", async () => 
 });
 ```
 
-- [ ] **Step 2: Run panel tests and verify failure**
+- [x] **Step 2: Run panel tests and verify failure**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/agent/AgentPanel.test.tsx`
 
 Expected: FAIL because the global panel does not exist.
 
-- [ ] **Step 3: Mount one panel at the application shell level**
+- [x] **Step 3: Mount one panel at the application shell level**
 
 The top bar contains `打开食品研发 Agent`. The panel is a third grid column at wide sizes and an overlay below 900 px. It remains mounted while application pages change. Closing changes visibility only, not conversation state.
 
-- [ ] **Step 4: Implement messages, composer, attachments, and privacy confirmation**
+- [x] **Step 4: Implement messages, composer, attachments, and privacy confirmation**
 
 The composer accepts text, multiple file selection, drag/drop, removal before send, Stop, Retry, and Clear Conversation. Before the first send containing attachments to a remote provider, render `这些资料将发送给当前配置的模型服务：${provider.displayName}` and require confirmation. Local CLI/Ollama displays `资料仅交给本机配置处理`.
 
-- [ ] **Step 5: Render normalized events without reasoning**
+- [x] **Step 5: Render normalized events without reasoning**
 
 Append text deltas, show friendly tool statuses (`正在读取附件`, `正在搜索供应商`, `已创建 3 张草稿`), replace them on completion, and display actionable provider errors. Ignore any provider event categorized as reasoning.
 
-- [ ] **Step 6: Implement cancel, retry, and conversation clearing**
+- [x] **Step 6: Implement cancel, retry, and conversation clearing**
 
 Stop calls `cancelAgentRun`. Retry creates a new run with the failed user message and same attachment IDs; it does not duplicate staged files. Clearing asks for confirmation and deletes Chat messages while leaving formal ingredients and already imported source attachments untouched.
 
-- [ ] **Step 7: Run panel, App, typecheck, and build tests**
+- [x] **Step 7: Run panel, App, typecheck, and build tests**
 
 Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/agent src/App.test.tsx`
 
@@ -954,7 +954,7 @@ Run: `pnpm --filter @food-rd/desktop typecheck && pnpm --filter @food-rd/desktop
 
 Expected: PASS for global persistence, upload confirmation, streaming states, cancellation, retry, and no-provider fallback.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/desktop/src/features/agent apps/desktop/src/App.tsx apps/desktop/src/components apps/desktop/src/styles/app.css

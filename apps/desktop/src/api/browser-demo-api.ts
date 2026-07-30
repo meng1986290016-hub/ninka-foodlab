@@ -539,12 +539,44 @@ export class BrowserDemoApi implements DesktopApi {
         "请先启用一个模型服务",
       );
     }
-    if (request.content.trim() === "" && request.files.length === 0) {
+    if (
+      request.retryRunId == null &&
+      request.content.trim() === "" &&
+      request.files.length === 0
+    ) {
       throw new DesktopApiError("invalid_input", "请输入问题或选择原料资料");
     }
 
     let job: IngredientImportJob;
-    if (request.files.length > 0) {
+    let reusedAttachmentIds: string[] | null = null;
+    let content = request.content.trim();
+    if (request.retryRunId) {
+      if (request.files.length > 0) {
+        throw new DesktopApiError(
+          "invalid_input",
+          "重试会复用原任务附件，请勿再次选择文件",
+        );
+      }
+      const previous = state.agentRuns[request.retryRunId];
+      if (
+        !previous ||
+        previous.conversationId !== request.conversationId ||
+        !["failed", "cancelled"].includes(previous.status) ||
+        !previous.importJobId
+      ) {
+        throw new DesktopApiError("invalid_state", "原任务当前不能重试");
+      }
+      job = state.importJobs[previous.importJobId]!;
+      const previousUser = Object.values(state.agentMessages).find(
+        (message) =>
+          message.runId === previous.id && message.role === "user",
+      );
+      if (!job || !previousUser) {
+        throw new DesktopApiError("invalid_state", "原任务资料不完整");
+      }
+      reusedAttachmentIds = [...previousUser.attachmentIds];
+      content ||= previousUser.content;
+    } else if (request.files.length > 0) {
       job = await this.createIngredientImportJob({
         sourceKind: "agent",
         files: request.files,
@@ -567,15 +599,17 @@ export class BrowserDemoApi implements DesktopApi {
 
     const timestamp = this.now();
     const runId = this.createId();
-    const attachmentIds = Object.values(state.importDrafts)
-      .filter((draft) => draft.jobId === job.id)
-      .flatMap((draft) => draft.attachments.map((attachment) => attachment.id));
+    const attachmentIds =
+      reusedAttachmentIds ??
+      Object.values(state.importDrafts)
+        .filter((draft) => draft.jobId === job.id)
+        .flatMap((draft) => draft.attachments.map((attachment) => attachment.id));
     const userMessage: AgentMessage = {
       id: this.createId(),
       conversationId: request.conversationId,
       runId,
       role: "user",
-      content: request.content.trim() || "请识别所选原料资料",
+      content: content || "请识别所选原料资料",
       attachmentIds,
       status: "complete",
       createdAt: timestamp,

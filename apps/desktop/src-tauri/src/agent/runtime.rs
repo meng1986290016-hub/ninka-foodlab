@@ -176,26 +176,82 @@ impl AgentRuntime {
         if !self.repository.get_preferences()?.enabled {
             return Err(AgentError::invalid_input("食品研发 Agent 已在设置中关闭"));
         }
-        if request.content.trim().is_empty() && request.files.is_empty() {
+        if request.retry_run_id.is_none()
+            && request.content.trim().is_empty()
+            && request.files.is_empty()
+        {
             return Err(AgentError::invalid_input("请输入问题或选择原料资料"));
         }
         self.repository.get_conversation(&request.conversation_id)?;
 
-        let job = self
-            .tools
-            .coordinator_mut()
-            .create_agent_job(request.files)
-            .map_err(map_ingest_error)?;
-        let attachments = self.prepare_attachments(&job.id)?;
-        let attachment_ids = attachments
-            .iter()
-            .map(|attachment| attachment.id.clone())
-            .collect::<Vec<_>>();
+        let (job_id, attachments, attachment_ids, content) =
+            if let Some(retry_run_id) = request.retry_run_id.as_deref() {
+                if !request.files.is_empty() {
+                    return Err(AgentError::invalid_input(
+                        "重试会复用原任务附件，请勿再次选择文件",
+                    ));
+                }
+                let previous = self.repository.get_run(retry_run_id)?;
+                if previous.conversation_id != request.conversation_id {
+                    return Err(AgentError::invalid_input("只能在原对话中重试任务"));
+                }
+                if !matches!(
+                    previous.status,
+                    AgentRunStatus::Failed | AgentRunStatus::Cancelled
+                ) {
+                    return Err(AgentError::invalid_input(
+                        "只有失败或已取消的任务可以重试",
+                    ));
+                }
+                let job_id = previous
+                    .import_job_id
+                    .ok_or_else(|| AgentError::invalid_input("原任务没有可复用的资料"))?;
+                let previous_user = self
+                    .repository
+                    .list_messages(&request.conversation_id)?
+                    .into_iter()
+                    .find(|message| {
+                        message.run_id.as_deref() == Some(retry_run_id)
+                            && message.role == AgentMessageRole::User
+                    })
+                    .ok_or_else(|| AgentError::invalid_input("找不到原任务消息"))?;
+                let attachment_ids = previous_user.attachment_ids;
+                let mut attachments = self.prepare_attachments(&job_id)?;
+                attachments.retain(|attachment| attachment_ids.contains(&attachment.id));
+                if attachments.len() != attachment_ids.len() {
+                    return Err(AgentError::invalid_input(
+                        "原任务附件不完整，无法安全重试",
+                    ));
+                }
+                let content = if request.content.trim().is_empty() {
+                    previous_user.content
+                } else {
+                    request.content.trim().into()
+                };
+                (job_id, attachments, attachment_ids, content)
+            } else {
+                let job = self
+                    .tools
+                    .coordinator_mut()
+                    .create_agent_job(request.files)
+                    .map_err(map_ingest_error)?;
+                let attachments = self.prepare_attachments(&job.id)?;
+                let attachment_ids = attachments
+                    .iter()
+                    .map(|attachment| attachment.id.clone())
+                    .collect::<Vec<_>>();
+                (
+                    job.id,
+                    attachments,
+                    attachment_ids,
+                    request.content.trim().into(),
+                )
+            };
 
         let mut run = self.repository.create_run(AgentRunInput {
             conversation_id: request.conversation_id.clone(),
             provider_config_id: self.provider_config.id.clone(),
-            import_job_id: Some(job.id.clone()),
+            import_job_id: Some(job_id.clone()),
             status: AgentRunStatus::Queued,
         })?;
         run = self
@@ -205,7 +261,7 @@ impl AgentRuntime {
         let setup = self.prepare_messages(
             &request.conversation_id,
             &run.id,
-            request.content.trim(),
+            &content,
             attachment_ids.clone(),
         );
         let assistant = match setup {
@@ -218,7 +274,7 @@ impl AgentRuntime {
 
         let context = AgentToolContext {
             run_id: run.id.clone(),
-            import_job_id: job.id.clone(),
+            import_job_id: job_id,
             allowed_attachment_ids: attachment_ids.iter().cloned().collect(),
             provider_kind: self.provider_config.kind,
             model: self.provider_config.model.clone(),

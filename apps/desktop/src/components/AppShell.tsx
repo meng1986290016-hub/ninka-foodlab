@@ -6,9 +6,12 @@ import { Icon, type IconName } from "./Icon";
 
 interface AppShellProps {
   children: ReactNode;
+  agentPanel: ReactNode;
+  agentOpen: boolean;
   databaseStatus: DatabaseStatus | null;
   activePage: AppPage;
   onNavigate(page: AppPage): void;
+  onToggleAgent(): void;
 }
 
 export type AppPage = "ingredients" | "recipes" | "recipe-library" | "settings";
@@ -22,14 +25,17 @@ const navigation: Array<{ id: AppPage; label: string; icon: IconName }> = [
 
 export function AppShell({
   children,
+  agentPanel,
+  agentOpen,
   databaseStatus,
   activePage,
   onNavigate,
+  onToggleAgent,
 }: AppShellProps) {
   const isBrowserDemo = databaseStatus?.mode !== "sqlite";
 
   return (
-    <div className="app-shell">
+    <div className={agentOpen ? "app-shell is-agent-open" : "app-shell"}>
       <aside className="sidebar">
         <div className="brand">{APP_NAME}</div>
         <nav aria-label="主导航" className="primary-nav">
@@ -55,6 +61,21 @@ export function AppShell({
       </aside>
 
       <header className="topbar">
+        <button
+          aria-expanded={agentOpen}
+          aria-label={
+            agentOpen ? "隐藏食品研发 Agent 面板" : "打开食品研发 Agent"
+          }
+          className={
+            agentOpen ? "agent-toggle-button is-active" : "agent-toggle-button"
+          }
+          onClick={onToggleAgent}
+          type="button"
+        >
+          <Icon name="message" size={18} />
+          <span>{agentOpen ? "关闭 Agent" : "食品研发 Agent"}</span>
+        </button>
+        <span className="topbar-spacer" />
         <div className="database-indicator">
           <Icon name="database" size={19} />
           <span>{isBrowserDemo ? "浏览器演示数据" : "本地数据库"}</span>
@@ -64,6 +85,7 @@ export function AppShell({
       </header>
 
       <main className="app-content">{children}</main>
+      {agentPanel}
 
       <footer className="statusbar">
         <span>{isBrowserDemo ? "浏览器演示数据" : "SQLite 本地数据"}</span>

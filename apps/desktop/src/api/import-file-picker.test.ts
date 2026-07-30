@@ -6,12 +6,16 @@ import {
   TauriImportFilePicker,
 } from "./import-file-picker";
 
-const { open, save } = vi.hoisted(() => ({
+const { open, save, onDragDropEvent } = vi.hoisted(() => ({
   open: vi.fn(),
   save: vi.fn(),
+  onDragDropEvent: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open, save }));
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({ onDragDropEvent }),
+}));
 
 describe("ImportFilePicker", () => {
   afterEach(() => {
@@ -63,5 +67,27 @@ describe("ImportFilePicker", () => {
       defaultPath: "原料库.xlsx",
       filters: [{ name: "XLSX", extensions: ["xlsx"] }],
     });
+  });
+
+  it("maps desktop drag-and-drop paths without reading file contents", async () => {
+    const unlisten = vi.fn();
+    onDragDropEvent.mockImplementation(async (handler) => {
+      handler({
+        payload: {
+          type: "drop",
+          paths: ["/tmp/标签.png", "/tmp/规格书.pdf"],
+          position: { x: 10, y: 10 },
+        },
+      });
+      return unlisten;
+    });
+    const listener = vi.fn();
+    const picker = new TauriImportFilePicker();
+
+    await expect(picker.subscribeSourceDrops(listener)).resolves.toBe(unlisten);
+    expect(listener).toHaveBeenCalledWith([
+      { kind: "native_path", value: "/tmp/标签.png" },
+      { kind: "native_path", value: "/tmp/规格书.pdf" },
+    ]);
   });
 });

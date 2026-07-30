@@ -220,6 +220,8 @@ pub struct AgentRunRequest {
     pub content: String,
     #[serde(default)]
     pub files: Vec<ImportFileReference>,
+    #[serde(default)]
+    pub retry_run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

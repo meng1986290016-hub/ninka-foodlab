@@ -1,4 +1,5 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import type {
   ImportFileReference,
@@ -12,6 +13,9 @@ export const INGREDIENT_SOURCE_FILTER = {
 
 export interface ImportFilePicker {
   pickSources(): Promise<ImportFileReference[]>;
+  subscribeSourceDrops?(
+    listener: (files: ImportFileReference[]) => void,
+  ): Promise<() => void>;
   pickDestination(
     format: IngredientExchangeFormat,
     defaultName: string,
@@ -37,6 +41,20 @@ export class TauriImportFilePicker implements ImportFilePicker {
     return save({
       defaultPath: `${defaultName}.${format}`,
       filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+  }
+
+  subscribeSourceDrops(
+    listener: (files: ImportFileReference[]) => void,
+  ) {
+    return getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type !== "drop") return;
+      listener(
+        event.payload.paths.map((value) => ({
+          kind: "native_path" as const,
+          value,
+        })),
+      );
     });
   }
 }

@@ -6,12 +6,16 @@ import { ModelProviderSettings } from "./ModelProviderSettings";
 
 interface SettingsPageProps {
   api: DesktopApi;
+  initialSection?: SettingsSection;
 }
 
 type SettingsSection = "general" | "models";
 
-export function SettingsPage({ api }: SettingsPageProps) {
-  const [section, setSection] = useState<SettingsSection>("general");
+export function SettingsPage({
+  api,
+  initialSection = "general",
+}: SettingsPageProps) {
+  const [section, setSection] = useState<SettingsSection>(initialSection);
 
   return (
     <div className="settings-page">

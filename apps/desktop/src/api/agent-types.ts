@@ -120,6 +120,7 @@ export interface AgentRunRequest {
   conversationId: string;
   content: string;
   files: ImportFileReference[];
+  retryRunId?: string | null;
 }
 
 export interface AgentRun {

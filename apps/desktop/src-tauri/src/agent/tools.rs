@@ -231,12 +231,30 @@ impl AgentToolRegistry {
     ) -> Result<Value, AgentError> {
         let arguments: CreateDraftArguments = parse_arguments(arguments)?;
         require_allowed_attachments(context, &arguments.attachment_ids)?;
+        require_allowed_attachments(
+            context,
+            &arguments
+                .source_links
+                .iter()
+                .map(|link| link.attachment_id.clone())
+                .collect::<Vec<_>>(),
+        )?;
+        if arguments
+            .source_links
+            .iter()
+            .any(|link| !arguments.attachment_ids.contains(&link.attachment_id))
+        {
+            return Err(AgentError::scope_violation(
+                "字段来源必须属于这张草稿关联的附件",
+            ));
+        }
         let draft = self
             .coordinator
             .create_agent_draft(
                 &context.import_job_id,
                 arguments.review,
                 arguments.attachment_ids,
+                arguments.source_links,
             )
             .map_err(map_ingest_error)?;
         Ok(json!({ "draft": draft }))
@@ -399,6 +417,8 @@ struct CreateDraftArguments {
     review: ReviewedIngredientImportDraft,
     #[serde(default)]
     attachment_ids: Vec<String>,
+    #[serde(default)]
+    source_links: Vec<crate::ingest::model::DraftSourceLink>,
 }
 
 #[derive(Deserialize)]
@@ -504,7 +524,7 @@ fn definition(name: &str) -> AgentToolDefinition {
             }),
         ),
         "create_ingredient_import_draft" => (
-            "创建待用户人工复核的原料草稿，不能正式保存原料",
+            "创建待用户人工复核的原料草稿，不能正式保存原料；同一原料、供应商和型号规格的文件应合并关联，身份不同必须分开，并为字段提供来源链接",
             review_mutation_schema(false),
         ),
         "update_ingredient_import_draft" => (
@@ -596,7 +616,24 @@ fn review_mutation_schema(update: bool) -> Value {
             "attachmentIds".into(),
             json!({ "type": "array", "items": { "type": "string" } }),
         );
+        properties.insert(
+            "sourceLinks".into(),
+            json!({
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "fieldPath": { "type": "string" },
+                        "attachmentId": { "type": "string" },
+                        "sourceLocator": { "type": ["string", "null"] }
+                    },
+                    "required": ["fieldPath", "attachmentId", "sourceLocator"],
+                    "additionalProperties": false
+                }
+            }),
+        );
         required.push(Value::String("attachmentIds".into()));
+        required.push(Value::String("sourceLinks".into()));
     }
     json!({
         "type": "object",

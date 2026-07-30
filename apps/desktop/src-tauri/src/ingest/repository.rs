@@ -15,6 +15,7 @@ use super::{
 
 pub struct NewImportDraft {
     pub attachment_ids: Vec<String>,
+    pub source_links: Vec<DraftSourceLink>,
     pub issues: Vec<ImportIssue>,
     pub review: ReviewedIngredientImportDraft,
 }
@@ -239,7 +240,10 @@ pub fn referenced_attachment_hashes(
            FROM ingredient_import_job_attachments ja
            JOIN ingredient_import_jobs j ON j.id = ja.job_id
            WHERE ja.attachment_id = a.id
-             AND j.status IN ('pending', 'extracting', 'recognizing', 'grouping', 'failed')
+             AND j.status IN (
+               'pending', 'extracting', 'recognizing', 'grouping',
+               'drafts_ready', 'partially_completed', 'failed'
+             )
          )",
     )?;
     statement
@@ -346,13 +350,14 @@ pub fn replace_drafts(
                 updated_at,
             ],
         )?;
-        for attachment_id in draft.attachment_ids {
+        for attachment_id in &draft.attachment_ids {
             transaction.execute(
                 "INSERT INTO import_draft_attachments (draft_id, attachment_id)
                  VALUES (?1, ?2)",
                 params![id, attachment_id],
             )?;
         }
+        insert_source_links(transaction, &id, &draft.source_links, create_id)?;
     }
     Ok(())
 }
@@ -414,14 +419,62 @@ pub fn insert_draft(
             updated_at,
         ],
     )?;
-    for attachment_id in draft.attachment_ids {
+    for attachment_id in &draft.attachment_ids {
         connection.execute(
             "INSERT INTO import_draft_attachments (draft_id, attachment_id)
              VALUES (?1, ?2)",
             params![id, attachment_id],
         )?;
     }
+    insert_source_links(connection, &id, &draft.source_links, create_id)?;
     Ok(id)
+}
+
+pub fn add_draft_attachments(
+    connection: &Connection,
+    draft_id: &str,
+    attachment_ids: &[String],
+) -> Result<(), IngestError> {
+    for attachment_id in attachment_ids {
+        connection.execute(
+            "INSERT OR IGNORE INTO import_draft_attachments (draft_id, attachment_id)
+             VALUES (?1, ?2)",
+            params![draft_id, attachment_id],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn add_draft_source_links(
+    connection: &Connection,
+    draft_id: &str,
+    source_links: &[DraftSourceLink],
+    create_id: &dyn Fn() -> String,
+) -> Result<(), IngestError> {
+    insert_source_links(connection, draft_id, source_links, create_id)
+}
+
+fn insert_source_links(
+    connection: &Connection,
+    draft_id: &str,
+    source_links: &[DraftSourceLink],
+    create_id: &dyn Fn() -> String,
+) -> Result<(), IngestError> {
+    for link in source_links {
+        connection.execute(
+            "INSERT OR IGNORE INTO import_draft_source_links (
+               id, draft_id, field_path, attachment_id, source_locator
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                create_id(),
+                draft_id,
+                link.field_path,
+                link.attachment_id,
+                link.source_locator
+            ],
+        )?;
+    }
+    Ok(())
 }
 
 pub fn read_job_extractions(

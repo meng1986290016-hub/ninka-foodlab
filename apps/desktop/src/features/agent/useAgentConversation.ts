@@ -10,7 +10,10 @@ import type {
   AgentRun,
 } from "../../api/agent-types";
 import type { DesktopApi } from "../../api/desktop-api";
-import type { ImportFileReference } from "../../api/import-types";
+import type {
+  ImportFileReference,
+  IngredientImportDraft,
+} from "../../api/import-types";
 
 const toolStatus: Record<string, string> = {
   read_task_attachments: "正在读取附件",
@@ -33,6 +36,8 @@ interface InitialAgentState {
   messages: AgentMessage[];
   preferences: AgentPreferences;
   providers: AgentProviderConfig[];
+  lastRun: AgentRun | null;
+  drafts: IngredientImportDraft[];
 }
 
 export function useAgentConversation(
@@ -47,6 +52,7 @@ export function useAgentConversation(
   const [providers, setProviders] = useState<AgentProviderConfig[]>([]);
   const [currentRun, setCurrentRun] = useState<AgentRun | null>(null);
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
+  const [drafts, setDrafts] = useState<IngredientImportDraft[]>([]);
   const [streamingText, setStreamingText] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
   const [error, setError] = useState("");
@@ -74,6 +80,20 @@ export function useAgentConversation(
     setProviders(nextProviders);
   }, [api]);
 
+  const refreshDrafts = useCallback(
+    async (runId?: string) => {
+      const id = runId ?? lastRun?.id;
+      if (!id) {
+        setDrafts([]);
+        return [];
+      }
+      const next = await api.listAgentImportDrafts(id);
+      setDrafts(next);
+      return next;
+    },
+    [api, lastRun?.id],
+  );
+
   useEffect(() => {
     let active = true;
     if (!initializationRef.current) {
@@ -86,11 +106,20 @@ export function useAgentConversation(
           ]);
         const nextConversation =
           conversations[0] ?? (await api.createAgentConversation("食品研发对话"));
+        const messages = await api.listAgentMessages(nextConversation.id);
+        const lastRunId = [...messages]
+          .reverse()
+          .find((message) => message.runId)?.runId;
+        const lastRun = lastRunId ? await api.getAgentRun(lastRunId) : null;
         return {
           conversation: nextConversation,
-          messages: await api.listAgentMessages(nextConversation.id),
+          messages,
           preferences: nextPreferences,
           providers: nextProviders,
+          lastRun,
+          drafts: lastRun
+            ? await api.listAgentImportDrafts(lastRun.id)
+            : [],
         };
       })();
     }
@@ -102,6 +131,8 @@ export function useAgentConversation(
         setMessages(initial.messages);
         setPreferences(initial.preferences);
         setProviders(initial.providers);
+        setLastRun(initial.lastRun);
+        setDrafts(initial.drafts);
       })
       .catch((reason: unknown) => {
         if (!active) return;
@@ -129,8 +160,10 @@ export function useAgentConversation(
       } else if (event.type === "tool_completed") {
         setTaskStatus(event.summary || "已完成一步处理");
       } else if (event.type === "drafts_changed") {
-        void api.listAgentImportDrafts(event.runId).then((drafts) => {
-          if (active) setTaskStatus(`已生成 ${drafts.length} 张待复核草稿`);
+        void api.listAgentImportDrafts(event.runId).then((nextDrafts) => {
+          if (!active) return;
+          setDrafts(nextDrafts);
+          setTaskStatus(`已生成 ${nextDrafts.length} 张待复核草稿`);
         });
       } else if (event.type === "run_completed") {
         setStreamingText("");
@@ -140,6 +173,7 @@ export function useAgentConversation(
           if (!active) return;
           setCurrentRun(null);
           setLastRun(run);
+          void refreshDrafts(run.id);
         });
         void refreshMessages();
       } else if (event.type === "run_failed") {
@@ -152,6 +186,7 @@ export function useAgentConversation(
           if (!active) return;
           setCurrentRun(null);
           setLastRun(run);
+          void refreshDrafts(run.id);
         });
         void refreshMessages();
       }
@@ -164,13 +199,16 @@ export function useAgentConversation(
       active = false;
       unsubscribe();
     };
-  }, [api, events, refreshMessages]);
+  }, [api, events, refreshDrafts, refreshMessages]);
 
   const send = useCallback(
     async (
       content: string,
       files: ImportFileReference[],
-      retryRunId?: string,
+      options: {
+        retryRunId?: string;
+        continueRunId?: string;
+      } = {},
     ) => {
       const activeConversation = conversationRef.current;
       if (!activeConversation) return null;
@@ -182,7 +220,12 @@ export function useAgentConversation(
           conversationId: activeConversation.id,
           content,
           files,
-          ...(retryRunId ? { retryRunId } : {}),
+          ...(options.retryRunId
+            ? { retryRunId: options.retryRunId }
+            : {}),
+          ...(options.continueRunId
+            ? { continueRunId: options.continueRunId }
+            : {}),
         });
         await refreshMessages(activeConversation.id);
         if (run.status === "queued" || run.status === "running") {
@@ -190,6 +233,7 @@ export function useAgentConversation(
         } else {
           setCurrentRun(null);
           setLastRun(run);
+          await refreshDrafts(run.id);
           setTaskStatus(
             run.status === "completed" ? "本次任务已完成" : "本次任务未完成",
           );
@@ -201,7 +245,7 @@ export function useAgentConversation(
         return null;
       }
     },
-    [api, refreshMessages],
+    [api, refreshDrafts, refreshMessages],
   );
 
   const cancel = useCallback(async () => {
@@ -232,8 +276,19 @@ export function useAgentConversation(
       setError("找不到上一次任务内容");
       return null;
     }
-    return send(failedUser.content, [], lastRun.id);
+    return send(failedUser.content, [], { retryRunId: lastRun.id });
   }, [lastRun, messages, send]);
+
+  const continueRun = useCallback(
+    async (content: string) => {
+      if (!lastRun || lastRun.status !== "completed") {
+        setError("当前没有可继续调整的已完成任务");
+        return null;
+      }
+      return send(content, [], { continueRunId: lastRun.id });
+    },
+    [lastRun, send],
+  );
 
   const clearConversation = useCallback(async () => {
     const activeConversation = conversationRef.current;
@@ -245,6 +300,7 @@ export function useAgentConversation(
     setMessages([]);
     setCurrentRun(null);
     setLastRun(null);
+    setDrafts([]);
     setStreamingText("");
     setTaskStatus("");
     setError("");
@@ -254,14 +310,17 @@ export function useAgentConversation(
     activeProvider: providers.find((provider) => provider.enabled) ?? null,
     cancel,
     clearConversation,
+    continueRun,
     conversation,
     currentRun,
+    drafts,
     error,
     lastRun,
     loading,
     messages,
     preferences,
     refreshConfiguration,
+    refreshDrafts,
     retry,
     send,
     streamingText,

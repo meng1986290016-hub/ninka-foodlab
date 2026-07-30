@@ -14,9 +14,8 @@ use food_rd_desktop::{
     agent::{
         AgentError,
         model::{
-            AgentMessageRole, AgentProviderCapabilities, AgentProviderConfig,
-            AgentProviderKind, AgentProviderProtocol, AgentRunRequest, AgentRunStatus,
-            ReasoningEffort,
+            AgentMessageRole, AgentProviderCapabilities, AgentProviderConfig, AgentProviderKind,
+            AgentProviderProtocol, AgentRunRequest, AgentRunStatus, ReasoningEffort,
         },
         providers::{
             AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult,
@@ -154,6 +153,7 @@ impl Fixture {
                 media_type: Some("text/plain".into()),
             }],
             retry_run_id: None,
+            continue_run_id: None,
         }
     }
 
@@ -290,6 +290,7 @@ async fn empty_model_output_retries_once_before_failing() {
             content: "帮我分析原料库".into(),
             files: vec![],
             retry_run_id: None,
+            continue_run_id: None,
         })
         .await
         .unwrap_err();
@@ -306,8 +307,7 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
         Ok(final_turn("")),
         Ok(final_turn("")),
     ]));
-    let mut failing_runtime =
-        fixture.runtime(failing_provider, Arc::new(Mutex::new(Vec::new())));
+    let mut failing_runtime = fixture.runtime(failing_provider, Arc::new(Mutex::new(Vec::new())));
     failing_runtime
         .start(fixture.request(conversation_id.clone()))
         .await
@@ -326,14 +326,14 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
     let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
         "已重新完成识别，请继续人工复核。",
     ))]));
-    let mut retry_runtime =
-        fixture.runtime(provider, Arc::new(Mutex::new(Vec::new())));
+    let mut retry_runtime = fixture.runtime(provider, Arc::new(Mutex::new(Vec::new())));
     let retried = retry_runtime
         .start(AgentRunRequest {
             conversation_id: conversation_id.clone(),
             content: String::new(),
             files: vec![],
             retry_run_id: Some(failed_run_id),
+            continue_run_id: None,
         })
         .await
         .unwrap();
@@ -346,11 +346,63 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
     let retried_user = messages
         .iter()
         .find(|message| {
-            message.run_id.as_deref() == Some(&retried.id)
-                && message.role == AgentMessageRole::User
+            message.run_id.as_deref() == Some(&retried.id) && message.role == AgentMessageRole::User
         })
         .unwrap();
     assert_eq!(retried_user.attachment_ids, first_user.attachment_ids);
+}
+
+#[tokio::test]
+async fn completed_run_can_continue_with_the_same_job_and_attachments() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let first_provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
+        "识别完成，请人工复核。",
+    ))]));
+    let mut first_runtime = fixture.runtime(first_provider, Arc::new(Mutex::new(Vec::new())));
+    let first = first_runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap();
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let first_user = repository
+        .list_messages(&conversation_id)
+        .unwrap()
+        .into_iter()
+        .find(|message| {
+            message.run_id.as_deref() == Some(&first.id) && message.role == AgentMessageRole::User
+        })
+        .unwrap();
+
+    let continue_provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
+        "已按要求继续调整草稿。",
+    ))]));
+    let mut continue_runtime = fixture.runtime(continue_provider, Arc::new(Mutex::new(Vec::new())));
+    let continued = continue_runtime
+        .start(AgentRunRequest {
+            conversation_id: conversation_id.clone(),
+            content: "重新检查并拆分不同供应商".into(),
+            files: vec![],
+            retry_run_id: None,
+            continue_run_id: Some(first.id),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(continued.import_job_id, first.import_job_id);
+    let messages = AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .list_messages(&conversation_id)
+        .unwrap();
+    let continued_user = messages
+        .iter()
+        .find(|message| {
+            message.run_id.as_deref() == Some(&continued.id)
+                && message.role == AgentMessageRole::User
+        })
+        .unwrap();
+    assert_eq!(continued_user.content, "重新检查并拆分不同供应商");
+    assert_eq!(continued_user.attachment_ids, first_user.attachment_ids);
 }
 
 #[tokio::test]

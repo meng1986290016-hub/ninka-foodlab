@@ -7,8 +7,9 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        HttpProviderCore, anthropic_messages, emit, ensure_attachment_support, fallback_models,
-        model_options, no_op_sink, probe_request, result, schema_is_empty, successful_test,
+        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, anthropic_messages, emit,
+        ensure_attachment_support, fallback_models, model_options, no_op_sink, probe_request,
+        result, schema_is_empty, successful_test,
     },
 };
 use crate::agent::{AgentError, model::AgentProviderCapabilities};
@@ -90,6 +91,7 @@ impl AgentProvider for AnthropicProvider {
         let mut body = json!({
             "model": self.core.config.model,
             "max_tokens": 4096,
+            "system": FOOD_RD_AGENT_INSTRUCTION,
             "messages": anthropic_messages(&request),
             "tools": tools
         });

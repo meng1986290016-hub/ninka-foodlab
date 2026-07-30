@@ -14,6 +14,7 @@ interface NutritionEditorProps {
   nutrition: VariantNutrition;
   onChange: (nutrition: VariantNutrition) => void;
   onDefinitionCreated: (definition: NutrientDefinition) => void;
+  allowCustomDefinition?: boolean;
 }
 
 export function NutritionEditor({
@@ -23,6 +24,7 @@ export function NutritionEditor({
   nutrition,
   onChange,
   onDefinitionCreated,
+  allowCustomDefinition = true,
 }: NutritionEditorProps) {
   const [adding, setAdding] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -116,15 +118,17 @@ export function NutritionEditor({
         ))}
       </div>
 
-      <button
-        className="text-button nutrition-add-button"
-        onClick={() => setAdding((current) => !current)}
-        type="button"
-      >
-        添加自定义成分
-      </button>
+      {allowCustomDefinition ? (
+        <button
+          className="text-button nutrition-add-button"
+          onClick={() => setAdding((current) => !current)}
+          type="button"
+        >
+          添加自定义成分
+        </button>
+      ) : null}
 
-      {adding ? (
+      {allowCustomDefinition && adding ? (
         <div className="custom-nutrient-form">
           <label className="field">
             <span>自定义成分名称</span>

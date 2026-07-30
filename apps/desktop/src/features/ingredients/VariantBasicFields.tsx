@@ -13,6 +13,8 @@ interface VariantBasicFieldsProps {
   input: IngredientVariantInput;
   onChange: (input: IngredientVariantInput) => void;
   variant: IngredientVariant | null;
+  showInternalCode?: boolean;
+  allowReferenceCreation?: boolean;
 }
 
 const updateFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -30,6 +32,8 @@ export function VariantBasicFields({
   input,
   onChange,
   variant,
+  showInternalCode = true,
+  allowReferenceCreation = true,
 }: VariantBasicFieldsProps) {
   const [showMore, setShowMore] = useState(variant?.internalCode != null);
 
@@ -47,6 +51,7 @@ export function VariantBasicFields({
   return (
     <div className="variant-fields">
       <SupplierCombobox
+        allowCreate={allowReferenceCreation}
         api={api}
         onChange={(supplierId) => update("supplierId", supplierId ?? "")}
         value={input.supplierId || null}
@@ -131,7 +136,7 @@ export function VariantBasicFields({
         </div>
       ) : null}
 
-      <div className="more-fields field--full">
+      {showInternalCode ? <div className="more-fields field--full">
         <button
           aria-expanded={showMore}
           className="text-button"
@@ -153,7 +158,7 @@ export function VariantBasicFields({
             />
           </label>
         ) : null}
-      </div>
+      </div> : null}
     </div>
   );
 }

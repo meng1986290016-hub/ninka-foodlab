@@ -541,6 +541,7 @@ export class BrowserDemoApi implements DesktopApi {
     }
     if (
       request.retryRunId == null &&
+      request.continueRunId == null &&
       request.content.trim() === "" &&
       request.files.length === 0
     ) {
@@ -550,21 +551,24 @@ export class BrowserDemoApi implements DesktopApi {
     let job: IngredientImportJob;
     let reusedAttachmentIds: string[] | null = null;
     let content = request.content.trim();
-    if (request.retryRunId) {
+    const reusedRunId = request.retryRunId ?? request.continueRunId;
+    if (reusedRunId) {
       if (request.files.length > 0) {
         throw new DesktopApiError(
           "invalid_input",
-          "重试会复用原任务附件，请勿再次选择文件",
+          "继续处理会复用原任务附件，请勿再次选择文件",
         );
       }
-      const previous = state.agentRuns[request.retryRunId];
+      const previous = state.agentRuns[reusedRunId];
       if (
         !previous ||
         previous.conversationId !== request.conversationId ||
-        !["failed", "cancelled"].includes(previous.status) ||
+        (request.retryRunId
+          ? !["failed", "cancelled"].includes(previous.status)
+          : previous.status !== "completed") ||
         !previous.importJobId
       ) {
-        throw new DesktopApiError("invalid_state", "原任务当前不能重试");
+        throw new DesktopApiError("invalid_state", "原任务当前不能继续处理");
       }
       job = state.importJobs[previous.importJobId]!;
       const previousUser = Object.values(state.agentMessages).find(
@@ -575,7 +579,10 @@ export class BrowserDemoApi implements DesktopApi {
         throw new DesktopApiError("invalid_state", "原任务资料不完整");
       }
       reusedAttachmentIds = [...previousUser.attachmentIds];
-      content ||= previousUser.content;
+      if (request.retryRunId) content ||= previousUser.content;
+      if (!content) {
+        throw new DesktopApiError("invalid_input", "请说明需要继续处理的草稿操作");
+      }
     } else if (request.files.length > 0) {
       job = await this.createIngredientImportJob({
         sourceKind: "agent",

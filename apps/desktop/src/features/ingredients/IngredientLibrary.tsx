@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
 import { createImportFilePicker } from "../../api/import-file-picker";
@@ -19,6 +19,7 @@ import { VariantComparisonDrawer } from "./VariantComparisonDrawer";
 
 interface IngredientLibraryProps {
   api: DesktopApi;
+  refreshToken?: number;
 }
 
 type EditorState =
@@ -34,7 +35,10 @@ interface VariantSelection {
   ids: Set<string>;
 }
 
-export function IngredientLibrary({ api }: IngredientLibraryProps) {
+export function IngredientLibrary({
+  api,
+  refreshToken = 0,
+}: IngredientLibraryProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -46,6 +50,10 @@ export function IngredientLibrary({ api }: IngredientLibraryProps) {
   const [filePicker] = useState(createImportFilePicker);
   const { archiveVariant, error, loading, materialGroups, refresh } =
     useIngredients(api, deferredQuery);
+
+  useEffect(() => {
+    if (refreshToken > 0) refresh();
+  }, [refreshToken]);
 
   function openEditor(nextEditor: EditorState) {
     setComparison(null);

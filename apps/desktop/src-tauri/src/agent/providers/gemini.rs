@@ -7,8 +7,9 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        HttpProviderCore, emit, ensure_attachment_support, fallback_models, no_op_sink,
-        probe_request, result, schema_is_empty, selected_attachments, successful_test,
+        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, emit, ensure_attachment_support,
+        fallback_models, no_op_sink, probe_request, result, schema_is_empty, selected_attachments,
+        successful_test,
     },
 };
 use crate::agent::{
@@ -134,6 +135,9 @@ impl AgentProvider for GeminiProvider {
             })
             .collect::<Vec<_>>();
         let mut body = json!({
+            "systemInstruction": {
+                "parts": [{ "text": FOOD_RD_AGENT_INSTRUCTION }]
+            },
             "contents": contents,
             "tools": [{ "functionDeclarations": declarations }]
         });

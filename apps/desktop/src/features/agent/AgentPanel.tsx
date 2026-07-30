@@ -3,11 +3,15 @@ import { useEffect, useState } from "react";
 import type { AgentEventSource } from "../../api/agent-event-source";
 import type { DesktopApi } from "../../api/desktop-api";
 import type { ImportFilePicker } from "../../api/import-file-picker";
-import type { ImportFileReference } from "../../api/import-types";
+import type {
+  ImportFileReference,
+  IngredientImportDraft,
+} from "../../api/import-types";
 import { Icon } from "../../components/Icon";
 import { AgentComposer } from "./AgentComposer";
 import { AgentMessageList } from "./AgentMessageList";
 import { AgentTaskStatus } from "./AgentTaskStatus";
+import { IngredientImportDraftList } from "./IngredientImportDraftList";
 import { useAgentConversation } from "./useAgentConversation";
 
 interface AgentPanelProps {
@@ -17,6 +21,9 @@ interface AgentPanelProps {
   open: boolean;
   onClose(): void;
   onConfigure(section: "general" | "models"): void;
+  onReviewDraft(draft: IngredientImportDraft): void;
+  onOpenImported(draft: IngredientImportDraft): void;
+  draftRefreshToken?: number;
 }
 
 interface PendingSend {
@@ -35,6 +42,9 @@ export function AgentPanel({
   open,
   onClose,
   onConfigure,
+  onReviewDraft,
+  onOpenImported,
+  draftRefreshToken = 0,
 }: AgentPanelProps) {
   const workflow = useAgentConversation(api, events);
   const [text, setText] = useState("");
@@ -47,6 +57,10 @@ export function AgentPanel({
   useEffect(() => {
     if (open) void workflow.refreshConfiguration();
   }, [open, workflow.refreshConfiguration]);
+
+  useEffect(() => {
+    if (draftRefreshToken > 0) void workflow.refreshDrafts();
+  }, [draftRefreshToken, workflow.refreshDrafts]);
 
   async function sendNow(nextText: string, nextFiles: ImportFileReference[]) {
     const run = await workflow.send(nextText, nextFiles);
@@ -90,9 +104,37 @@ export function AgentPanel({
     }
   }
 
+  async function discardDraft(draft: IngredientImportDraft) {
+    if (
+      !window.confirm(
+        `放弃“${draft.review.materialName || "未命名原料"}”这张草稿？`,
+      )
+    ) {
+      return;
+    }
+    await api.discardIngredientImportDraft(draft.id);
+    await workflow.refreshDrafts();
+  }
+
   const needsConfiguration =
     workflow.preferences !== null &&
     (!workflow.preferences.enabled || !workflow.activeProvider);
+  const runAttachmentIds = new Set(
+    workflow.messages
+      .filter(
+        (message) =>
+          message.runId === workflow.lastRun?.id && message.role === "user",
+      )
+      .flatMap((message) => message.attachmentIds),
+  );
+  const assignedAttachmentIds = new Set(
+    workflow.drafts.flatMap((draft) =>
+      draft.attachments.map((attachment) => attachment.id),
+    ),
+  );
+  const unassignedAttachmentCount = [...runAttachmentIds].filter(
+    (id) => !assignedAttachmentIds.has(id),
+  ).length;
 
   return (
     <aside
@@ -149,6 +191,29 @@ export function AgentPanel({
             loading={workflow.loading}
             messages={workflow.messages}
             streamingText={workflow.streamingText}
+          />
+          <IngredientImportDraftList
+            busy={Boolean(workflow.currentRun)}
+            drafts={workflow.drafts}
+            onDiscard={(draft) => void discardDraft(draft)}
+            onMerge={(source, target) =>
+              void workflow.continueRun(
+                `请将草稿 ${source.id} 合并到草稿 ${target.id}。仅在原料名称、供应商和型号规格一致时合并；如有字段冲突请保留为空并标记来源不一致。`,
+              )
+            }
+            onOpen={onReviewDraft}
+            onOpenImported={onOpenImported}
+            onRetry={(draft) =>
+              void workflow.continueRun(
+                `请重新读取草稿 ${draft.id} 关联的原始资料并更新这张草稿。不要正式保存。`,
+              )
+            }
+            onSplit={(draft) =>
+              void workflow.continueRun(
+                `请检查草稿 ${draft.id} 的来源资料；如果包含多个原料、供应商或型号规格，请拆分为独立草稿。不要正式保存。`,
+              )
+            }
+            unassignedAttachmentCount={unassignedAttachmentCount}
           />
           <AgentTaskStatus
             currentRun={workflow.currentRun}

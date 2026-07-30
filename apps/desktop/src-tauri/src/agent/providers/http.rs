@@ -15,6 +15,13 @@ use crate::agent::{
     model::{AgentMessage, AgentMessageRole, AgentProviderConfig, AgentProviderKind},
 };
 
+pub(crate) const FOOD_RD_AGENT_INSTRUCTION: &str = "\
+你是食品研发 Agent。所有原料识别结果只能创建待人工复核草稿，不能正式保存。\
+按规范化后的原料名称、供应商、型号或规格分组：三个非空身份字段一致的多个文件合并为一张草稿；\
+供应商或型号规格不同必须分别创建草稿；一个文件包含多个身份组时也必须拆为多张草稿。\
+每个草稿应关联全部对应附件，并用 sourceLinks 标记每个字段的原始来源。\
+同一字段在来源间冲突时将该字段留空、保留全部来源链接并等待人工确认。";
+
 pub(crate) struct HttpProviderCore {
     pub config: AgentProviderConfig,
     client: Client,
@@ -95,7 +102,11 @@ pub(crate) fn message_values(messages: &[AgentMessage], model_role: &str) -> Vec
 }
 
 pub(crate) fn openai_response_messages(request: &ProviderTurnRequest) -> Vec<Value> {
-    let mut messages = message_values(&request.messages, "assistant");
+    let mut messages = vec![json!({
+        "role": "system",
+        "content": FOOD_RD_AGENT_INSTRUCTION
+    })];
+    messages.extend(message_values(&request.messages, "assistant"));
     let attachments = selected_attachments(request);
     if !attachments.is_empty() {
         let mut content = attachment_text_blocks(&attachments, "input_text");
@@ -113,7 +124,11 @@ pub(crate) fn openai_response_messages(request: &ProviderTurnRequest) -> Vec<Val
 }
 
 pub(crate) fn chat_completion_messages(request: &ProviderTurnRequest) -> Vec<Value> {
-    let mut messages = message_values(&request.messages, "assistant");
+    let mut messages = vec![json!({
+        "role": "system",
+        "content": FOOD_RD_AGENT_INSTRUCTION
+    })];
+    messages.extend(message_values(&request.messages, "assistant"));
     let attachments = selected_attachments(request);
     if !attachments.is_empty() {
         let mut content = attachment_text_blocks(&attachments, "text");

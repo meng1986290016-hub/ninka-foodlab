@@ -121,6 +121,7 @@ export interface AgentRunRequest {
   content: string;
   files: ImportFileReference[];
   retryRunId?: string | null;
+  continueRunId?: string | null;
 }
 
 export interface AgentRun {

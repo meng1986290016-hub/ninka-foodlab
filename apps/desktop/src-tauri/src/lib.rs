@@ -9,8 +9,8 @@ use commands::agent::{
     delete_agent_conversation, detect_cli_providers, get_agent_custom_provider_subconfig,
     get_agent_preferences, get_agent_run, list_agent_conversations, list_agent_import_drafts,
     list_agent_messages, list_agent_provider_configs, list_agent_provider_models,
-    save_agent_preferences, save_agent_provider_config, set_agent_provider_secret,
-    start_agent_run, test_agent_provider,
+    save_agent_preferences, save_agent_provider_config, set_agent_provider_secret, start_agent_run,
+    test_agent_provider,
 };
 use commands::ingest::{
     cancel_ingredient_import_job, cleanup_orphan_attachments, commit_ingredient_import_job,

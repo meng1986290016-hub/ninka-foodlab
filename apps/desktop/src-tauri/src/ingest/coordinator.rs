@@ -18,10 +18,11 @@ use super::{
     IngestError,
     attachment_store::{AttachmentStore, StoredAttachment},
     model::{
-        ImportFileReferenceKind, ImportIssueSeverity, ImportedNutrientValue,
-        IngredientExchangeFormat, IngredientImportCommitResult, IngredientImportDraft,
-        IngredientImportDraftStatus, IngredientImportJob, IngredientImportJobRequest,
-        IngredientImportJobStatus, IngredientImportSourceKind, ReviewedIngredientImportDraft,
+        DraftSourceLink, ImportFileReferenceKind, ImportIssue, ImportIssueCode,
+        ImportIssueSeverity, ImportedNutrientValue, IngredientExchangeFormat,
+        IngredientImportCommitResult, IngredientImportDraft, IngredientImportDraftStatus,
+        IngredientImportJob, IngredientImportJobRequest, IngredientImportJobStatus,
+        IngredientImportSourceKind, ReviewedIngredientImportDraft,
     },
     repository::{self, NewImportDraft},
     spreadsheet::{parse_ingredient_table, write_library_export, write_template},
@@ -210,8 +211,9 @@ impl IngredientIngestCoordinator {
     pub fn create_agent_draft(
         &mut self,
         job_id: &str,
-        review: ReviewedIngredientImportDraft,
+        mut review: ReviewedIngredientImportDraft,
         attachment_ids: Vec<String>,
+        source_links: Vec<DraftSourceLink>,
     ) -> Result<IngredientImportDraft, IngestError> {
         let job = repository::get_job(&self.ingredients.connection, job_id)?;
         if job.source_kind != IngredientImportSourceKind::Agent {
@@ -233,7 +235,22 @@ impl IngredientIngestCoordinator {
             ));
         }
 
-        let issues = validate_review(&review);
+        normalize_review(&mut review);
+        let existing = if group_key(&review).is_some() {
+            let mut candidates = repository::list_drafts(&self.ingredients.connection, job_id)?
+                .into_iter()
+                .filter(|draft| {
+                    !matches!(
+                        draft.status,
+                        IngredientImportDraftStatus::Imported
+                            | IngredientImportDraftStatus::Discarded
+                    ) && compatible_group(&draft.review, &review)
+                })
+                .collect::<Vec<_>>();
+            (candidates.len() == 1).then(|| candidates.remove(0))
+        } else {
+            None
+        };
         let timestamp = (self.ingredients.clock)();
         let create_id = Arc::clone(&self.ingredients.create_id);
         let transaction = self.ingredients.connection.transaction()?;
@@ -246,11 +263,33 @@ impl IngredientIngestCoordinator {
                 &timestamp,
             )?;
         }
+        if let Some(existing) = existing {
+            let mut conflict_issues = existing
+                .issues
+                .into_iter()
+                .filter(|issue| issue.code == ImportIssueCode::SourceConflict)
+                .collect::<Vec<_>>();
+            let merged = merge_grouped_reviews(existing.review, review, &mut conflict_issues);
+            let mut issues = validate_review(&merged);
+            issues.extend(conflict_issues);
+            repository::update_draft(&transaction, &existing.id, &merged, &issues, &timestamp)?;
+            repository::add_draft_attachments(&transaction, &existing.id, &attachment_ids)?;
+            repository::add_draft_source_links(
+                &transaction,
+                &existing.id,
+                &source_links,
+                create_id.as_ref(),
+            )?;
+            transaction.commit()?;
+            return repository::get_draft(&self.ingredients.connection, &existing.id);
+        }
+        let issues = validate_review(&review);
         let id = repository::insert_draft(
             &transaction,
             job_id,
             NewImportDraft {
                 attachment_ids,
+                source_links,
                 issues,
                 review,
             },
@@ -304,6 +343,7 @@ impl IngredientIngestCoordinator {
             job_id,
             NewImportDraft {
                 attachment_ids: attachment_ids.into_iter().collect(),
+                source_links: Vec::new(),
                 issues: validate_review(&review),
                 review,
             },
@@ -346,6 +386,7 @@ impl IngredientIngestCoordinator {
                 job_id,
                 NewImportDraft {
                     attachment_ids: attachment_ids.clone(),
+                    source_links: Vec::new(),
                     issues: validate_review(&review),
                     review,
                 },
@@ -650,6 +691,7 @@ impl IngredientIngestCoordinator {
                             let issues = validate_review(&review);
                             new_drafts.push(NewImportDraft {
                                 attachment_ids: vec![attachment.id.clone()],
+                                source_links: Vec::new(),
                                 issues,
                                 review,
                             });
@@ -917,6 +959,208 @@ fn resolve_nutrients(
         });
     }
     Ok(values)
+}
+
+fn group_key(review: &ReviewedIngredientImportDraft) -> Option<(String, String, String)> {
+    let material = normalized_identity(&review.material_name);
+    let supplier = normalized_identity(&review.supplier_name);
+    if material.is_empty() || supplier.is_empty() {
+        return None;
+    }
+    Some((
+        material,
+        supplier,
+        normalized_identity(&review.model_or_specification),
+    ))
+}
+
+fn compatible_group(
+    left: &ReviewedIngredientImportDraft,
+    right: &ReviewedIngredientImportDraft,
+) -> bool {
+    if normalized_identity(&left.material_name) != normalized_identity(&right.material_name)
+        || normalized_identity(&left.supplier_name) != normalized_identity(&right.supplier_name)
+    {
+        return false;
+    }
+    let left_model = normalized_identity(&left.model_or_specification);
+    let right_model = normalized_identity(&right.model_or_specification);
+    left_model.is_empty() || right_model.is_empty() || left_model == right_model
+}
+
+fn normalized_identity(value: &str) -> String {
+    value.split_whitespace().collect::<String>().to_lowercase()
+}
+
+fn merge_grouped_reviews(
+    mut existing: ReviewedIngredientImportDraft,
+    incoming: ReviewedIngredientImportDraft,
+    conflicts: &mut Vec<ImportIssue>,
+) -> ReviewedIngredientImportDraft {
+    if existing.model_or_specification.is_empty() {
+        existing.model_or_specification = incoming.model_or_specification.clone();
+    }
+    merge_optional(
+        &mut existing.material_group_id,
+        incoming.material_group_id,
+        "materialGroupId",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.category_id,
+        incoming.category_id,
+        "categoryId",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.category_name,
+        incoming.category_name,
+        "categoryName",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.supplier_id,
+        incoming.supplier_id,
+        "supplierId",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.current_price,
+        incoming.current_price,
+        "currentPrice",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.price_unit,
+        incoming.price_unit,
+        "priceUnit",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.density_g_per_ml,
+        incoming.density_g_per_ml,
+        "densityGPerMl",
+        conflicts,
+    );
+    merge_optional(
+        &mut existing.nutrition_basis,
+        incoming.nutrition_basis,
+        "nutritionBasis",
+        conflicts,
+    );
+
+    append_distinct_text(&mut existing.source, &incoming.source);
+    append_distinct_text(&mut existing.research_notes, &incoming.research_notes);
+    existing.duplicate_confirmed |= incoming.duplicate_confirmed;
+    existing.contains_allergens =
+        union_strings(existing.contains_allergens, incoming.contains_allergens);
+    existing.may_contain_allergens = union_strings(
+        existing.may_contain_allergens,
+        incoming.may_contain_allergens,
+    );
+
+    for nutrient in incoming.nutrients {
+        let key = nutrient_key(&nutrient);
+        if let Some(current) = existing
+            .nutrients
+            .iter_mut()
+            .find(|candidate| nutrient_key(candidate) == key)
+        {
+            if current.definition_id.is_none() {
+                current.definition_id = nutrient.definition_id;
+            }
+            let conflict_path = format!("nutrients.{}.value", current.name);
+            if has_conflict(conflicts, &conflict_path) {
+                continue;
+            }
+            match (&current.value, nutrient.value) {
+                (None, value @ Some(_)) => current.value = value,
+                (Some(left), Some(right)) if left != &right => {
+                    current.value = None;
+                    record_conflict(conflicts, &conflict_path);
+                }
+                _ => {}
+            }
+        } else {
+            existing.nutrients.push(nutrient);
+        }
+    }
+    existing
+}
+
+fn nutrient_key(nutrient: &ImportedNutrientValue) -> String {
+    nutrient.definition_id.clone().unwrap_or_else(|| {
+        format!(
+            "{}\u{0}{}",
+            normalized_identity(&nutrient.name),
+            normalized_identity(&nutrient.unit)
+        )
+    })
+}
+
+fn merge_optional(
+    current: &mut Option<String>,
+    incoming: Option<String>,
+    field_path: &str,
+    conflicts: &mut Vec<ImportIssue>,
+) {
+    if has_conflict(conflicts, field_path) {
+        return;
+    }
+    match (current.clone(), incoming) {
+        (None, value @ Some(_)) => *current = value,
+        (Some(left), Some(right)) if normalized_identity(&left) != normalized_identity(&right) => {
+            *current = None;
+            record_conflict(conflicts, field_path);
+        }
+        _ => {}
+    }
+}
+
+fn has_conflict(conflicts: &[ImportIssue], field_path: &str) -> bool {
+    conflicts.iter().any(|issue| {
+        issue.code == ImportIssueCode::SourceConflict
+            && issue.field_path.as_deref() == Some(field_path)
+    })
+}
+
+fn record_conflict(conflicts: &mut Vec<ImportIssue>, field_path: &str) {
+    if has_conflict(conflicts, field_path) {
+        return;
+    }
+    conflicts.push(ImportIssue {
+        code: ImportIssueCode::SourceConflict,
+        severity: ImportIssueSeverity::Warning,
+        message: "多个来源数据不一致，请人工确认".into(),
+        field_path: Some(field_path.into()),
+        source_name: None,
+        row: None,
+        column: None,
+    });
+}
+
+fn append_distinct_text(current: &mut String, incoming: &str) {
+    let incoming = incoming.trim();
+    if incoming.is_empty()
+        || current
+            .split('；')
+            .map(str::trim)
+            .any(|candidate| candidate == incoming)
+    {
+        return;
+    }
+    if current.trim().is_empty() {
+        *current = incoming.into();
+    } else {
+        *current = format!("{}；{incoming}", current.trim());
+    }
+}
+
+fn union_strings(left: Vec<String>, right: Vec<String>) -> Vec<String> {
+    let mut values = BTreeSet::new();
+    values.extend(left);
+    values.extend(right);
+    values.into_iter().collect()
 }
 
 fn require_active_id(

@@ -11,9 +11,11 @@ import {
   type ImportFilePicker,
 } from "./api/import-file-picker";
 import type { DatabaseStatus } from "./api/types";
+import type { IngredientImportDraft } from "./api/import-types";
 import { AppShell, type AppPage } from "./components/AppShell";
 import { AgentPanel } from "./features/agent/AgentPanel";
 import { IngredientLibrary } from "./features/ingredients/IngredientLibrary";
+import { ImportedVariantReview } from "./features/ingredients/ImportedVariantReview";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import "./styles/app.css";
 
@@ -41,6 +43,10 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [settingsSection, setSettingsSection] = useState<
     "general" | "models"
   >("general");
+  const [reviewDraft, setReviewDraft] =
+    useState<IngredientImportDraft | null>(null);
+  const [ingredientRefreshToken, setIngredientRefreshToken] = useState(0);
+  const [draftRefreshToken, setDraftRefreshToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -64,37 +70,61 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   }
 
   return (
-    <AppShell
-      activePage={activePage}
-      agentOpen={agentOpen}
-      agentPanel={
-        <AgentPanel
+    <>
+      <AppShell
+        activePage={activePage}
+        agentOpen={agentOpen}
+        agentPanel={
+          <AgentPanel
+            api={desktopApi}
+            draftRefreshToken={draftRefreshToken}
+            events={eventSource}
+            filePicker={sourcePicker}
+            onClose={() => setAgentOpen(false)}
+            onConfigure={configureAgent}
+            onOpenImported={() => {
+              setActivePage("ingredients");
+              setAgentOpen(false);
+            }}
+            onReviewDraft={setReviewDraft}
+            open={agentOpen}
+          />
+        }
+        databaseStatus={databaseStatus}
+        onNavigate={navigate}
+        onToggleAgent={() => setAgentOpen((current) => !current)}
+      >
+        {activePage === "ingredients" ? (
+          <IngredientLibrary
+            api={desktopApi}
+            refreshToken={ingredientRefreshToken}
+          />
+        ) : activePage === "settings" ? (
+          <SettingsPage
+            api={desktopApi}
+            initialSection={settingsSection}
+            key={settingsSection}
+          />
+        ) : (
+          <section className="future-page">
+            <h1>{activePage === "recipes" ? "配方工作台" : "配方库"}</h1>
+            <p>该功能将在后续阶段开放，当前原料库和设置可正常使用。</p>
+          </section>
+        )}
+      </AppShell>
+      {reviewDraft ? (
+        <ImportedVariantReview
           api={desktopApi}
-          events={eventSource}
-          filePicker={sourcePicker}
-          onClose={() => setAgentOpen(false)}
-          onConfigure={configureAgent}
-          open={agentOpen}
+          draft={reviewDraft}
+          onCancel={() => setReviewDraft(null)}
+          onSaved={() => {
+            setReviewDraft(null);
+            setIngredientRefreshToken((current) => current + 1);
+            setDraftRefreshToken((current) => current + 1);
+            setActivePage("ingredients");
+          }}
         />
-      }
-      databaseStatus={databaseStatus}
-      onNavigate={navigate}
-      onToggleAgent={() => setAgentOpen((current) => !current)}
-    >
-      {activePage === "ingredients" ? (
-        <IngredientLibrary api={desktopApi} />
-      ) : activePage === "settings" ? (
-        <SettingsPage
-          api={desktopApi}
-          initialSection={settingsSection}
-          key={settingsSection}
-        />
-      ) : (
-        <section className="future-page">
-          <h1>{activePage === "recipes" ? "配方工作台" : "配方库"}</h1>
-          <p>该功能将在后续阶段开放，当前原料库和设置可正常使用。</p>
-        </section>
-      )}
-    </AppShell>
+      ) : null}
+    </>
   );
 }

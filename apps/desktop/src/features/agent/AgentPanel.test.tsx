@@ -132,6 +132,8 @@ describe("AgentPanel", () => {
         filePicker={picker()}
         onClose={() => {}}
         onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
         open
       />,
     );
@@ -176,6 +178,8 @@ describe("AgentPanel", () => {
         ])}
         onClose={() => {}}
         onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
         open
       />,
     );
@@ -222,6 +226,8 @@ describe("AgentPanel", () => {
         filePicker={picker()}
         onClose={() => {}}
         onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
         open
       />,
     );

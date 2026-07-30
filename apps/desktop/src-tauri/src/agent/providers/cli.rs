@@ -636,8 +636,9 @@ fn diagnostic_message(prefix: &str, bytes: &[u8]) -> String {
 }
 
 fn build_prompt(request: &ProviderTurnRequest, task_files: &[String]) -> String {
-    let mut prompt = String::from(
-        "你是食品研发 Agent。仅处理本次任务目录中的资料；正式保存前必须交由用户人工复核。\n\n对话：\n",
+    let mut prompt = format!(
+        "{}\n仅处理本次任务目录中的资料。\n\n对话：\n",
+        super::http::FOOD_RD_AGENT_INSTRUCTION
     );
     for message in &request.messages {
         let role = match message.role {

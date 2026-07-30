@@ -4,12 +4,14 @@ import type { DesktopApi } from "../../api/desktop-api";
 import { ReferenceCombobox } from "./ReferenceCombobox";
 
 interface SupplierComboboxProps {
+  allowCreate?: boolean;
   api: DesktopApi;
   onChange: (supplierId: string | null) => void;
   value: string | null;
 }
 
 export function SupplierCombobox({
+  allowCreate = true,
   api,
   onChange,
   value,
@@ -22,6 +24,7 @@ export function SupplierCombobox({
 
   return (
     <ReferenceCombobox
+      allowCreate={allowCreate}
       createItem={createItem}
       label="供应商"
       loadItems={loadItems}

@@ -470,7 +470,7 @@ async fn request_body_uses_only_public_tool_schema_and_selected_message_content(
         body["tools"][0]["function"]["name"],
         "create_ingredient_import_draft"
     );
-    assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(body["messages"].as_array().unwrap().len(), 3);
     assert_eq!(body["messages"][0]["role"], "system");
     assert!(
         body["messages"][0]["content"]
@@ -478,7 +478,14 @@ async fn request_body_uses_only_public_tool_schema_and_selected_message_content(
             .unwrap()
             .contains("JSON Schema")
     );
-    assert_eq!(body["messages"][1]["content"], "请识别所选原料资料");
+    assert_eq!(body["messages"][1]["role"], "system");
+    assert!(
+        body["messages"][1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("供应商或型号规格不同必须分别创建草稿")
+    );
+    assert_eq!(body["messages"][2]["content"], "请识别所选原料资料");
     assert!(requests[0].headers.get("authorization").is_none());
 }
 

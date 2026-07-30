@@ -980,7 +980,7 @@ git commit -m "feat(agent): add global food R&D chat"
 - Consumes: tool-created 3A drafts and `commitReviewedIngredientImportDraft` available only to UI.
 - Produces: draft cards, merge/split/retry/discard UI, and explicit human save using existing ingredient field components.
 
-- [ ] **Step 1: Write failing grouping and formal-save boundary tests**
+- [x] **Step 1: Write failing grouping and formal-save boundary tests**
 
 ```rust
 #[tokio::test]
@@ -1005,7 +1005,7 @@ it("writes the variant only when the user clicks save", async () => {
 });
 ```
 
-- [ ] **Step 2: Run flow and component tests and verify failure**
+- [x] **Step 2: Run flow and component tests and verify failure**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test agent_ingest_flow`
 
@@ -1013,23 +1013,23 @@ Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/agent/Ingredie
 
 Expected: FAIL because grouping cards and imported review mode do not exist.
 
-- [ ] **Step 3: Enforce grouping keys and conflict behavior in Agent instructions and tools**
+- [x] **Step 3: Enforce grouping keys and conflict behavior in Agent instructions and tools**
 
 Group on normalized `materialName + supplierName + modelOrSpecification`. Multiple files may join only when all non-empty identity values agree. A document containing multiple identity groups creates multiple drafts. Unassigned attachments remain on the job with a warning. Conflicting field values add `source_conflict` with all source links and leave the reviewed value empty.
 
-- [ ] **Step 4: Render independent draft cards**
+- [x] **Step 4: Render independent draft cards**
 
 Each card shows material, supplier, specification, nutrient count, missing fields, source names, status, and actions: `打开并检查`, `重新识别`, `合并`, `拆分`, `放弃`. One failed card does not disable the others. Imported cards link to the formal variant.
 
-- [ ] **Step 5: Reuse existing ingredient fields in review mode**
+- [x] **Step 5: Reuse existing ingredient fields in review mode**
 
 `ImportedVariantReview` composes `VariantBasicFields` and `NutritionEditor`, adds material/category/supplier name-or-existing selectors and allergen fields, and omits internal code entirely. Saving calls only `commitReviewedIngredientImportDraft`; the Agent tool registry has no access to this desktop command.
 
-- [ ] **Step 6: Refresh Chat cards after save without deleting unsaved drafts**
+- [x] **Step 6: Refresh Chat cards after save without deleting unsaved drafts**
 
 After a successful save, refresh the ingredient library and the job draft list. Mark only that card imported. Closing or cancelling the review form leaves the draft `needs_review` and does not create reference records.
 
-- [ ] **Step 7: Run grouping, UI, and existing ingredient tests**
+- [x] **Step 7: Run grouping, UI, and existing ingredient tests**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test agent_ingest_flow --test agent_tool_registry`
 
@@ -1037,7 +1037,7 @@ Run: `pnpm --filter @food-rd/desktop exec vitest run src/features/agent src/feat
 
 Expected: PASS for grouping, conflict preservation, manual save, individual failure isolation, and existing editor behavior.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/desktop/src/features/agent apps/desktop/src/features/ingredients apps/desktop/src-tauri/tests/agent_ingest_flow.rs
@@ -1060,7 +1060,7 @@ git commit -m "feat(agent): review agent-created ingredient drafts"
 - Consumes: the same `AgentProvider`, event sink, tool schemas, and task directory builder as HTTP adapters.
 - Produces: CLI discovery, connection/functional tests, JSONL event parsing, cancellation, timeout, and structured results.
 
-- [ ] **Step 1: Write failing fake-executable contract tests**
+- [x] **Step 1: Write failing fake-executable contract tests**
 
 ```rust
 #[tokio::test]
@@ -1083,17 +1083,17 @@ async fn cancellation_terminates_the_child_and_keeps_the_import_job() {
 }
 ```
 
-- [ ] **Step 2: Run CLI tests and verify failure**
+- [x] **Step 2: Run CLI tests and verify failure**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test cli_provider_contract`
 
 Expected: FAIL because CLI discovery and runners do not exist.
 
-- [ ] **Step 3: Implement executable discovery and diagnostics**
+- [x] **Step 3: Implement executable discovery and diagnostics**
 
 Search the configured manual path first, then the application process `PATH`, and on macOS/Linux the common login-shell locations without executing a shell command. Detection runs `tokio::process::Command::new(executable_path).arg("--version")` and a minimal non-interactive structured test. Return path, version, installed, authenticated, and diagnostic message; never read or copy CLI credential files.
 
-- [ ] **Step 4: Build argument arrays for Codex**
+- [x] **Step 4: Build argument arrays for Codex**
 
 Build the Codex process without a shell:
 
@@ -1119,7 +1119,7 @@ command
 
 Parse stdout as JSONL. Consume `item.*`, MCP tool-call, completion, failure, and error events; ignore reasoning item text.
 
-- [ ] **Step 5: Build argument arrays for Claude Code**
+- [x] **Step 5: Build argument arrays for Claude Code**
 
 Build the Claude Code process without a shell:
 
@@ -1147,17 +1147,17 @@ command
 
 Do not use `--dangerously-skip-permissions`. Parse stream-json, tool-use, result, and error records and ignore thinking content.
 
-- [ ] **Step 6: Enforce process lifecycle and output limits**
+- [x] **Step 6: Enforce process lifecycle and output limits**
 
 Use `tokio::process::Command` without a shell, clear inherited environment variables that are not required, preserve CLI-native authentication, cap each stdout/stderr line and total captured diagnostic text, terminate on configured timeout/cancel, and remove the task directory after result persistence.
 
-- [ ] **Step 7: Run fake CLI, timeout, cancellation, and path tests**
+- [x] **Step 7: Run fake CLI, timeout, cancellation, and path tests**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test cli_provider_contract`
 
 Expected: PASS on macOS, Windows-safe argument construction, no real CLI login dependency, and identical normalized output.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/desktop/src-tauri/src/agent/providers apps/desktop/src-tauri/tests/cli_provider_contract.rs apps/desktop/src-tauri/tests/fixtures
@@ -1178,7 +1178,7 @@ git commit -m "feat(agent): add Codex and Claude CLI providers"
 - Consumes: `AgentToolRegistry`, `AgentToolContext`, run/import-job IDs, and a one-use capability token.
 - Produces: an MCP stdio server supporting initialize, tools/list, tools/call, cancellation, and shutdown for one CLI task.
 
-- [ ] **Step 1: Write failing MCP protocol and parity tests**
+- [x] **Step 1: Write failing MCP protocol and parity tests**
 
 ```rust
 #[tokio::test]
@@ -1199,31 +1199,31 @@ async fn invalid_or_reused_task_token_is_rejected() {
 }
 ```
 
-- [ ] **Step 2: Run MCP tests and verify failure**
+- [x] **Step 2: Run MCP tests and verify failure**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test mcp_tool_bridge`
 
 Expected: FAIL because the stdio bridge does not exist.
 
-- [ ] **Step 3: Implement newline-delimited JSON-RPC stdio framing**
+- [x] **Step 3: Implement newline-delimited JSON-RPC stdio framing**
 
 Read one UTF-8 JSON object per stdin line and write one JSON-RPC response per stdout line. Implement `initialize`, `notifications/initialized`, `tools/list`, `tools/call`, and `notifications/cancelled`. Send diagnostics only to stderr so stdout remains valid MCP traffic.
 
-- [ ] **Step 4: Scope the child server to one task**
+- [x] **Step 4: Scope the child server to one task**
 
 Before launching a CLI, create a 256-bit random token record containing run ID, import job ID, allowed attachment IDs, expiry, and unused status. Pass token and database path as child-only environment variables, validate once, mark used, and remove/expire it when the process ends. The server cannot enumerate other jobs or attachments.
 
-- [ ] **Step 5: Dispatch `tools/call` to the same registry instance contract**
+- [x] **Step 5: Dispatch `tools/call` to the same registry instance contract**
 
 Deserialize arguments against the registered JSON Schema, call `AgentToolRegistry::execute`, and serialize only the same sanitized result used by HTTP providers. Tool audit rows must be byte-for-byte equivalent in required fields regardless of provider transport.
 
-- [ ] **Step 6: Run MCP Inspector-compatible framing and parity tests**
+- [x] **Step 6: Run MCP Inspector-compatible framing and parity tests**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test mcp_tool_bridge --test agent_tool_registry --test cli_provider_contract`
 
 Expected: PASS for initialization, tool listing, calls, cancellation, token expiry, denial rules, and API/CLI tool-name parity.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/desktop/src-tauri/src/agent/mcp.rs apps/desktop/src-tauri/src/bin/food_rd_mcp.rs apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock apps/desktop/src-tauri/tests/mcp_tool_bridge.rs

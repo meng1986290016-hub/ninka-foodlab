@@ -8,6 +8,7 @@ interface ReferenceItem {
 }
 
 interface ReferenceComboboxProps<T extends ReferenceItem> {
+  allowCreate?: boolean;
   createItem: (name: string) => Promise<T>;
   label: string;
   loadItems: () => Promise<T[]>;
@@ -22,6 +23,7 @@ function normalized(value: string) {
 }
 
 export function ReferenceCombobox<T extends ReferenceItem>({
+  allowCreate = true,
   createItem,
   label,
   loadItems,
@@ -70,7 +72,8 @@ export function ReferenceCombobox<T extends ReferenceItem>({
   const exactMatch = items.some(
     (item) => normalized(item.name) === normalized(trimmedQuery),
   );
-  const canCreate = trimmedQuery !== "" && !exactMatch && !loading;
+  const canCreate =
+    allowCreate && trimmedQuery !== "" && !exactMatch && !loading;
 
   useEffect(() => {
     if (!open && selected !== null) setQuery(selected.name);
@@ -172,7 +175,7 @@ export function ReferenceCombobox<T extends ReferenceItem>({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder={`搜索或创建${noun}`}
+          placeholder={allowCreate ? `搜索或创建${noun}` : `搜索${noun}`}
           role="combobox"
           value={query}
         />

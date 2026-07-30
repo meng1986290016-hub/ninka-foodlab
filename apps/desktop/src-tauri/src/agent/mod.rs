@@ -15,6 +15,12 @@ pub enum AgentError {
     Repository(#[from] RepositoryError),
     #[error("{message}")]
     SecretStore { message: String },
+    #[error("{message}")]
+    Provider {
+        code: &'static str,
+        message: String,
+        retryable_once: bool,
+    },
 }
 
 impl AgentError {
@@ -23,14 +29,27 @@ impl AgentError {
             Self::Domain { code, .. } => code,
             Self::Repository(error) => error.code(),
             Self::SecretStore { .. } => "credential_store_failure",
+            Self::Provider { code, .. } => code,
         }
     }
 
     pub fn message(&self) -> &str {
         match self {
-            Self::Domain { message, .. } | Self::SecretStore { message } => message,
+            Self::Domain { message, .. }
+            | Self::SecretStore { message }
+            | Self::Provider { message, .. } => message,
             Self::Repository(error) => error.message(),
         }
+    }
+
+    pub fn retryable_once(&self) -> bool {
+        matches!(
+            self,
+            Self::Provider {
+                retryable_once: true,
+                ..
+            }
+        )
     }
 
     pub fn provider_not_configured(message: impl Into<String>) -> Self {
@@ -51,6 +70,22 @@ impl AgentError {
         Self::Domain {
             code: "tool_denied",
             message: format!("Agent 无权调用工具：{name}"),
+        }
+    }
+
+    pub fn provider_failure(message: impl Into<String>) -> Self {
+        Self::Provider {
+            code: "provider_failure",
+            message: message.into(),
+            retryable_once: false,
+        }
+    }
+
+    pub fn invalid_model_output(message: impl Into<String>) -> Self {
+        Self::Provider {
+            code: "invalid_model_output",
+            message: message.into(),
+            retryable_once: true,
         }
     }
 

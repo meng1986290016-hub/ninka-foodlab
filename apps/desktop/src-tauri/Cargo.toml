@@ -8,15 +8,18 @@ name = "food_rd_desktop"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = "0.1"
 calamine = "0.31"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 csv = "1"
+futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 mime_guess = "2"
 pdf-extract = "0.10"
 quick-xml = "0.38"
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 rust_xlsxwriter = "0.92"
 serde = { version = "1", features = ["derive"] }
@@ -25,8 +28,12 @@ sha2 = "0.10"
 tauri = "2.11.5"
 tauri-plugin-dialog = "2"
 thiserror = "2"
+tokio = { version = "1", features = ["process", "io-util", "time", "sync", "rt-multi-thread", "macros"] }
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "4", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+wiremock = "0.6"
 
 [build-dependencies]
 tauri-build = "2"

@@ -47,7 +47,7 @@ pub fn provider_presets() -> Vec<AgentProviderConfigInput> {
             "azure_openai",
             AgentProviderKind::AzureOpenAi,
             "Azure OpenAI",
-            AgentProviderProtocol::OpenAiCompatible,
+            AgentProviderProtocol::OpenAiResponses,
             "",
             128_000,
             true,

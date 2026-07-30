@@ -103,7 +103,7 @@ INSERT INTO agent_provider_configs (
     '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
   ),
   (
-    'azure_openai', 'azure_openai', 'Azure OpenAI', 'openai_compatible',
+    'azure_openai', 'azure_openai', 'Azure OpenAI', 'openai_responses',
     '', '', 128000, 'auto', 120, NULL, 0, NULL,
     '{"text":true,"images":true,"tools":true,"structuredOutput":true,"streaming":true}',
     '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

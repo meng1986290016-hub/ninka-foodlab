@@ -1,18 +1,114 @@
+pub mod anthropic;
+pub mod gemini;
+pub mod http;
+pub mod openai;
+pub mod openai_compatible;
 pub mod presets;
 
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::{
     AgentError,
     model::{
-        AgentPreferences, AgentProviderConfig, AgentProviderConfigInput, AgentProviderKind,
-        AgentProviderProtocol,
+        AgentMessage, AgentPreferences, AgentProviderCapabilities, AgentProviderConfig,
+        AgentProviderConfigInput, AgentProviderKind, AgentProviderProtocol,
     },
     repository::AgentRepository,
     secrets::SecretStore,
 };
 
 pub const CREDENTIAL_SERVICE: &str = "com.foodrd.studio";
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProviderEvent {
+    TextDelta(String),
+    ToolCall(ProviderToolCall),
+    Usage {
+        input_tokens: u64,
+        output_tokens: u64,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderAttachment {
+    pub id: String,
+    pub media_type: String,
+    pub data_base64: Option<String>,
+    pub extracted_text: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProviderTurnRequest {
+    pub messages: Vec<AgentMessage>,
+    pub attachment_ids: Vec<String>,
+    pub attachments: Vec<ProviderAttachment>,
+    pub tools: Vec<AgentToolDefinition>,
+    pub output_schema: Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProviderTurnResult {
+    pub final_text: String,
+    pub structured_output: Option<Value>,
+    pub events: Vec<ProviderEvent>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderTestKind {
+    Connection,
+    StructuredOutput,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentProviderTestResult {
+    pub ok: bool,
+    pub kind: ProviderTestKind,
+    pub latency_ms: Option<u64>,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentModelOption {
+    pub id: String,
+    pub label: String,
+}
+
+pub type AgentEventSink = Arc<dyn Fn(ProviderEvent) + Send + Sync>;
+
+#[async_trait]
+pub trait AgentProvider: Send + Sync {
+    fn capabilities(&self) -> AgentProviderCapabilities;
+
+    async fn test(&self, kind: ProviderTestKind) -> Result<AgentProviderTestResult, AgentError>;
+
+    async fn run(
+        &self,
+        request: ProviderTurnRequest,
+        sink: AgentEventSink,
+    ) -> Result<ProviderTurnResult, AgentError>;
+
+    async fn list_models(&self) -> Result<Vec<AgentModelOption>, AgentError>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

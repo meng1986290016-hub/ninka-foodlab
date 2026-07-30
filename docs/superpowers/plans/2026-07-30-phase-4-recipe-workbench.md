@@ -124,10 +124,10 @@
 - 计算整批、每 kg、每 100g、每份、每包装成本和营养完整度。
 - 汇总“含有/可能含有”过敏原与缺失数据。
 
-- [ ] **Step 1:** 写质量/体积、未知值、供应商价格和多层半成品测试。
-- [ ] **Step 2:** 添加 workspace core 依赖并实现适配器。
-- [ ] **Step 3:** 验证计算结果与 core 端到端金样一致。
-- [ ] **Step 4:** 提交 `feat(recipes): adapt ingredient snapshots to core`。
+- [x] **Step 1:** 写质量/体积、未知值、供应商价格和多层半成品测试。
+- [x] **Step 2:** 添加 workspace core 依赖并实现适配器。
+- [x] **Step 3:** 验证计算结果与 core 端到端金样一致。
+- [x] **Step 4:** 提交 `feat(recipes): adapt ingredient snapshots to core`。
 
 ---
 

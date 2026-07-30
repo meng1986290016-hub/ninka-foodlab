@@ -21,6 +21,16 @@ import type {
   ReviewedIngredientImportDraft,
 } from "./import-types";
 import type {
+  Recipe,
+  RecipeDraft,
+  RecipeDraftSaveInput,
+  RecipeInput,
+  RecipeSummary,
+  RecipeVersion,
+  RecipeVersionComparison,
+  RecipeVersionCreateInput,
+} from "./recipe-types";
+import type {
   Category,
   DatabaseStatus,
   DraftRecord,
@@ -46,6 +56,21 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  listRecipes(): Promise<RecipeSummary[]>;
+  getRecipe(id: string): Promise<Recipe>;
+  createRecipe(input: RecipeInput): Promise<Recipe>;
+  updateRecipe(id: string, input: RecipeInput): Promise<Recipe>;
+  archiveRecipe(id: string): Promise<void>;
+  getRecipeDraft(recipeId: string): Promise<RecipeDraft | null>;
+  saveRecipeDraft(input: RecipeDraftSaveInput): Promise<RecipeDraft>;
+  listRecipeVersions(recipeId: string): Promise<RecipeVersion[]>;
+  getRecipeVersion(id: string): Promise<RecipeVersion>;
+  createRecipeVersion(input: RecipeVersionCreateInput): Promise<RecipeVersion>;
+  copyRecipeVersionToDraft(versionId: string): Promise<RecipeDraft>;
+  compareRecipeVersions(
+    beforeVersionId: string,
+    afterVersionId: string,
+  ): Promise<RecipeVersionComparison>;
   getAgentPreferences(): Promise<AgentPreferences>;
   saveAgentPreferences(input: AgentPreferences): Promise<AgentPreferences>;
   listAgentProviderConfigs(): Promise<AgentProviderConfig[]>;

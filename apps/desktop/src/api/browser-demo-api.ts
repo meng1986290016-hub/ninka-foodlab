@@ -26,11 +26,28 @@ import type {
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV4,
+  type BrowserStateV5,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
 } from "./browser-schema";
+import type {
+  Recipe,
+  RecipeDraft,
+  RecipeDraftIngredientItem,
+  RecipeDraftItemInput,
+  RecipeDraftSaveInput,
+  RecipeDraftVersionItem,
+  RecipeInput,
+  RecipeSummary,
+  RecipeVersion,
+  RecipeVersionComparison,
+  RecipeVersionComparisonRow,
+  RecipeVersionCreateInput,
+  RecipeVersionItemChange,
+  RecipeVersionReference,
+  RecipeVersionSnapshot,
+} from "./recipe-types";
 import {
   DesktopApiError,
   type Category,
@@ -181,8 +198,197 @@ function legacyCompleteness(input: IngredientInput) {
   return Math.round((present.length / values.length) * 100);
 }
 
-function cloneBrowserState(state: BrowserStateV4): BrowserStateV4 {
-  return JSON.parse(JSON.stringify(state)) as BrowserStateV4;
+function cloneBrowserState(state: BrowserStateV5): BrowserStateV5 {
+  return JSON.parse(JSON.stringify(state)) as BrowserStateV5;
+}
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function versionReference(version: RecipeVersion): RecipeVersionReference {
+  return {
+    id: version.id,
+    recipeId: version.recipeId,
+    recipeName: version.snapshot.recipe.name,
+    versionNumber: version.versionNumber,
+    outputMassGrams:
+      version.snapshot.finishedMassGrams ??
+      version.snapshot.targetBatchGrams,
+    createdAt: version.createdAt,
+  };
+}
+
+function draftItemsFromSnapshot(
+  snapshot: RecipeVersionSnapshot,
+): RecipeDraftItemInput[] {
+  return snapshot.items.map((item) =>
+    item.kind === "ingredient"
+      ? {
+          id: item.id,
+          position: item.position,
+          kind: "ingredient",
+          ingredientVariantId: item.ingredient.ingredientVariantId,
+          amount: item.amount,
+          unit: item.unit,
+          locked: item.locked,
+          autoFill: item.autoFill,
+        }
+      : {
+          id: item.id,
+          position: item.position,
+          kind: "recipe_version",
+          recipeVersionId: item.recipeVersion.id,
+          amount: item.amount,
+          unit: item.unit,
+          locked: item.locked,
+          autoFill: item.autoFill,
+        },
+  );
+}
+
+function comparisonRows(
+  beforeValues: Map<string, { label: string; unit: string | null; value: string | null }>,
+  afterValues: Map<string, { label: string; unit: string | null; value: string | null }>,
+): RecipeVersionComparisonRow[] {
+  return [...new Set([...beforeValues.keys(), ...afterValues.keys()])]
+    .map((key) => {
+      const before = beforeValues.get(key);
+      const after = afterValues.get(key);
+      return {
+        key,
+        label: after?.label ?? before?.label ?? key,
+        unit: after?.unit ?? before?.unit ?? null,
+        before: before?.value ?? null,
+        after: after?.value ?? null,
+      } satisfies RecipeVersionComparisonRow;
+    })
+    .filter((row) => row.before !== row.after);
+}
+
+function buildRecipeVersionComparison(
+  before: RecipeVersion,
+  after: RecipeVersion,
+): RecipeVersionComparison {
+  const beforeItems = new Map(before.snapshot.items.map((item) => [item.id, item]));
+  const afterItems = new Map(after.snapshot.items.map((item) => [item.id, item]));
+  const itemChanges: RecipeVersionItemChange[] = [];
+  for (const itemId of new Set([...beforeItems.keys(), ...afterItems.keys()])) {
+    const beforeItem = beforeItems.get(itemId);
+    const afterItem = afterItems.get(itemId);
+    const label = afterItem?.kind === "ingredient"
+      ? `${afterItem.ingredient.materialName} · ${afterItem.ingredient.supplierName}`
+      : afterItem?.kind === "recipe_version"
+        ? `${afterItem.recipeVersion.recipeName} v${afterItem.recipeVersion.versionNumber}`
+        : beforeItem?.kind === "ingredient"
+          ? `${beforeItem.ingredient.materialName} · ${beforeItem.ingredient.supplierName}`
+          : beforeItem?.kind === "recipe_version"
+            ? `${beforeItem.recipeVersion.recipeName} v${beforeItem.recipeVersion.versionNumber}`
+            : itemId;
+    if (!beforeItem || !afterItem) {
+      itemChanges.push({
+        kind: beforeItem ? "removed" : "added",
+        itemKey: itemId,
+        label,
+        beforeAmountGrams: beforeItem?.massGrams ?? null,
+        afterAmountGrams: afterItem?.massGrams ?? null,
+      });
+      continue;
+    }
+    const beforeReference = beforeItem.kind === "ingredient"
+      ? `ingredient:${beforeItem.ingredient.ingredientVariantId}`
+      : `recipe_version:${beforeItem.recipeVersion.id}`;
+    const afterReference = afterItem.kind === "ingredient"
+      ? `ingredient:${afterItem.ingredient.ingredientVariantId}`
+      : `recipe_version:${afterItem.recipeVersion.id}`;
+    if (beforeReference !== afterReference) {
+      itemChanges.push({
+        kind: "reference_changed",
+        itemKey: itemId,
+        label,
+        beforeAmountGrams: beforeItem.massGrams,
+        afterAmountGrams: afterItem.massGrams,
+      });
+    } else if (beforeItem.massGrams !== afterItem.massGrams) {
+      itemChanges.push({
+        kind: "amount_changed",
+        itemKey: itemId,
+        label,
+        beforeAmountGrams: beforeItem.massGrams,
+        afterAmountGrams: afterItem.massGrams,
+      });
+    }
+  }
+
+  const nutrients = (version: RecipeVersion) =>
+    new Map(
+      version.snapshot.calculation.nutrients.map((nutrient) => [
+        nutrient.nutrientDefinitionId,
+        {
+          label: nutrient.name,
+          unit: nutrient.unit,
+          value:
+            nutrient.status === "unknown"
+              ? null
+              : nutrient.per100gKnownAmount,
+        },
+      ]),
+    );
+  const costs = (version: RecipeVersion) =>
+    new Map(
+      [
+        ["batchTotal", "整批成本", version.snapshot.calculation.cost.batchTotal],
+        ["perKg", "每千克成本", version.snapshot.calculation.cost.perKg],
+        ["per100g", "每100克成本", version.snapshot.calculation.cost.per100g],
+        ["perServing", "每份成本", version.snapshot.calculation.cost.perServing],
+        ["perPackage", "每包装成本", version.snapshot.calculation.cost.perPackage],
+      ].map(([key, label, value]) => [
+        key as string,
+        { label: label as string, unit: "CNY", value: value as string | null },
+      ]),
+    );
+  const targets = (version: RecipeVersion) =>
+    new Map(
+      version.snapshot.calculation.targets.map((target) => [
+        target.targetId,
+        {
+          label: target.targetId,
+          unit: null,
+          value: target.observed,
+        },
+      ]),
+    );
+  const allergens = (version: RecipeVersion) =>
+    new Map([
+      [
+        "contains",
+        {
+          label: "含有",
+          unit: null,
+          value: version.snapshot.calculation.allergens.contains.join("、"),
+        },
+      ],
+      [
+        "mayContain",
+        {
+          label: "可能含有",
+          unit: null,
+          value: version.snapshot.calculation.allergens.mayContain.join("、"),
+        },
+      ],
+    ]);
+
+  return {
+    before: versionReference(before),
+    after: versionReference(after),
+    itemChanges,
+    nutritionChanges: comparisonRows(nutrients(before), nutrients(after)),
+    costChanges: comparisonRows(costs(before), costs(after)),
+    targetChanges: comparisonRows(targets(before), targets(after)),
+    allergenChanges: comparisonRows(allergens(before), allergens(after)),
+    notesChanged:
+      before.snapshot.markdownNotes !== after.snapshot.markdownNotes,
+  };
 }
 
 function demoMediaType(extension: string) {
@@ -323,6 +529,272 @@ export class BrowserDemoApi implements DesktopApi {
         "浏览器演示模式暂不读取本机文件",
       ),
     );
+  }
+
+  async listRecipes(): Promise<RecipeSummary[]> {
+    const state = this.read();
+    return Object.values(state.recipes)
+      .sort(
+        (left, right) =>
+          Number(left.archivedAt !== null) -
+            Number(right.archivedAt !== null) ||
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          left.name.localeCompare(right.name, "zh-CN"),
+      )
+      .map((recipe) => {
+        const versions = Object.values(state.recipeVersions)
+          .filter((version) => version.recipeId === recipe.id)
+          .sort((left, right) => right.versionNumber - left.versionNumber);
+        const latestVersion = versions[0];
+        const referencedBy = new Set(
+          Object.entries(state.recipeVersionDependencies)
+            .filter(([, dependencyIds]) =>
+              dependencyIds.some((dependencyId) =>
+                versions.some((version) => version.id === dependencyId),
+              ),
+            )
+            .map(([versionId]) => versionId),
+        );
+        return {
+          recipe: cloneValue(recipe),
+          draftUpdatedAt:
+            state.recipeDrafts[recipe.id]?.updatedAt ?? null,
+          latestVersion: latestVersion
+            ? versionReference(latestVersion)
+            : null,
+          referencedByCount: referencedBy.size,
+        };
+      });
+  }
+
+  async getRecipe(id: string): Promise<Recipe> {
+    return cloneValue(this.findRecipe(this.read(), id));
+  }
+
+  async createRecipe(input: RecipeInput): Promise<Recipe> {
+    const state = this.read();
+    const normalized = this.normalizeRecipeInput(input);
+    this.assertUniqueRecipeCode(state, normalized.code);
+    const timestamp = this.now();
+    const recipe: Recipe = {
+      id: this.createId(),
+      ...normalized,
+      currentDraftId: null,
+      latestVersionNumber: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+    };
+    state.recipes[recipe.id] = recipe;
+    this.write(state);
+    return cloneValue(recipe);
+  }
+
+  async updateRecipe(id: string, input: RecipeInput): Promise<Recipe> {
+    const state = this.read();
+    const existing = this.findRecipe(state, id);
+    if (existing.archivedAt !== null) {
+      throw new DesktopApiError("archived", "已归档配方不能修改");
+    }
+    const normalized = this.normalizeRecipeInput(input);
+    this.assertUniqueRecipeCode(state, normalized.code, id);
+    const updated: Recipe = {
+      ...existing,
+      ...normalized,
+      updatedAt: this.now(),
+    };
+    state.recipes[id] = updated;
+    this.write(state);
+    return cloneValue(updated);
+  }
+
+  async archiveRecipe(id: string): Promise<void> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, id);
+    if (recipe.archivedAt !== null) return;
+    const ownVersionIds = new Set(
+      Object.values(state.recipeVersions)
+        .filter((version) => version.recipeId === id)
+        .map((version) => version.id),
+    );
+    const referenced = Object.values(state.recipeVersionDependencies).some(
+      (dependencyIds) =>
+        dependencyIds.some((dependencyId) => ownVersionIds.has(dependencyId)),
+    );
+    if (referenced) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该配方版本仍被其他配方引用，暂时不能归档",
+      );
+    }
+    const timestamp = this.now();
+    state.recipes[id] = {
+      ...recipe,
+      archivedAt: timestamp,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+  }
+
+  async getRecipeDraft(recipeId: string): Promise<RecipeDraft | null> {
+    const state = this.read();
+    this.findRecipe(state, recipeId);
+    const draft = state.recipeDrafts[recipeId];
+    return draft ? cloneValue(this.materializeRecipeDraft(state, draft)) : null;
+  }
+
+  async saveRecipeDraft(input: RecipeDraftSaveInput): Promise<RecipeDraft> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, input.recipeId);
+    if (recipe.archivedAt !== null) {
+      throw new DesktopApiError("archived", "已归档配方不能保存草稿");
+    }
+    if (input.basedOnVersionId !== null) {
+      const source = this.findRecipeVersion(state, input.basedOnVersionId);
+      if (source.recipeId !== recipe.id) {
+        throw new DesktopApiError("missing_reference", "找不到配方来源版本");
+      }
+    }
+    const existing = state.recipeDrafts[recipe.id];
+    const timestamp = this.now();
+    const draft = this.materializeRecipeDraft(state, {
+      ...cloneValue(input),
+      id: existing?.id ?? this.createId(),
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    });
+    state.recipeDrafts[recipe.id] = draft;
+    state.recipes[recipe.id] = {
+      ...recipe,
+      currentDraftId: draft.id,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return cloneValue(draft);
+  }
+
+  async listRecipeVersions(recipeId: string): Promise<RecipeVersion[]> {
+    const state = this.read();
+    this.findRecipe(state, recipeId);
+    return Object.values(state.recipeVersions)
+      .filter((version) => version.recipeId === recipeId)
+      .sort((left, right) => right.versionNumber - left.versionNumber)
+      .map(cloneValue);
+  }
+
+  async getRecipeVersion(id: string): Promise<RecipeVersion> {
+    return cloneValue(this.findRecipeVersion(this.read(), id));
+  }
+
+  async createRecipeVersion(
+    input: RecipeVersionCreateInput,
+  ): Promise<RecipeVersion> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, input.recipeId);
+    if (recipe.archivedAt !== null) {
+      throw new DesktopApiError(
+        "archived",
+        "已归档配方不能保存正式版本",
+      );
+    }
+    const draft = state.recipeDrafts[recipe.id];
+    if (!draft || draft.id !== input.sourceDraftId) {
+      throw new DesktopApiError(
+        "missing_reference",
+        "找不到正式版本对应的草稿",
+      );
+    }
+    if (
+      input.basedOnVersionId !== null &&
+      this.findRecipeVersion(state, input.basedOnVersionId).recipeId !==
+        recipe.id
+    ) {
+      throw new DesktopApiError("missing_reference", "找不到配方来源版本");
+    }
+    if (
+      input.snapshot.schemaVersion !== 1 ||
+      input.snapshot.recipe.id !== recipe.id
+    ) {
+      throw new DesktopApiError("invalid_input", "配方版本快照无效");
+    }
+    if (new Set(input.dependencyVersionIds).size !== input.dependencyVersionIds.length) {
+      throw new DesktopApiError("invalid_input", "半成品版本不能重复引用");
+    }
+    for (const dependencyId of input.dependencyVersionIds) {
+      const dependency = this.findRecipeVersion(state, dependencyId);
+      const dependencyRecipe = this.findRecipe(state, dependency.recipeId);
+      if (dependencyRecipe.archivedAt !== null) {
+        throw new DesktopApiError(
+          "missing_reference",
+          "找不到引用的半成品版本",
+        );
+      }
+    }
+    const versionNumber =
+      Math.max(
+        0,
+        ...Object.values(state.recipeVersions)
+          .filter((version) => version.recipeId === recipe.id)
+          .map((version) => version.versionNumber),
+      ) + 1;
+    const timestamp = this.now();
+    const version: RecipeVersion = {
+      id: this.createId(),
+      recipeId: recipe.id,
+      versionNumber,
+      sourceDraftId: input.sourceDraftId,
+      basedOnVersionId: input.basedOnVersionId,
+      snapshot: cloneValue(input.snapshot),
+      createdAt: timestamp,
+    };
+    state.recipeVersions[version.id] = version;
+    state.recipeVersionDependencies[version.id] = [
+      ...input.dependencyVersionIds,
+    ];
+    state.recipes[recipe.id] = {
+      ...recipe,
+      latestVersionNumber: versionNumber,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return cloneValue(version);
+  }
+
+  async copyRecipeVersionToDraft(versionId: string): Promise<RecipeDraft> {
+    const version = this.findRecipeVersion(this.read(), versionId);
+    const snapshot = version.snapshot;
+    return this.saveRecipeDraft({
+      recipeId: version.recipeId,
+      basedOnVersionId: version.id,
+      source: "manual",
+      targetBatchGrams: snapshot.targetBatchGrams,
+      finishedMassGrams: snapshot.finishedMassGrams,
+      servingMassGrams: snapshot.servingMassGrams,
+      packageCount: snapshot.packageCount,
+      items: draftItemsFromSnapshot(snapshot),
+      packagingCosts: cloneValue(snapshot.packagingCosts),
+      additionalCosts: cloneValue(snapshot.additionalCosts),
+      targets: cloneValue(snapshot.targets),
+      markdownNotes: snapshot.markdownNotes,
+      calculation: cloneValue(snapshot.calculation),
+      calculationIssues: [],
+    });
+  }
+
+  async compareRecipeVersions(
+    beforeVersionId: string,
+    afterVersionId: string,
+  ): Promise<RecipeVersionComparison> {
+    const state = this.read();
+    const before = this.findRecipeVersion(state, beforeVersionId);
+    const after = this.findRecipeVersion(state, afterVersionId);
+    if (before.recipeId !== after.recipeId) {
+      throw new DesktopApiError(
+        "invalid_input",
+        "只能比较同一个配方的正式版本",
+      );
+    }
+    return buildRecipeVersionComparison(before, after);
   }
 
   async getAgentPreferences(): Promise<AgentPreferences> {
@@ -1511,7 +1983,7 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private write(state: BrowserStateV4) {
+  private write(state: BrowserStateV5) {
     try {
       writeBrowserState(this.storage, state);
     } catch {
@@ -1548,7 +2020,87 @@ export class BrowserDemoApi implements DesktopApi {
     }
   }
 
-  private findCategory(state: BrowserStateV4, id: string) {
+  private normalizeRecipeInput(input: RecipeInput): RecipeInput {
+    const name = this.requiredName(input.name, "请填写配方名称");
+    const code = nullableText(input.code);
+    const tags: string[] = [];
+    const seen = new Set<string>();
+    for (const rawTag of input.tags) {
+      const tag = rawTag.trim();
+      const key = normalize(tag);
+      if (tag !== "" && !seen.has(key)) {
+        seen.add(key);
+        tags.push(tag);
+      }
+    }
+    return { name, code, tags, kind: input.kind };
+  }
+
+  private assertUniqueRecipeCode(
+    state: BrowserStateV5,
+    code: string | null,
+    exceptId?: string,
+  ) {
+    if (code === null) return;
+    if (
+      Object.values(state.recipes).some(
+        (recipe) =>
+          recipe.id !== exceptId &&
+          recipe.archivedAt === null &&
+          normalize(recipe.code ?? "") === normalize(code),
+      )
+    ) {
+      throw new DesktopApiError("duplicate_code", "配方编号已存在");
+    }
+  }
+
+  private findRecipe(state: BrowserStateV5, id: string) {
+    const recipe = state.recipes[id];
+    if (!recipe) throw new DesktopApiError("not_found", "找不到该配方");
+    return recipe;
+  }
+
+  private findRecipeVersion(state: BrowserStateV5, id: string) {
+    const version = state.recipeVersions[id];
+    if (!version) {
+      throw new DesktopApiError("not_found", "找不到该配方版本");
+    }
+    return version;
+  }
+
+  private materializeRecipeDraft(
+    state: BrowserStateV5,
+    draft: Omit<RecipeDraft, "items"> & { items: RecipeDraftItemInput[] },
+  ): RecipeDraft {
+    const items = draft.items.map((item) => {
+      if (item.kind === "ingredient") {
+        for (const group of state.materialGroups) {
+          const variant = group.variants.find(
+            (candidate) => candidate.id === item.ingredientVariantId,
+          );
+          if (variant) {
+            return {
+              ...item,
+              materialName: group.name,
+              ingredientVariant: cloneValue(variant),
+            } satisfies RecipeDraftIngredientItem;
+          }
+        }
+        throw new DesktopApiError(
+          "missing_reference",
+          "找不到配方中的供应商原料版本",
+        );
+      }
+      const version = this.findRecipeVersion(state, item.recipeVersionId);
+      return {
+        ...item,
+        recipeVersion: versionReference(version),
+      } satisfies RecipeDraftVersionItem;
+    });
+    return { ...draft, items };
+  }
+
+  private findCategory(state: BrowserStateV5, id: string) {
     const category = state.categories.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1556,7 +2108,7 @@ export class BrowserDemoApi implements DesktopApi {
     return category;
   }
 
-  private findSupplier(state: BrowserStateV4, id: string) {
+  private findSupplier(state: BrowserStateV5, id: string) {
     const supplier = state.suppliers.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1564,7 +2116,7 @@ export class BrowserDemoApi implements DesktopApi {
     return supplier;
   }
 
-  private findGroup(state: BrowserStateV4, id: string) {
+  private findGroup(state: BrowserStateV5, id: string) {
     const group = state.materialGroups.find(
       (candidate) => candidate.id === id && candidate.archivedAt === null,
     );
@@ -1572,7 +2124,7 @@ export class BrowserDemoApi implements DesktopApi {
     return group;
   }
 
-  private findVariant(state: BrowserStateV4, id: string) {
+  private findVariant(state: BrowserStateV5, id: string) {
     for (const group of state.materialGroups) {
       const variant = group.variants.find(
         (candidate) => candidate.id === id && candidate.archivedAt === null,
@@ -1582,20 +2134,20 @@ export class BrowserDemoApi implements DesktopApi {
     throw new DesktopApiError("not_found", "找不到该供应商版本");
   }
 
-  private findImportJob(state: BrowserStateV4, id: string) {
+  private findImportJob(state: BrowserStateV5, id: string) {
     const job = state.importJobs[id];
     if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
     return job;
   }
 
-  private findImportDraft(state: BrowserStateV4, id: string) {
+  private findImportDraft(state: BrowserStateV5, id: string) {
     const draft = state.importDrafts[id];
     if (!draft) throw new DesktopApiError("not_found", "找不到该导入草稿");
     return draft;
   }
 
   private materializeImportDraft(
-    state: BrowserStateV4,
+    state: BrowserStateV5,
     draft: IngredientImportDraft,
     requestedReview: ReviewedIngredientImportDraft,
   ) {
@@ -1784,7 +2336,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueVariant(
-    state: BrowserStateV4,
+    state: BrowserStateV5,
     input: IngredientVariantInput,
   ) {
     if (input.duplicateConfirmed) return;
@@ -1807,7 +2359,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private assertUniqueInternalCode(
-    state: BrowserStateV4,
+    state: BrowserStateV5,
     internalCode: string | null,
     exceptId?: string,
   ) {
@@ -1832,7 +2384,7 @@ export class BrowserDemoApi implements DesktopApi {
     this.requiredName(input.internalCode, "请填写内部编号");
   }
 
-  private ensureLegacySupplier(state: BrowserStateV4, timestamp: string) {
+  private ensureLegacySupplier(state: BrowserStateV5, timestamp: string) {
     const existing = state.suppliers.find(
       (supplier) => supplier.id === LEGACY_SUPPLIER_ID,
     );
@@ -1850,7 +2402,7 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   private ensureLegacyCategory(
-    state: BrowserStateV4,
+    state: BrowserStateV5,
     name: string,
     timestamp: string,
   ) {

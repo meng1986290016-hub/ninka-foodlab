@@ -176,6 +176,8 @@ export type DesktopErrorCode =
   | "duplicate_name"
   | "duplicate_variant"
   | "reference_conflict"
+  | "missing_reference"
+  | "archived"
   | "conversion_unavailable"
   | "import_failure"
   | "attachment_failure"

@@ -23,6 +23,16 @@ import type {
   IngredientImportJobRequest,
   ReviewedIngredientImportDraft,
 } from "./import-types";
+import type {
+  Recipe,
+  RecipeDraft,
+  RecipeDraftSaveInput,
+  RecipeInput,
+  RecipeSummary,
+  RecipeVersion,
+  RecipeVersionComparison,
+  RecipeVersionCreateInput,
+} from "./recipe-types";
 import { DesktopApiError } from "./types";
 import type {
   Category,
@@ -54,6 +64,8 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "duplicate_name",
   "duplicate_variant",
   "reference_conflict",
+  "missing_reference",
+  "archived",
   "conversion_unavailable",
   "import_failure",
   "attachment_failure",
@@ -94,6 +106,59 @@ export class TauriDesktopApi implements DesktopApi {
   private invoke<T>(command: string, args?: Record<string, unknown>) {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
+    });
+  }
+
+  listRecipes() {
+    return this.invoke<RecipeSummary[]>("list_recipes");
+  }
+
+  getRecipe(id: string) {
+    return this.invoke<Recipe>("get_recipe", { id });
+  }
+
+  createRecipe(input: RecipeInput) {
+    return this.invoke<Recipe>("create_recipe", { input });
+  }
+
+  updateRecipe(id: string, input: RecipeInput) {
+    return this.invoke<Recipe>("update_recipe", { id, input });
+  }
+
+  archiveRecipe(id: string) {
+    return this.invoke<void>("archive_recipe", { id });
+  }
+
+  getRecipeDraft(recipeId: string) {
+    return this.invoke<RecipeDraft | null>("get_recipe_draft", { recipeId });
+  }
+
+  saveRecipeDraft(input: RecipeDraftSaveInput) {
+    return this.invoke<RecipeDraft>("save_recipe_draft", { input });
+  }
+
+  listRecipeVersions(recipeId: string) {
+    return this.invoke<RecipeVersion[]>("list_recipe_versions", { recipeId });
+  }
+
+  getRecipeVersion(id: string) {
+    return this.invoke<RecipeVersion>("get_recipe_version", { id });
+  }
+
+  createRecipeVersion(input: RecipeVersionCreateInput) {
+    return this.invoke<RecipeVersion>("create_recipe_version", { input });
+  }
+
+  copyRecipeVersionToDraft(versionId: string) {
+    return this.invoke<RecipeDraft>("copy_recipe_version_to_draft", {
+      versionId,
+    });
+  }
+
+  compareRecipeVersions(beforeVersionId: string, afterVersionId: string) {
+    return this.invoke<RecipeVersionComparison>("compare_recipe_versions", {
+      beforeVersionId,
+      afterVersionId,
     });
   }
 

@@ -28,6 +28,11 @@ use commands::ingredients::{
     rename_category, save_draft, save_ingredient_variant, set_setting, update_material_group,
     update_supplier,
 };
+use commands::recipes::{
+    archive_recipe, compare_recipe_versions, copy_recipe_version_to_draft, create_recipe,
+    create_recipe_version, get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions,
+    list_recipes, save_recipe_draft, update_recipe,
+};
 use tauri::Manager;
 
 pub fn run() {
@@ -104,6 +109,18 @@ pub fn run() {
             cancel_agent_run,
             get_agent_run,
             list_agent_import_drafts,
+            list_recipes,
+            get_recipe,
+            create_recipe,
+            update_recipe,
+            archive_recipe,
+            get_recipe_draft,
+            save_recipe_draft,
+            list_recipe_versions,
+            get_recipe_version,
+            create_recipe_version,
+            copy_recipe_version_to_draft,
+            compare_recipe_versions,
         ])
         .run(tauri::generate_context!())
         .expect("食研工作台启动失败");

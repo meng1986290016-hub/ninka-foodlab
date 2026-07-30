@@ -406,6 +406,20 @@ impl IngredientRepository {
         get_variant_from_connection(&self.connection, id)
     }
 
+    pub fn get_material_name_for_variant(&self, id: &str) -> Result<String, RepositoryError> {
+        self.connection
+            .query_row(
+                "SELECT material.name
+                 FROM ingredient_variants variant
+                 JOIN material_groups material ON material.id = variant.material_group_id
+                 WHERE variant.id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| RepositoryError::domain("not_found", "找不到该供应商版本"))
+    }
+
     pub fn archive_variant(&mut self, id: &str) -> Result<(), RepositoryError> {
         get_variant_from_connection(&self.connection, id)?;
         let timestamp = (self.clock)();

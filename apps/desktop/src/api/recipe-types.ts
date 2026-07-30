@@ -149,12 +149,15 @@ export interface RecipeDraftInput {
   markdownNotes: string;
 }
 
-export interface RecipeDraft
-  extends Omit<RecipeDraftInput, "items"> {
-  id: EntityId;
-  items: RecipeDraftItem[];
+export interface RecipeDraftSaveInput extends RecipeDraftInput {
   calculation: RecipeCalculation | null;
   calculationIssues: RecipeCalculationIssue[];
+}
+
+export interface RecipeDraft
+  extends Omit<RecipeDraftSaveInput, "items"> {
+  id: EntityId;
+  items: RecipeDraftItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -300,6 +303,14 @@ export interface RecipeVersion {
   basedOnVersionId: EntityId | null;
   snapshot: RecipeVersionSnapshot;
   createdAt: string;
+}
+
+export interface RecipeVersionCreateInput {
+  recipeId: EntityId;
+  sourceDraftId: EntityId;
+  basedOnVersionId: EntityId | null;
+  snapshot: RecipeVersionSnapshot;
+  dependencyVersionIds: EntityId[];
 }
 
 export interface RecipeSummary {

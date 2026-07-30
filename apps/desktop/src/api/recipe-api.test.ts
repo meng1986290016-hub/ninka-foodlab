@@ -1,0 +1,414 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { BrowserDemoApi } from "./browser-demo-api";
+import type {
+  RecipeCalculation,
+  RecipeDraftSaveInput,
+  RecipeInput,
+  RecipeVersionCreateInput,
+  RecipeVersionSnapshot,
+} from "./recipe-types";
+import { TauriDesktopApi } from "./tauri-desktop-api";
+
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length() {
+    return this.values.size;
+  }
+
+  clear() {
+    this.values.clear();
+  }
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return [...this.values.keys()][index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, value);
+  }
+}
+
+function calculation(protein: string, batchTotal: string): RecipeCalculation {
+  return {
+    inputMassGrams: "1000",
+    basisMassGrams: "1000",
+    basis: "input_mass",
+    yieldPercent: null,
+    nutrients: [
+      {
+        nutrientDefinitionId: "protein",
+        name: "蛋白质",
+        unit: "g",
+        totalKnownAmount: protein,
+        per100gKnownAmount: protein,
+        status: "complete",
+        completenessRatio: "1",
+        missingItemIds: [],
+      },
+    ],
+    cost: {
+      rawMaterialTotal: batchTotal,
+      packagingTotal: "0",
+      additionalTotal: "0",
+      batchTotal,
+      perKg: batchTotal,
+      per100g: batchTotal,
+      perServing: null,
+      perPackage: null,
+      status: "complete",
+      missingItemIds: [],
+      breakdown: [],
+    },
+    targets: [],
+    allergens: {
+      contains: [],
+      mayContain: [],
+      sourceItemIds: {},
+    },
+    completeness: { percent: 100, missingFields: [] },
+    calculatedAt: "2026-07-30T10:00:00.000Z",
+  };
+}
+
+function draftInput(
+  recipeId: string,
+  targetBatchGrams: string,
+  protein: string,
+  notes: string,
+): RecipeDraftSaveInput {
+  return {
+    recipeId,
+    basedOnVersionId: null,
+    source: "manual",
+    targetBatchGrams,
+    finishedMassGrams: null,
+    servingMassGrams: null,
+    packageCount: null,
+    items: [],
+    packagingCosts: [],
+    additionalCosts: [],
+    targets: [],
+    markdownNotes: notes,
+    calculation: calculation(protein, protein),
+    calculationIssues: [],
+  };
+}
+
+function snapshot(
+  recipe: { id: string; name: string },
+  targetBatchGrams: string,
+  protein: string,
+  notes: string,
+): RecipeVersionSnapshot {
+  return {
+    schemaVersion: 1,
+    recipe: {
+      id: recipe.id,
+      name: recipe.name,
+      code: null,
+      tags: [],
+      kind: "formula",
+    },
+    targetBatchGrams,
+    finishedMassGrams: null,
+    servingMassGrams: null,
+    packageCount: null,
+    items: [],
+    packagingCosts: [],
+    additionalCosts: [],
+    targets: [],
+    markdownNotes: notes,
+    calculation: calculation(protein, protein),
+  };
+}
+
+describe("recipe desktop API", () => {
+  it("maps every native recipe command with camel-case payloads", async () => {
+    const invoke = vi.fn().mockResolvedValue({});
+    const api = new TauriDesktopApi(invoke);
+    const recipeInput: RecipeInput = {
+      name: "低糖乳饮料",
+      code: null,
+      tags: [],
+      kind: "formula",
+    };
+    const saveDraftInput = draftInput(
+      "recipe-1",
+      "1000",
+      "3.2",
+      "第一次小试",
+    );
+    const versionInput: RecipeVersionCreateInput = {
+      recipeId: "recipe-1",
+      sourceDraftId: "draft-1",
+      basedOnVersionId: null,
+      snapshot: snapshot(
+        { id: "recipe-1", name: "低糖乳饮料" },
+        "1000",
+        "3.2",
+        "第一次小试",
+      ),
+      dependencyVersionIds: [],
+    };
+
+    await api.listRecipes();
+    await api.getRecipe("recipe-1");
+    await api.createRecipe(recipeInput);
+    await api.updateRecipe("recipe-1", recipeInput);
+    await api.getRecipeDraft("recipe-1");
+    await api.saveRecipeDraft(saveDraftInput);
+    await api.listRecipeVersions("recipe-1");
+    await api.getRecipeVersion("version-1");
+    await api.createRecipeVersion(versionInput);
+    await api.copyRecipeVersionToDraft("version-1");
+    await api.compareRecipeVersions("version-1", "version-2");
+    await api.archiveRecipe("recipe-1");
+
+    expect(invoke.mock.calls).toEqual([
+      ["list_recipes", undefined],
+      ["get_recipe", { id: "recipe-1" }],
+      ["create_recipe", { input: recipeInput }],
+      ["update_recipe", { id: "recipe-1", input: recipeInput }],
+      ["get_recipe_draft", { recipeId: "recipe-1" }],
+      ["save_recipe_draft", { input: saveDraftInput }],
+      ["list_recipe_versions", { recipeId: "recipe-1" }],
+      ["get_recipe_version", { id: "version-1" }],
+      ["create_recipe_version", { input: versionInput }],
+      ["copy_recipe_version_to_draft", { versionId: "version-1" }],
+      [
+        "compare_recipe_versions",
+        { beforeVersionId: "version-1", afterVersionId: "version-2" },
+      ],
+      ["archive_recipe", { id: "recipe-1" }],
+    ]);
+  });
+
+  it("persists drafts and immutable versions in browser schema v5", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `recipe-id-${++sequence}`,
+      now: () => "2026-07-30T10:00:00.000Z",
+    });
+    const recipe = await api.createRecipe({
+      name: "低糖乳饮料",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const firstDraft = await api.saveRecipeDraft(
+      draftInput(recipe.id, "1000", "3.2", "第一次小试"),
+    );
+    const firstVersion = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: firstDraft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(recipe, "1000", "3.2", "第一次小试"),
+      dependencyVersionIds: [],
+    });
+    const secondDraftInput = draftInput(
+      recipe.id,
+      "1200",
+      "3.6",
+      "第二次小试",
+    );
+    secondDraftInput.basedOnVersionId = firstVersion.id;
+    const secondDraft = await api.saveRecipeDraft(secondDraftInput);
+    const secondVersion = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: secondDraft.id,
+      basedOnVersionId: firstVersion.id,
+      snapshot: snapshot(recipe, "1200", "3.6", "第二次小试"),
+      dependencyVersionIds: [],
+    });
+
+    const reopened = new BrowserDemoApi({ storage });
+    const summaries = await reopened.listRecipes();
+    const comparison = await reopened.compareRecipeVersions(
+      firstVersion.id,
+      secondVersion.id,
+    );
+    const copied = await reopened.copyRecipeVersionToDraft(firstVersion.id);
+
+    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v5") ?? "{}"))
+      .toMatchObject({
+        schemaVersion: 5,
+        recipes: {
+          [recipe.id]: { name: "低糖乳饮料", latestVersionNumber: 2 },
+        },
+      });
+    expect(summaries[0]?.latestVersion?.versionNumber).toBe(2);
+    expect(comparison.notesChanged).toBe(true);
+    expect(comparison.nutritionChanges).toEqual([
+      expect.objectContaining({
+        key: "protein",
+        before: "3.2",
+        after: "3.6",
+      }),
+    ]);
+    expect(copied).toMatchObject({
+      id: firstDraft.id,
+      basedOnVersionId: firstVersion.id,
+      targetBatchGrams: "1000",
+      markdownNotes: "第一次小试",
+    });
+  });
+
+  it("upgrades existing browser v4 data without losing Agent records", async () => {
+    const storage = new MemoryStorage();
+    const original = new BrowserDemoApi({
+      storage,
+      createId: () => "conversation-before-v5",
+      now: () => "2026-07-30T10:30:00.000Z",
+    });
+    await original.createAgentConversation("升级前的研发对话");
+    const v5 = JSON.parse(
+      storage.getItem("food-rd.browser-demo.v5") ?? "{}",
+    ) as Record<string, unknown>;
+    const v4 = { ...v5 };
+    delete v4.recipes;
+    delete v4.recipeDrafts;
+    delete v4.recipeVersions;
+    delete v4.recipeVersionDependencies;
+    storage.clear();
+    storage.setItem(
+      "food-rd.browser-demo.v4",
+      JSON.stringify({ ...v4, schemaVersion: 4 }),
+    );
+
+    const migrated = new BrowserDemoApi({ storage });
+
+    expect(await migrated.listAgentConversations()).toEqual([
+      expect.objectContaining({
+        id: "conversation-before-v5",
+        title: "升级前的研发对话",
+      }),
+    ]);
+    expect(await migrated.listRecipes()).toEqual([]);
+    expect(
+      JSON.parse(storage.getItem("food-rd.browser-demo.v5") ?? "{}"),
+    ).toMatchObject({
+      schemaVersion: 5,
+      recipes: {},
+      recipeDrafts: {},
+      recipeVersions: {},
+      recipeVersionDependencies: {},
+    });
+  });
+
+  it("protects a recipe when an immutable version is referenced", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `dependency-id-${++sequence}`,
+      now: () => "2026-07-30T11:00:00.000Z",
+    });
+    const base = await api.createRecipe({
+      name: "果酱半成品",
+      code: null,
+      tags: [],
+      kind: "semi_finished",
+    });
+    const baseDraft = await api.saveRecipeDraft(
+      draftInput(base.id, "1000", "0", ""),
+    );
+    const baseVersion = await api.createRecipeVersion({
+      recipeId: base.id,
+      sourceDraftId: baseDraft.id,
+      basedOnVersionId: null,
+      snapshot: {
+        ...snapshot(base, "1000", "0", ""),
+        recipe: { ...snapshot(base, "1000", "0", "").recipe, kind: "semi_finished" },
+      },
+      dependencyVersionIds: [],
+    });
+    const finished = await api.createRecipe({
+      name: "草莓酸奶",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const finishedDraft = await api.saveRecipeDraft(
+      draftInput(finished.id, "1000", "3.0", ""),
+    );
+    await api.createRecipeVersion({
+      recipeId: finished.id,
+      sourceDraftId: finishedDraft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(finished, "1000", "3.0", ""),
+      dependencyVersionIds: [baseVersion.id],
+    });
+
+    await expect(api.archiveRecipe(base.id)).rejects.toMatchObject({
+      code: "reference_conflict",
+    });
+  });
+
+  it("keeps unknown nutrition distinct from confirmed zero in comparisons", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `zero-id-${++sequence}`,
+      now: () => "2026-07-30T12:00:00.000Z",
+    });
+    const recipe = await api.createRecipe({
+      name: "营养零值测试",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const unknownDraftInput = draftInput(recipe.id, "1000", "0", "");
+    const unknownCalculation = calculation("0", "0");
+    const unknownNutrient = unknownCalculation.nutrients[0];
+    if (!unknownNutrient) throw new Error("missing nutrient fixture");
+    unknownNutrient.status = "unknown";
+    unknownDraftInput.calculation = unknownCalculation;
+    const unknownDraft = await api.saveRecipeDraft(unknownDraftInput);
+    const unknownSnapshot = snapshot(recipe, "1000", "0", "");
+    const unknownSnapshotNutrient =
+      unknownSnapshot.calculation.nutrients[0];
+    if (!unknownSnapshotNutrient) throw new Error("missing nutrient fixture");
+    unknownSnapshotNutrient.status = "unknown";
+    const first = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: unknownDraft.id,
+      basedOnVersionId: null,
+      snapshot: unknownSnapshot,
+      dependencyVersionIds: [],
+    });
+
+    const confirmedDraftInput = draftInput(recipe.id, "1000", "0", "");
+    confirmedDraftInput.basedOnVersionId = first.id;
+    const confirmedDraft = await api.saveRecipeDraft(confirmedDraftInput);
+    const second = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: confirmedDraft.id,
+      basedOnVersionId: first.id,
+      snapshot: snapshot(recipe, "1000", "0", ""),
+      dependencyVersionIds: [],
+    });
+
+    expect(
+      (await api.compareRecipeVersions(first.id, second.id)).nutritionChanges,
+    ).toEqual([
+      expect.objectContaining({
+        key: "protein",
+        before: null,
+        after: "0",
+      }),
+    ]);
+  });
+});

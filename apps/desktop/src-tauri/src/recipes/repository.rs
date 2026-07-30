@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::Path, sync::Arc};
 
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -10,8 +11,8 @@ use crate::{
 };
 
 use super::model::{
-    Recipe, RecipeDraft, RecipeDraftInput, RecipeInput, RecipeKind, RecipeVersion,
-    RecipeVersionInput,
+    Recipe, RecipeDraft, RecipeDraftInput, RecipeInput, RecipeKind, RecipeSummary, RecipeVersion,
+    RecipeVersionInput, RecipeVersionReference,
 };
 
 type Clock = Arc<dyn Fn() -> String + Send + Sync>;
@@ -63,6 +64,35 @@ impl RecipeRepository {
             .query_map([], map_recipe_row)?
             .collect::<Result<Vec<_>, _>>()?;
         rows.into_iter().map(recipe_from_row).collect()
+    }
+
+    pub fn list_recipe_summaries(&self) -> Result<Vec<RecipeSummary>, RepositoryError> {
+        self.list_recipes()?
+            .into_iter()
+            .map(|recipe| {
+                let draft_updated_at = self.get_draft(&recipe.id)?.map(|draft| draft.updated_at);
+                let latest_version = self
+                    .list_versions(&recipe.id)?
+                    .into_iter()
+                    .next()
+                    .map(|version| version_reference(&version));
+                let referenced_by_count = self.connection.query_row(
+                    "SELECT COUNT(DISTINCT dependency.version_id)
+                     FROM recipe_version_dependencies dependency
+                     JOIN recipe_versions referenced
+                       ON referenced.id = dependency.referenced_version_id
+                     WHERE referenced.recipe_id = ?1",
+                    [&recipe.id],
+                    |row| row.get::<_, i64>(0),
+                )?;
+                Ok(RecipeSummary {
+                    recipe,
+                    draft_updated_at,
+                    latest_version,
+                    referenced_by_count,
+                })
+            })
+            .collect()
     }
 
     pub fn get_recipe(&self, id: &str) -> Result<Recipe, RepositoryError> {
@@ -452,6 +482,35 @@ fn get_version_from_connection(
         .optional()?
         .ok_or_else(|| domain("not_found", "找不到该配方版本"))?;
     version_from_row(connection, row)
+}
+
+pub fn version_reference(version: &RecipeVersion) -> RecipeVersionReference {
+    let recipe_name = version
+        .snapshot
+        .pointer("/recipe/name")
+        .and_then(Value::as_str)
+        .unwrap_or("未命名配方")
+        .to_string();
+    let output_mass_grams = version
+        .snapshot
+        .get("finishedMassGrams")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            version
+                .snapshot
+                .get("targetBatchGrams")
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("0")
+        .to_string();
+    RecipeVersionReference {
+        id: version.id.clone(),
+        recipe_id: version.recipe_id.clone(),
+        recipe_name,
+        version_number: version.version_number,
+        output_mass_grams,
+        created_at: version.created_at.clone(),
+    }
 }
 
 fn insert_dependencies(

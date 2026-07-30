@@ -96,11 +96,11 @@
 - 所有时间和版本号由服务端生成。
 - 结构化错误不暴露 SQL、本机路径或快照全文。
 
-- [ ] **Step 1:** 写 DesktopApi 和命令映射失败测试。
-- [ ] **Step 2:** 实现 Tauri 命令与 camelCase 序列化。
-- [ ] **Step 3:** 将浏览器 schema 升级到 v5 并保留旧数据。
-- [ ] **Step 4:** 运行 API、浏览器迁移和 Rust 命令测试。
-- [ ] **Step 5:** 提交 `feat(recipes): expose recipe desktop api`。
+- [x] **Step 1:** 写 DesktopApi 和命令映射失败测试。
+- [x] **Step 2:** 实现 Tauri 命令与 camelCase 序列化。
+- [x] **Step 3:** 将浏览器 schema 升级到 v5 并保留旧数据。
+- [x] **Step 4:** 运行 API、浏览器迁移和 Rust 命令测试。
+- [x] **Step 5:** 提交 `feat(recipes): expose recipe desktop api`。
 
 ---
 

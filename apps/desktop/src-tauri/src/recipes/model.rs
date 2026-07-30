@@ -83,3 +83,23 @@ pub struct RecipeVersion {
     pub dependency_version_ids: Vec<String>,
     pub created_at: String,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeVersionReference {
+    pub id: String,
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub version_number: i64,
+    pub output_mass_grams: String,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeSummary {
+    pub recipe: Recipe,
+    pub draft_updated_at: Option<String>,
+    pub latest_version: Option<RecipeVersionReference>,
+    pub referenced_by_count: i64,
+}

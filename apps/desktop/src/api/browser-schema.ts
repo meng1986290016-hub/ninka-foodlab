@@ -21,12 +21,18 @@ import type {
   AgentProviderProtocol,
   AgentRun,
 } from "./agent-types";
+import type {
+  Recipe,
+  RecipeDraft,
+  RecipeVersion,
+} from "./recipe-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
 export const BROWSER_V3_KEY = "food-rd.browser-demo.v3";
 export const BROWSER_V4_KEY = "food-rd.browser-demo.v4";
-export const BROWSER_SCHEMA_VERSION = 4;
+export const BROWSER_V5_KEY = "food-rd.browser-demo.v5";
+export const BROWSER_SCHEMA_VERSION = 5;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -66,6 +72,15 @@ export interface BrowserStateV4
   agentConversations: Record<string, AgentConversation>;
   agentMessages: Record<string, AgentMessage>;
   agentRuns: Record<string, AgentRun>;
+}
+
+export interface BrowserStateV5
+  extends Omit<BrowserStateV4, "schemaVersion"> {
+  schemaVersion: 5;
+  recipes: Record<string, Recipe>;
+  recipeDrafts: Record<string, RecipeDraft>;
+  recipeVersions: Record<string, RecipeVersion>;
+  recipeVersionDependencies: Record<string, string[]>;
 }
 
 export interface MigrationContext {
@@ -206,7 +221,7 @@ export function migrateV3ToV4(
 ): BrowserStateV4 {
   return {
     ...state,
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 4,
     agentPreferences: {
       enabled: true,
       visionProviderConfigId: null,
@@ -218,18 +233,40 @@ export function migrateV3ToV4(
   };
 }
 
+export function migrateV4ToV5(state: BrowserStateV4): BrowserStateV5 {
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    recipes: {},
+    recipeDrafts: {},
+    recipeVersions: {},
+    recipeVersionDependencies: {},
+  };
+}
+
 export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV4 {
-  const v4 = storage.getItem(BROWSER_V4_KEY);
-  if (v4 !== null) {
-    const parsed = JSON.parse(v4) as BrowserStateV4;
+): BrowserStateV5 {
+  const v5 = storage.getItem(BROWSER_V5_KEY);
+  if (v5 !== null) {
+    const parsed = JSON.parse(v5) as BrowserStateV5;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+
+  const v4 = storage.getItem(BROWSER_V4_KEY);
+  if (v4 !== null) {
+    const parsed = JSON.parse(v4) as BrowserStateV4;
+    if (parsed.schemaVersion !== 4) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV4ToV5(parsed);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v3 = storage.getItem(BROWSER_V3_KEY);
@@ -238,7 +275,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 3) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV3ToV4(parsed, context);
+    const migrated = migrateV4ToV5(migrateV3ToV4(parsed, context));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -249,7 +286,9 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 2) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV3ToV4(migrateV2ToV3(parsed), context);
+    const migrated = migrateV4ToV5(
+      migrateV3ToV4(migrateV2ToV3(parsed), context),
+    );
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -261,16 +300,18 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV3ToV4(
-    migrateV2ToV3(migrateV1ToV2(legacy, context)),
-    context,
+  const migrated = migrateV4ToV5(
+    migrateV3ToV4(
+      migrateV2ToV3(migrateV1ToV2(legacy, context)),
+      context,
+    ),
   );
   writeBrowserState(storage, migrated);
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV4) {
-  storage.setItem(BROWSER_V4_KEY, JSON.stringify(state));
+export function writeBrowserState(storage: Storage, state: BrowserStateV5) {
+  storage.setItem(BROWSER_V5_KEY, JSON.stringify(state));
 }
 
 function browserAgentProviderConfigs(

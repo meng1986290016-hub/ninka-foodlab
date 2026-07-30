@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod ingest;
 pub mod ingredients;
+pub mod recipes;
 
 use std::{
     collections::HashMap,
@@ -16,7 +17,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 54] = [
+pub const REGISTERED_COMMANDS: [&str; 66] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -71,6 +72,18 @@ pub const REGISTERED_COMMANDS: [&str; 54] = [
     "cancel_agent_run",
     "get_agent_run",
     "list_agent_import_drafts",
+    "list_recipes",
+    "get_recipe",
+    "create_recipe",
+    "update_recipe",
+    "archive_recipe",
+    "get_recipe_draft",
+    "save_recipe_draft",
+    "list_recipe_versions",
+    "get_recipe_version",
+    "create_recipe_version",
+    "copy_recipe_version_to_draft",
+    "compare_recipe_versions",
 ];
 
 pub struct AppState {

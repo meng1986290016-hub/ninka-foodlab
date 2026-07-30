@@ -13,6 +13,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 csv = "1"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 mime_guess = "2"
 pdf-extract = "0.10"
 quick-xml = "0.38"

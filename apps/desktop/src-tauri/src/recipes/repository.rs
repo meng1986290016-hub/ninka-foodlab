@@ -590,6 +590,33 @@ fn validate_version_input_before_transaction(
     if let Some(version_id) = input.based_on_version_id.as_deref() {
         assert_version_belongs_to_recipe(connection, version_id, &input.recipe_id)?;
     }
+    for dependency_id in &input.dependency_version_ids {
+        let reaches_current_recipe = connection.query_row(
+            "WITH RECURSIVE dependency_tree(version_id) AS (
+               SELECT ?1
+               UNION
+               SELECT dependency.referenced_version_id
+               FROM recipe_version_dependencies dependency
+               JOIN dependency_tree parent
+                 ON dependency.version_id = parent.version_id
+             )
+             SELECT EXISTS(
+               SELECT 1
+               FROM dependency_tree tree
+               JOIN recipe_versions version
+                 ON version.id = tree.version_id
+               WHERE version.recipe_id = ?2
+             )",
+            params![dependency_id, input.recipe_id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if reaches_current_recipe {
+            return Err(domain(
+                "recipe_cycle",
+                "不能引用当前配方自身或间接引用当前配方的半成品版本",
+            ));
+        }
+    }
     Ok(())
 }
 

@@ -30,6 +30,12 @@ import { RecipeIngredientPicker } from "./RecipeIngredientPicker";
 import { RecipeItemTable } from "./RecipeItemTable";
 import { rebalanceDraftItems } from "./recipe-rebalance";
 import { RecipeTargetEditor } from "./RecipeTargetEditor";
+import { RecipeVersionDialog } from "./RecipeVersionDialog";
+import {
+  prepareRecipeVersion,
+  type RecipeVersionPreparation,
+  type RecipeVersionValidationIssue,
+} from "./recipe-versioning";
 import { useRecipeDraft } from "./useRecipeDraft";
 
 interface RecipeWorkbenchProps {
@@ -178,8 +184,9 @@ function RecipeEditorLoader({
               ),
           ),
         ].filter(Boolean);
-        const loadedVersions = await Promise.all(
-          versionIds.map((id) => api.getRecipeVersion(id)),
+        const loadedVersions = await loadRecipeVersionClosure(
+          api,
+          versionIds,
         );
         if (!active) return;
         setNutrients(definitions);
@@ -248,6 +255,19 @@ function RecipeEditor({
     useState<string | null>(null);
   const [narrowView, setNarrowView] =
     useState<NarrowView>("formula");
+  const [versionUpgrades, setVersionUpgrades] = useState<
+    Record<string, RecipeVersion>
+  >({});
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [versionPreparation, setVersionPreparation] =
+    useState<RecipeVersionPreparation | null>(null);
+  const [versionValidationIssues, setVersionValidationIssues] =
+    useState<RecipeVersionValidationIssue[]>([]);
+  const [versionSaving, setVersionSaving] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
+  const [versionNotice, setVersionNotice] = useState<string | null>(
+    null,
+  );
   const calculate = useCallback(
     (draft: Parameters<typeof calculateRecipeDraft>[0]["draft"]) =>
       calculateRecipeDraft({
@@ -260,6 +280,73 @@ function RecipeEditor({
   );
   const draftState = useRecipeDraft(api, recipe.id, { calculate });
   const { draft, dispatch } = draftState;
+  const versionReferenceKey = draft.items
+    .flatMap((item) =>
+      item.kind === "recipe_version"
+        ? [
+            `${item.id}:${item.recipeVersion.recipeId}:${item.recipeVersion.versionNumber}`,
+          ]
+        : [],
+    )
+    .join("|");
+
+  useEffect(() => {
+    let active = true;
+    const versionItems = draft.items.filter(
+      (item) => item.kind === "recipe_version",
+    );
+    const recipeIds = [
+      ...new Set(
+        versionItems.map((item) =>
+          item.kind === "recipe_version"
+            ? item.recipeVersion.recipeId
+            : "",
+        ),
+      ),
+    ].filter(Boolean);
+    if (recipeIds.length === 0) {
+      setVersionUpgrades({});
+      return () => {
+        active = false;
+      };
+    }
+    void Promise.all(
+      recipeIds.map((recipeId) => api.listRecipeVersions(recipeId)),
+    )
+      .then((versionLists) => {
+        if (!active) return;
+        const latestByRecipe = new Map<string, RecipeVersion>();
+        for (const version of versionLists.flat()) {
+          const current = latestByRecipe.get(version.recipeId);
+          if (
+            current === undefined ||
+            version.versionNumber > current.versionNumber
+          ) {
+            latestByRecipe.set(version.recipeId, version);
+          }
+        }
+        const upgrades: Record<string, RecipeVersion> = {};
+        for (const item of versionItems) {
+          if (item.kind !== "recipe_version") continue;
+          const latest = latestByRecipe.get(
+            item.recipeVersion.recipeId,
+          );
+          if (
+            latest !== undefined &&
+            latest.versionNumber > item.recipeVersion.versionNumber
+          ) {
+            upgrades[item.id] = latest;
+          }
+        }
+        setVersionUpgrades(upgrades);
+      })
+      .catch(() => {
+        if (active) setVersionUpgrades({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, versionReferenceKey]);
 
   async function commitRecipeName() {
     const name = recipeName.trim();
@@ -310,36 +397,85 @@ function RecipeEditor({
     ]);
   }
 
-  function addVersion(version: RecipeVersion) {
-    setReferencedVersions((current) =>
-      current.some((item) => item.id === version.id)
-        ? current
-        : [...current, version],
-    );
-    const outputMass =
-      version.snapshot.finishedMassGrams ??
-      version.snapshot.targetBatchGrams;
-    setItems([
-      ...draft.items,
-      {
-        id: createItemId(),
-        position: draft.items.length,
-        kind: "recipe_version",
-        recipeVersionId: version.id,
-        recipeVersion: {
-          id: version.id,
-          recipeId: version.recipeId,
-          recipeName: version.snapshot.recipe.name,
-          versionNumber: version.versionNumber,
-          outputMassGrams: outputMass,
-          createdAt: version.createdAt,
+  async function addVersion(version: RecipeVersion) {
+    try {
+      const closure = await loadRecipeVersionClosure(api, [version.id]);
+      setReferencedVersions((current) =>
+        mergeRecipeVersions(current, closure),
+      );
+      const outputMass =
+        version.snapshot.finishedMassGrams ??
+        version.snapshot.targetBatchGrams;
+      setItems([
+        ...draft.items,
+        {
+          id: createItemId(),
+          position: draft.items.length,
+          kind: "recipe_version",
+          recipeVersionId: version.id,
+          recipeVersion: {
+            id: version.id,
+            recipeId: version.recipeId,
+            recipeName: version.snapshot.recipe.name,
+            versionNumber: version.versionNumber,
+            outputMassGrams: outputMass,
+            createdAt: version.createdAt,
+          },
+          amount: "0",
+          unit: "g",
+          locked: false,
+          autoFill: false,
         },
-        amount: "0",
-        unit: "g",
-        locked: false,
-        autoFill: false,
-      },
-    ]);
+      ]);
+    } catch (cause) {
+      setRebalanceError(
+        cause instanceof Error
+          ? cause.message
+          : "半成品版本无法读取",
+      );
+    }
+  }
+
+  async function upgradeVersion(
+    itemId: string,
+    version: RecipeVersion,
+  ) {
+    try {
+      const closure = await loadRecipeVersionClosure(api, [version.id]);
+      setReferencedVersions((current) =>
+        mergeRecipeVersions(current, closure),
+      );
+      const outputMass =
+        version.snapshot.finishedMassGrams ??
+        version.snapshot.targetBatchGrams;
+      setItems(
+        draft.items.map((item) =>
+          item.id === itemId && item.kind === "recipe_version"
+            ? {
+                ...item,
+                recipeVersionId: version.id,
+                recipeVersion: {
+                  id: version.id,
+                  recipeId: version.recipeId,
+                  recipeName: version.snapshot.recipe.name,
+                  versionNumber: version.versionNumber,
+                  outputMassGrams: outputMass,
+                  createdAt: version.createdAt,
+                },
+              }
+            : item,
+        ),
+      );
+      setVersionNotice(
+        `${version.snapshot.recipe.name} 已升级到 V${version.versionNumber}`,
+      );
+    } catch (cause) {
+      setRebalanceError(
+        cause instanceof Error
+          ? cause.message
+          : "半成品版本升级失败",
+      );
+    }
   }
 
   function moveItem(id: string, direction: -1 | 1) {
@@ -422,6 +558,94 @@ function RecipeEditor({
     setItems(result.items);
   }
 
+  function openVersionDialog() {
+    const result = prepareRecipeVersion({
+      recipe,
+      recipeName,
+      draft,
+      sourceDraftId: draft.id,
+      calculation: calculate(draft),
+    });
+    setVersionError(null);
+    setVersionNotice(null);
+    setVersionDialogOpen(true);
+    if (result.ok) {
+      setVersionPreparation(result.value);
+      setVersionValidationIssues([]);
+    } else {
+      setVersionPreparation(null);
+      setVersionValidationIssues(result.issues);
+    }
+  }
+
+  async function confirmVersionSave() {
+    if (versionPreparation === null || versionSaving) return;
+    setVersionSaving(true);
+    setVersionError(null);
+    try {
+      await draftState.saveNow();
+      const persistedDraft = await api.getRecipeDraft(recipe.id);
+      if (persistedDraft === null) {
+        throw new Error("草稿尚未保存，请稍后重试");
+      }
+      const preparedName =
+        versionPreparation.input.snapshot.recipe.name;
+      let updatedRecipe = recipe;
+      if (preparedName !== recipe.name) {
+        updatedRecipe = await api.updateRecipe(recipe.id, {
+          name: preparedName,
+          code: recipe.code,
+          tags: recipe.tags,
+          kind: recipe.kind,
+        });
+        setRecipeName(updatedRecipe.name);
+      }
+      const version = await api.createRecipeVersion({
+        ...versionPreparation.input,
+        sourceDraftId: persistedDraft.id,
+        basedOnVersionId: persistedDraft.basedOnVersionId,
+        snapshot: {
+          ...versionPreparation.input.snapshot,
+          recipe: {
+            id: updatedRecipe.id,
+            name: updatedRecipe.name,
+            code: updatedRecipe.code,
+            tags: [...updatedRecipe.tags],
+            kind: updatedRecipe.kind,
+          },
+        },
+      });
+      const copied = await draftState.copyFromVersion(version.id);
+      const closure = await loadRecipeVersionClosure(api, [
+        ...copied.items.flatMap((item) =>
+          item.kind === "recipe_version"
+            ? [item.recipeVersionId]
+            : [],
+        ),
+        version.id,
+      ]);
+      setReferencedVersions((current) =>
+        mergeRecipeVersions(current, closure),
+      );
+      const refreshedRecipe = await api.getRecipe(recipe.id);
+      onRecipeUpdated(refreshedRecipe);
+      setVersionDialogOpen(false);
+      setVersionPreparation(null);
+      setVersionValidationIssues([]);
+      setVersionNotice(
+        `V${version.versionNumber} 已保存，已生成基于该版本的工作草稿`,
+      );
+    } catch (cause) {
+      setVersionError(
+        cause instanceof Error
+          ? cause.message
+          : "正式版本保存失败",
+      );
+    } finally {
+      setVersionSaving(false);
+    }
+  }
+
   const inputMass = formulaInputMass(draft.items);
   const visibleIssues = draft.calculationIssues.filter(
     (issue) =>
@@ -451,8 +675,10 @@ function RecipeEditor({
         name={recipeName}
         onNameChange={setRecipeName}
         onNameCommit={() => void commitRecipeName()}
+        onSaveVersion={openVersionDialog}
         recipe={recipe}
         saveStatus={draftState.saveStatus}
+        versionSaving={versionSaving}
       />
 
       <div className="recipe-workbench__body">
@@ -463,6 +689,12 @@ function RecipeEditor({
               : "recipe-editor-pane"
           }
         >
+          {versionNotice ? (
+            <p className="recipe-version-notice" role="status">
+              <Icon name="check" size={16} />
+              {versionNotice}
+            </p>
+          ) : null}
           <div className="recipe-batch-bar">
             <label>
               <span>目标批量</span>
@@ -574,7 +806,11 @@ function RecipeEditor({
               );
               updateWithAutoFill(items);
             }}
+            onUpgradeVersion={(id, version) =>
+              void upgradeVersion(id, version)
+            }
             targetBatchGrams={draft.targetBatchGrams}
+            versionUpgrades={versionUpgrades}
           />
 
           <div className="recipe-lower-grid">
@@ -648,6 +884,20 @@ function RecipeEditor({
         onClose={() => setPickerOpen(false)}
         open={pickerOpen}
         recipeId={recipe.id}
+      />
+      <RecipeVersionDialog
+        error={versionError}
+        issues={versionValidationIssues}
+        onClose={() => {
+          if (versionSaving) return;
+          setVersionDialogOpen(false);
+          setVersionError(null);
+        }}
+        onConfirm={() => void confirmVersionSave()}
+        open={versionDialogOpen}
+        preparation={versionPreparation}
+        saving={versionSaving}
+        versionNumber={(recipe.latestVersionNumber ?? 0) + 1}
       />
     </section>
   );
@@ -834,6 +1084,42 @@ function ResultAllergens({
       </p>
     </section>
   );
+}
+
+async function loadRecipeVersionClosure(
+  api: DesktopApi,
+  initialVersionIds: string[],
+) {
+  const loaded = new Map<string, RecipeVersion>();
+  const pending = [...new Set(initialVersionIds)];
+  while (pending.length > 0) {
+    const versionId = pending.shift();
+    if (versionId === undefined || loaded.has(versionId)) continue;
+    const version = await api.getRecipeVersion(versionId);
+    loaded.set(version.id, version);
+    for (const item of version.snapshot.items) {
+      if (
+        item.kind === "recipe_version" &&
+        !loaded.has(item.recipeVersion.id)
+      ) {
+        pending.push(item.recipeVersion.id);
+      }
+    }
+  }
+  return [...loaded.values()];
+}
+
+function mergeRecipeVersions(
+  current: RecipeVersion[],
+  additions: RecipeVersion[],
+) {
+  const versions = new Map(
+    current.map((version) => [version.id, version]),
+  );
+  for (const version of additions) {
+    versions.set(version.id, version);
+  }
+  return [...versions.values()];
 }
 
 function normalizePositions(items: RecipeDraftItem[]) {

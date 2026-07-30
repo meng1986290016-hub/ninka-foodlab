@@ -356,6 +356,74 @@ describe("recipe desktop API", () => {
     });
   });
 
+  it("rejects direct and indirect recipe cycles in browser storage", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `cycle-id-${++sequence}`,
+      now: () => "2026-07-30T11:30:00.000Z",
+    });
+    const base = await api.createRecipe({
+      name: "基础糖浆",
+      code: null,
+      tags: [],
+      kind: "semi_finished",
+    });
+    const baseDraft = await api.saveRecipeDraft(
+      draftInput(base.id, "1000", "0", ""),
+    );
+    const baseSnapshot = snapshot(base, "1000", "0", "");
+    baseSnapshot.recipe.kind = "semi_finished";
+    const baseV1 = await api.createRecipeVersion({
+      recipeId: base.id,
+      sourceDraftId: baseDraft.id,
+      basedOnVersionId: null,
+      snapshot: baseSnapshot,
+      dependencyVersionIds: [],
+    });
+
+    await expect(
+      api.createRecipeVersion({
+        recipeId: base.id,
+        sourceDraftId: baseDraft.id,
+        basedOnVersionId: null,
+        snapshot: baseSnapshot,
+        dependencyVersionIds: [baseV1.id],
+      }),
+    ).rejects.toMatchObject({ code: "recipe_cycle" });
+
+    const filling = await api.createRecipe({
+      name: "复合夹心",
+      code: null,
+      tags: [],
+      kind: "semi_finished",
+    });
+    const fillingDraft = await api.saveRecipeDraft(
+      draftInput(filling.id, "1000", "0", ""),
+    );
+    const fillingSnapshot = snapshot(filling, "1000", "0", "");
+    fillingSnapshot.recipe.kind = "semi_finished";
+    const fillingV1 = await api.createRecipeVersion({
+      recipeId: filling.id,
+      sourceDraftId: fillingDraft.id,
+      basedOnVersionId: null,
+      snapshot: fillingSnapshot,
+      dependencyVersionIds: [baseV1.id],
+    });
+
+    await expect(
+      api.createRecipeVersion({
+        recipeId: base.id,
+        sourceDraftId: baseDraft.id,
+        basedOnVersionId: null,
+        snapshot: baseSnapshot,
+        dependencyVersionIds: [fillingV1.id],
+      }),
+    ).rejects.toMatchObject({ code: "recipe_cycle" });
+    expect(await api.listRecipeVersions(base.id)).toHaveLength(1);
+  });
+
   it("keeps unknown nutrition distinct from confirmed zero in comparisons", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;

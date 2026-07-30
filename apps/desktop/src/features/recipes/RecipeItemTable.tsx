@@ -4,6 +4,7 @@ import type {
   RecipeCalculationIssue,
   RecipeDraftItem,
   RecipeItemUnit,
+  RecipeVersion,
 } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
 
@@ -12,6 +13,7 @@ interface RecipeItemTableProps {
   items: RecipeDraftItem[];
   missingData: Record<string, string[]>;
   targetBatchGrams: string;
+  versionUpgrades: Record<string, RecipeVersion>;
   onAdd(): void;
   onAmountChange(id: string, amount: string): void;
   onAutoFillChange(id: string): void;
@@ -19,6 +21,7 @@ interface RecipeItemTableProps {
   onMove(id: string, direction: -1 | 1): void;
   onRemove(id: string): void;
   onUnitChange(id: string, unit: RecipeItemUnit): void;
+  onUpgradeVersion(id: string, version: RecipeVersion): void;
 }
 
 const units: RecipeItemUnit[] = ["mg", "g", "kg", "mL", "L"];
@@ -28,6 +31,7 @@ export function RecipeItemTable({
   items,
   missingData,
   targetBatchGrams,
+  versionUpgrades,
   onAdd,
   onAmountChange,
   onAutoFillChange,
@@ -35,6 +39,7 @@ export function RecipeItemTable({
   onMove,
   onRemove,
   onUnitChange,
+  onUpgradeVersion,
 }: RecipeItemTableProps) {
   return (
     <div className="recipe-table-frame">
@@ -122,7 +127,25 @@ export function RecipeItemTable({
                     </td>
                     <td className="recipe-identity-cell">
                       <strong>{label}</strong>
-                      <span>{itemDetail(item)}</span>
+                      <span>
+                        {itemDetail(item)}
+                        {versionUpgrades[item.id] ? (
+                          <button
+                            aria-label={`将${label}升级到 V${versionUpgrades[item.id]!.versionNumber}`}
+                            className="recipe-version-upgrade"
+                            onClick={() =>
+                              onUpgradeVersion(
+                                item.id,
+                                versionUpgrades[item.id]!,
+                              )
+                            }
+                            type="button"
+                          >
+                            升级到 V
+                            {versionUpgrades[item.id]!.versionNumber}
+                          </button>
+                        ) : null}
+                      </span>
                     </td>
                     <td className="recipe-amount-cell">
                       <input

@@ -11,8 +11,10 @@ interface RecipeHeaderProps {
   name: string;
   recipe: Recipe;
   saveStatus: RecipeDraftSaveStatus;
+  versionSaving: boolean;
   onNameChange(value: string): void;
   onNameCommit(): void;
+  onSaveVersion(): void;
 }
 
 export function RecipeHeader({
@@ -21,8 +23,10 @@ export function RecipeHeader({
   name,
   recipe,
   saveStatus,
+  versionSaving,
   onNameChange,
   onNameCommit,
+  onSaveVersion,
 }: RecipeHeaderProps) {
   const invalidInput = draft.calculationIssues.some((issue) =>
     ["invalid_number", "negative_value"].includes(issue.code) ||
@@ -80,11 +84,11 @@ export function RecipeHeader({
       </span>
       <button
         className="button button--primary recipe-version-button"
-        disabled
-        title="完成正式版本功能后启用"
+        disabled={versionSaving}
+        onClick={onSaveVersion}
         type="button"
       >
-        保存为正式版本
+        {versionSaving ? "正在保存…" : "保存为正式版本"}
       </button>
       <button
         aria-label="更多配方操作"

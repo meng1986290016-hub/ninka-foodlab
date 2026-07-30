@@ -286,3 +286,48 @@ fn explicit_version_dependencies_protect_referenced_recipes_from_archiving() {
             .is_some()
     );
 }
+
+#[test]
+fn direct_and_indirect_recipe_cycles_are_rejected() {
+    let mut repository = controlled_repository();
+    let base_recipe = repository
+        .create_recipe(recipe_input("基础糖浆", RecipeKind::SemiFinished))
+        .unwrap();
+    let base_draft = repository.save_draft(draft_input(&base_recipe.id)).unwrap();
+    let base_v1 = repository
+        .create_version(version_input(&base_recipe.id, &base_draft.id, Vec::new()))
+        .unwrap();
+
+    let direct = repository
+        .create_version(version_input(
+            &base_recipe.id,
+            &base_draft.id,
+            vec![base_v1.id.clone()],
+        ))
+        .unwrap_err();
+    assert_eq!(direct.code(), "recipe_cycle");
+
+    let filling_recipe = repository
+        .create_recipe(recipe_input("复合夹心", RecipeKind::SemiFinished))
+        .unwrap();
+    let filling_draft = repository
+        .save_draft(draft_input(&filling_recipe.id))
+        .unwrap();
+    let filling_v1 = repository
+        .create_version(version_input(
+            &filling_recipe.id,
+            &filling_draft.id,
+            vec![base_v1.id],
+        ))
+        .unwrap();
+
+    let indirect = repository
+        .create_version(version_input(
+            &base_recipe.id,
+            &base_draft.id,
+            vec![filling_v1.id],
+        ))
+        .unwrap_err();
+    assert_eq!(indirect.code(), "recipe_cycle");
+    assert_eq!(repository.list_versions(&base_recipe.id).unwrap().len(), 1);
+}

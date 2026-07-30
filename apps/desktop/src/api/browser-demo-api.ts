@@ -729,6 +729,19 @@ export class BrowserDemoApi implements DesktopApi {
           "找不到引用的半成品版本",
         );
       }
+      if (
+        dependencyReachesRecipe(
+          state,
+          dependencyId,
+          recipe.id,
+          new Set(),
+        )
+      ) {
+        throw new DesktopApiError(
+          "recipe_cycle",
+          "不能引用当前配方自身或间接引用当前配方的半成品版本",
+        );
+      }
     }
     const versionNumber =
       Math.max(
@@ -2447,4 +2460,26 @@ export class BrowserDemoApi implements DesktopApi {
       archivedAt: group.archivedAt,
     };
   }
+}
+
+function dependencyReachesRecipe(
+  state: BrowserStateV5,
+  versionId: string,
+  recipeId: string,
+  visited: Set<string>,
+): boolean {
+  if (visited.has(versionId)) return false;
+  visited.add(versionId);
+  const version = state.recipeVersions[versionId];
+  if (version === undefined) return false;
+  if (version.recipeId === recipeId) return true;
+  return (state.recipeVersionDependencies[versionId] ?? []).some(
+    (dependencyId) =>
+      dependencyReachesRecipe(
+        state,
+        dependencyId,
+        recipeId,
+        visited,
+      ),
+  );
 }

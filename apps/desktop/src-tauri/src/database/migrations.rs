@@ -8,6 +8,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         2,
         include_str!("../../migrations/0002_ingredient_import.sql"),
     ),
+    (3, include_str!("../../migrations/0003_food_rd_agent.sql")),
 ];
 
 pub fn apply(connection: &mut Connection, applied_at: &str) -> Result<(), RepositoryError> {

@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_import_schema_version_two() {
+fn fresh_database_applies_agent_schema_version_three() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 2);
+    assert_eq!(schema_version(&connection), 3);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -42,6 +42,12 @@ fn fresh_database_applies_import_schema_version_two() {
         "import_draft_source_links",
         "ingredient_variant_attachments",
         "ingredient_variant_allergens",
+        "agent_provider_configs",
+        "agent_conversations",
+        "agent_runs",
+        "agent_messages",
+        "agent_message_attachments",
+        "agent_tool_calls",
     ] {
         assert!(table_exists(&connection, table), "missing table {table}");
     }
@@ -84,7 +90,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 2);
+    assert_eq!(schema_version(&connection), 3);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -97,4 +103,5 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
         .unwrap();
     assert_eq!(saved_name, "脱脂乳粉");
     assert!(table_exists(&connection, "ingredient_import_jobs"));
+    assert!(table_exists(&connection, "agent_provider_configs"));
 }

@@ -1,5 +1,18 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
+import type {
+  AgentConversation,
+  AgentMessage,
+  AgentModelOption,
+  AgentPreferences,
+  AgentProviderConfig,
+  AgentProviderConfigInput,
+  AgentProviderSecretInput,
+  AgentProviderTestResult,
+  AgentRun,
+  AgentRunRequest,
+  CliDetectionResult,
+} from "./agent-types";
 import type { DesktopApi } from "./desktop-api";
 import type {
   IngredientExchangeFormat,
@@ -45,6 +58,11 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "attachment_failure",
   "unsupported_file",
   "invalid_state",
+  "provider_not_configured",
+  "provider_failure",
+  "invalid_model_output",
+  "tool_denied",
+  "cancelled",
   "storage_failure",
   "unknown",
 ]);
@@ -75,6 +93,90 @@ export class TauriDesktopApi implements DesktopApi {
   private invoke<T>(command: string, args?: Record<string, unknown>) {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
+    });
+  }
+
+  getAgentPreferences() {
+    return this.invoke<AgentPreferences>("get_agent_preferences");
+  }
+
+  saveAgentPreferences(input: AgentPreferences) {
+    return this.invoke<AgentPreferences>("save_agent_preferences", { input });
+  }
+
+  listAgentProviderConfigs() {
+    return this.invoke<AgentProviderConfig[]>("list_agent_provider_configs");
+  }
+
+  saveAgentProviderConfig(input: AgentProviderConfigInput) {
+    return this.invoke<AgentProviderConfig>("save_agent_provider_config", {
+      input,
+    });
+  }
+
+  setAgentProviderSecret(input: AgentProviderSecretInput) {
+    return this.invoke<void>("set_agent_provider_secret", { input });
+  }
+
+  clearAgentProviderSecret(providerId: string) {
+    return this.invoke<void>("clear_agent_provider_secret", { providerId });
+  }
+
+  listAgentProviderModels(providerId: string) {
+    return this.invoke<AgentModelOption[]>("list_agent_provider_models", {
+      providerId,
+    });
+  }
+
+  testAgentProvider(
+    providerId: string,
+    kind: AgentProviderTestResult["kind"],
+  ) {
+    return this.invoke<AgentProviderTestResult>("test_agent_provider", {
+      providerId,
+      kind,
+    });
+  }
+
+  detectCliProviders() {
+    return this.invoke<CliDetectionResult[]>("detect_cli_providers");
+  }
+
+  listAgentConversations() {
+    return this.invoke<AgentConversation[]>("list_agent_conversations");
+  }
+
+  createAgentConversation(title?: string) {
+    return this.invoke<AgentConversation>("create_agent_conversation", {
+      title,
+    });
+  }
+
+  deleteAgentConversation(id: string) {
+    return this.invoke<void>("delete_agent_conversation", { id });
+  }
+
+  listAgentMessages(conversationId: string) {
+    return this.invoke<AgentMessage[]>("list_agent_messages", {
+      conversationId,
+    });
+  }
+
+  startAgentRun(request: AgentRunRequest) {
+    return this.invoke<AgentRun>("start_agent_run", { request });
+  }
+
+  cancelAgentRun(id: string) {
+    return this.invoke<AgentRun>("cancel_agent_run", { id });
+  }
+
+  getAgentRun(id: string) {
+    return this.invoke<AgentRun>("get_agent_run", { id });
+  }
+
+  listAgentImportDrafts(runId: string) {
+    return this.invoke<IngredientImportDraft[]>("list_agent_import_drafts", {
+      runId,
     });
   }
 

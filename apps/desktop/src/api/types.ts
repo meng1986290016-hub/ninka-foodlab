@@ -181,6 +181,11 @@ export type DesktopErrorCode =
   | "attachment_failure"
   | "unsupported_file"
   | "invalid_state"
+  | "provider_not_configured"
+  | "provider_failure"
+  | "invalid_model_output"
+  | "tool_denied"
+  | "cancelled"
   | "storage_failure"
   | "unknown";
 

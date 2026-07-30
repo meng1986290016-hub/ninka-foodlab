@@ -2,6 +2,14 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type { DesktopApi } from "./desktop-api";
 import type {
+  AgentConversation,
+  AgentMessage,
+  AgentProviderConfig,
+  AgentRun,
+  AgentRunRequest,
+  CliDetectionResult,
+} from "./agent-types";
+import type {
   IngredientImportCommitResult,
   IngredientImportDraft,
   IngredientImportJob,
@@ -47,5 +55,26 @@ describe("supplier-specific DesktopApi contract", () => {
     expectTypeOf<
       Awaited<ReturnType<DesktopApi["listIngredientImportDrafts"]>>
     >().toEqualTypeOf<IngredientImportDraft[]>();
+  });
+
+  it("exposes persistent provider and conversation operations", () => {
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["listAgentProviderConfigs"]>>
+    >().toEqualTypeOf<AgentProviderConfig[]>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["createAgentConversation"]>>
+    >().toEqualTypeOf<AgentConversation>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["listAgentMessages"]>>
+    >().toEqualTypeOf<AgentMessage[]>();
+    expectTypeOf<
+      Parameters<DesktopApi["startAgentRun"]>[0]
+    >().toEqualTypeOf<AgentRunRequest>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["startAgentRun"]>>
+    >().toEqualTypeOf<AgentRun>();
+    expectTypeOf<
+      Awaited<ReturnType<DesktopApi["detectCliProviders"]>>
+    >().toEqualTypeOf<CliDetectionResult[]>();
   });
 });

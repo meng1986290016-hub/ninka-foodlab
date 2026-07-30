@@ -1,3 +1,16 @@
+import type {
+  AgentConversation,
+  AgentMessage,
+  AgentModelOption,
+  AgentPreferences,
+  AgentProviderConfig,
+  AgentProviderConfigInput,
+  AgentProviderSecretInput,
+  AgentProviderTestResult,
+  AgentRun,
+  AgentRunRequest,
+  CliDetectionResult,
+} from "./agent-types";
 import type { DesktopApi } from "./desktop-api";
 import type {
   IngredientExchangeFormat,
@@ -305,6 +318,88 @@ export class BrowserDemoApi implements DesktopApi {
         "浏览器演示模式暂不读取本机文件",
       ),
     );
+  }
+
+  private unsupportedAgent<T>(): Promise<T> {
+    return Promise.reject(
+      new DesktopApiError(
+        "provider_not_configured",
+        "食品研发 Agent 运行时尚未接入浏览器演示模式",
+      ),
+    );
+  }
+
+  getAgentPreferences(): Promise<AgentPreferences> {
+    return this.unsupportedAgent();
+  }
+
+  saveAgentPreferences(_input: AgentPreferences): Promise<AgentPreferences> {
+    return this.unsupportedAgent();
+  }
+
+  listAgentProviderConfigs(): Promise<AgentProviderConfig[]> {
+    return this.unsupportedAgent();
+  }
+
+  saveAgentProviderConfig(
+    _input: AgentProviderConfigInput,
+  ): Promise<AgentProviderConfig> {
+    return this.unsupportedAgent();
+  }
+
+  setAgentProviderSecret(_input: AgentProviderSecretInput): Promise<void> {
+    return this.unsupportedAgent();
+  }
+
+  clearAgentProviderSecret(_providerId: string): Promise<void> {
+    return this.unsupportedAgent();
+  }
+
+  listAgentProviderModels(_providerId: string): Promise<AgentModelOption[]> {
+    return this.unsupportedAgent();
+  }
+
+  testAgentProvider(
+    _providerId: string,
+    _kind: AgentProviderTestResult["kind"],
+  ): Promise<AgentProviderTestResult> {
+    return this.unsupportedAgent();
+  }
+
+  detectCliProviders(): Promise<CliDetectionResult[]> {
+    return this.unsupportedAgent();
+  }
+
+  listAgentConversations(): Promise<AgentConversation[]> {
+    return this.unsupportedAgent();
+  }
+
+  createAgentConversation(_title?: string): Promise<AgentConversation> {
+    return this.unsupportedAgent();
+  }
+
+  deleteAgentConversation(_id: string): Promise<void> {
+    return this.unsupportedAgent();
+  }
+
+  listAgentMessages(_conversationId: string): Promise<AgentMessage[]> {
+    return this.unsupportedAgent();
+  }
+
+  startAgentRun(_request: AgentRunRequest): Promise<AgentRun> {
+    return this.unsupportedAgent();
+  }
+
+  cancelAgentRun(_id: string): Promise<AgentRun> {
+    return this.unsupportedAgent();
+  }
+
+  getAgentRun(_id: string): Promise<AgentRun> {
+    return this.unsupportedAgent();
+  }
+
+  listAgentImportDrafts(_runId: string): Promise<IngredientImportDraft[]> {
+    return this.unsupportedAgent();
   }
 
   async createIngredientImportJob(request: IngredientImportJobRequest) {

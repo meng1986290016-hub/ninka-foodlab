@@ -1,4 +1,17 @@
 import type {
+  AgentConversation,
+  AgentMessage,
+  AgentModelOption,
+  AgentPreferences,
+  AgentProviderConfig,
+  AgentProviderConfigInput,
+  AgentProviderSecretInput,
+  AgentProviderTestResult,
+  AgentRun,
+  AgentRunRequest,
+  CliDetectionResult,
+} from "./agent-types";
+import type {
   IngredientExchangeFormat,
   IngredientImportCommitResult,
   IngredientImportDraft,
@@ -32,6 +45,28 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  getAgentPreferences(): Promise<AgentPreferences>;
+  saveAgentPreferences(input: AgentPreferences): Promise<AgentPreferences>;
+  listAgentProviderConfigs(): Promise<AgentProviderConfig[]>;
+  saveAgentProviderConfig(
+    input: AgentProviderConfigInput,
+  ): Promise<AgentProviderConfig>;
+  setAgentProviderSecret(input: AgentProviderSecretInput): Promise<void>;
+  clearAgentProviderSecret(providerId: string): Promise<void>;
+  listAgentProviderModels(providerId: string): Promise<AgentModelOption[]>;
+  testAgentProvider(
+    providerId: string,
+    kind: AgentProviderTestResult["kind"],
+  ): Promise<AgentProviderTestResult>;
+  detectCliProviders(): Promise<CliDetectionResult[]>;
+  listAgentConversations(): Promise<AgentConversation[]>;
+  createAgentConversation(title?: string): Promise<AgentConversation>;
+  deleteAgentConversation(id: string): Promise<void>;
+  listAgentMessages(conversationId: string): Promise<AgentMessage[]>;
+  startAgentRun(request: AgentRunRequest): Promise<AgentRun>;
+  cancelAgentRun(id: string): Promise<AgentRun>;
+  getAgentRun(id: string): Promise<AgentRun>;
+  listAgentImportDrafts(runId: string): Promise<IngredientImportDraft[]>;
   createIngredientImportJob(
     request: IngredientImportJobRequest,
   ): Promise<IngredientImportJob>;

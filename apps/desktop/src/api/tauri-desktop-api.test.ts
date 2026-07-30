@@ -21,6 +21,118 @@ describe("TauriDesktopApi", () => {
     });
   });
 
+  it("uses camel-case Agent payloads and sends API keys only to the secret command", async () => {
+    const invoke = vi.fn().mockResolvedValue({});
+    const api = new TauriDesktopApi(invoke);
+    const provider = {
+      id: "provider-openai",
+      kind: "openai" as const,
+      displayName: "OpenAI",
+      protocol: "openai_responses" as const,
+      endpoint: "https://api.openai.com/v1",
+      model: "gpt-5.5",
+      contextWindow: 128_000,
+      reasoningEffort: "auto" as const,
+      timeoutSeconds: 120,
+      executablePath: null,
+      enabled: true,
+      capabilities: {
+        text: true,
+        images: true,
+        tools: true,
+        structuredOutput: true,
+        streaming: true,
+      },
+    };
+
+    await api.saveAgentProviderConfig(provider);
+    await api.setAgentProviderSecret({
+      providerId: provider.id,
+      apiKey: "test-only-secret",
+    });
+    await api.testAgentProvider(provider.id, "structured_output");
+    await api.startAgentRun({
+      conversationId: "conversation-1",
+      content: "读取这些原料资料",
+      files: [{ kind: "browser_demo", value: "乳粉规格书.pdf" }],
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "save_agent_provider_config", {
+      input: provider,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "set_agent_provider_secret", {
+      input: {
+        providerId: "provider-openai",
+        apiKey: "test-only-secret",
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "test_agent_provider", {
+      providerId: "provider-openai",
+      kind: "structured_output",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, "start_agent_run", {
+      request: {
+        conversationId: "conversation-1",
+        content: "读取这些原料资料",
+        files: [{ kind: "browser_demo", value: "乳粉规格书.pdf" }],
+      },
+    });
+
+    const callsContainingSecret = invoke.mock.calls.filter(([, args]) =>
+      JSON.stringify(args).includes("test-only-secret"),
+    );
+    expect(callsContainingSecret).toEqual([
+      [
+        "set_agent_provider_secret",
+        {
+          input: {
+            providerId: "provider-openai",
+            apiKey: "test-only-secret",
+          },
+        },
+      ],
+    ]);
+  });
+
+  it("maps the complete Agent metadata and conversation command contract", async () => {
+    const invoke = vi.fn().mockResolvedValue({});
+    const api = new TauriDesktopApi(invoke);
+    const preferences = {
+      enabled: true,
+      visionProviderConfigId: "provider-vision",
+    };
+
+    await api.getAgentPreferences();
+    await api.saveAgentPreferences(preferences);
+    await api.listAgentProviderConfigs();
+    await api.clearAgentProviderSecret("provider-1");
+    await api.listAgentProviderModels("provider-1");
+    await api.detectCliProviders();
+    await api.listAgentConversations();
+    await api.createAgentConversation("乳粉资料分析");
+    await api.deleteAgentConversation("conversation-1");
+    await api.listAgentMessages("conversation-1");
+    await api.cancelAgentRun("run-1");
+    await api.getAgentRun("run-1");
+    await api.listAgentImportDrafts("run-1");
+
+    expect(invoke.mock.calls).toEqual([
+      ["get_agent_preferences", undefined],
+      ["save_agent_preferences", { input: preferences }],
+      ["list_agent_provider_configs", undefined],
+      ["clear_agent_provider_secret", { providerId: "provider-1" }],
+      ["list_agent_provider_models", { providerId: "provider-1" }],
+      ["detect_cli_providers", undefined],
+      ["list_agent_conversations", undefined],
+      ["create_agent_conversation", { title: "乳粉资料分析" }],
+      ["delete_agent_conversation", { id: "conversation-1" }],
+      ["list_agent_messages", { conversationId: "conversation-1" }],
+      ["cancel_agent_run", { id: "run-1" }],
+      ["get_agent_run", { id: "run-1" }],
+      ["list_agent_import_drafts", { runId: "run-1" }],
+    ]);
+  });
+
   it("uses the grouped material list command contract", async () => {
     const invoke = vi.fn().mockResolvedValue([]);
     const api = new TauriDesktopApi(invoke);

@@ -86,7 +86,7 @@ impl AgentProvider for GeminiProvider {
         request: ProviderTurnRequest,
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
-        ensure_attachment_support(&request, self.core.config.capabilities.images)?;
+        ensure_attachment_support(&request, &self.core.config)?;
         let mut contents = request
             .messages
             .iter()

@@ -7,12 +7,29 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        HttpProviderCore, chat_completion_messages, chat_completion_tools, emit,
-        ensure_attachment_support, fallback_models, model_options, no_op_sink, probe_request,
-        result, schema_is_empty, successful_test,
+        HttpProviderCore, add_structured_output_instruction, chat_completion_messages,
+        chat_completion_tools, emit, ensure_attachment_support, fallback_models, model_options,
+        no_op_sink, probe_request, result, schema_is_empty, successful_test,
     },
 };
-use crate::agent::{AgentError, model::AgentProviderCapabilities};
+use crate::agent::{
+    AgentError,
+    model::{AgentProviderCapabilities, AgentProviderKind},
+};
+
+#[derive(Clone, Copy)]
+enum StructuredOutputMode {
+    JsonSchema,
+    JsonObject,
+    PromptOnly,
+}
+
+#[derive(Clone, Copy)]
+struct CompatibilityProfile {
+    strict_tools: bool,
+    structured_output: StructuredOutputMode,
+    separate_reasoning: bool,
+}
 
 pub struct OpenAiCompatibleProvider {
     core: HttpProviderCore,
@@ -71,22 +88,36 @@ impl AgentProvider for OpenAiCompatibleProvider {
         request: ProviderTurnRequest,
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
-        ensure_attachment_support(&request, self.core.config.capabilities.images)?;
+        ensure_attachment_support(&request, &self.core.config)?;
+        let profile = compatibility_profile(self.core.config.kind);
+        let mut messages = chat_completion_messages(&request);
+        add_structured_output_instruction(&mut messages, &request.output_schema);
         let mut body = json!({
             "model": self.core.config.model,
-            "messages": chat_completion_messages(&request),
-            "tools": chat_completion_tools(&request.tools),
+            "messages": messages,
+            "tools": chat_completion_tools(&request.tools, profile.strict_tools),
             "stream": false
         });
+        if profile.separate_reasoning {
+            body["reasoning_split"] = Value::Bool(true);
+        }
         if !schema_is_empty(&request.output_schema) {
-            body["response_format"] = json!({
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "food_rd_agent_output",
-                    "schema": request.output_schema,
-                    "strict": true
+            match profile.structured_output {
+                StructuredOutputMode::JsonSchema => {
+                    body["response_format"] = json!({
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "food_rd_agent_output",
+                            "schema": request.output_schema,
+                            "strict": true
+                        }
+                    });
                 }
-            });
+                StructuredOutputMode::JsonObject => {
+                    body["response_format"] = json!({ "type": "json_object" });
+                }
+                StructuredOutputMode::PromptOnly => {}
+            }
         }
         let value = self
             .core
@@ -100,6 +131,31 @@ impl AgentProvider for OpenAiCompatibleProvider {
             Ok(models) if !models.is_empty() => Ok(models),
             _ => Ok(fallback_models(self.core.config.kind)),
         }
+    }
+}
+
+fn compatibility_profile(kind: AgentProviderKind) -> CompatibilityProfile {
+    match kind {
+        AgentProviderKind::KimiCn => CompatibilityProfile {
+            strict_tools: true,
+            structured_output: StructuredOutputMode::JsonSchema,
+            separate_reasoning: false,
+        },
+        AgentProviderKind::DeepSeek | AgentProviderKind::Bailian => CompatibilityProfile {
+            strict_tools: false,
+            structured_output: StructuredOutputMode::JsonObject,
+            separate_reasoning: false,
+        },
+        AgentProviderKind::MinimaxCn => CompatibilityProfile {
+            strict_tools: false,
+            structured_output: StructuredOutputMode::PromptOnly,
+            separate_reasoning: true,
+        },
+        _ => CompatibilityProfile {
+            strict_tools: false,
+            structured_output: StructuredOutputMode::PromptOnly,
+            separate_reasoning: false,
+        },
     }
 }
 

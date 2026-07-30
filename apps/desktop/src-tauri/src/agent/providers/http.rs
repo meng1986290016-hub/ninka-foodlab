@@ -156,17 +156,38 @@ pub(crate) fn anthropic_messages(request: &ProviderTurnRequest) -> Vec<Value> {
 
 pub(crate) fn ensure_attachment_support(
     request: &ProviderTurnRequest,
-    images_supported: bool,
+    config: &AgentProviderConfig,
 ) -> Result<(), AgentError> {
     let includes_images = selected_attachments(request)
         .iter()
         .any(|attachment| attachment.data_base64.is_some());
-    if includes_images && !images_supported {
+    if includes_images && !supports_image_input(config) {
         return Err(AgentError::provider_not_configured(
             "当前模型不支持图片，请选择图片识别模型",
         ));
     }
     Ok(())
+}
+
+pub(crate) fn supports_image_input(config: &AgentProviderConfig) -> bool {
+    if !config.capabilities.images {
+        return false;
+    }
+    let model = config.model.to_ascii_lowercase();
+    match config.kind {
+        AgentProviderKind::ZhipuGlm => {
+            model.starts_with("glm-")
+                && model
+                    .split('-')
+                    .skip(1)
+                    .any(|segment| segment.ends_with('v') || segment == "vision")
+        }
+        AgentProviderKind::MinimaxCn => model.starts_with("minimax-m3"),
+        AgentProviderKind::Bailian => {
+            model.contains("-vl") || model.contains("omni") || model.contains("ocr")
+        }
+        _ => true,
+    }
 }
 
 pub(crate) fn selected_attachments(request: &ProviderTurnRequest) -> Vec<&ProviderAttachment> {
@@ -177,34 +198,56 @@ pub(crate) fn selected_attachments(request: &ProviderTurnRequest) -> Vec<&Provid
         .collect()
 }
 
-pub(crate) fn openai_tools(tools: &[AgentToolDefinition]) -> Vec<Value> {
+pub(crate) fn add_structured_output_instruction(messages: &mut Vec<Value>, output_schema: &Value) {
+    if schema_is_empty(output_schema) {
+        return;
+    }
+    messages.insert(
+        0,
+        json!({
+            "role": "system",
+            "content": format!(
+                "请只返回符合以下 JSON Schema 的 JSON 对象，不要输出 Markdown 或额外说明：{}",
+                output_schema
+            )
+        }),
+    );
+}
+
+pub(crate) fn openai_tools(tools: &[AgentToolDefinition], strict: bool) -> Vec<Value> {
     tools
         .iter()
         .map(|tool| {
-            json!({
+            let mut definition = json!({
                 "type": "function",
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.input_schema,
-                "strict": true
-            })
+                "parameters": tool.input_schema
+            });
+            if strict {
+                definition["strict"] = Value::Bool(true);
+            }
+            definition
         })
         .collect()
 }
 
-pub(crate) fn chat_completion_tools(tools: &[AgentToolDefinition]) -> Vec<Value> {
+pub(crate) fn chat_completion_tools(tools: &[AgentToolDefinition], strict: bool) -> Vec<Value> {
     tools
         .iter()
         .map(|tool| {
-            json!({
+            let mut definition = json!({
                 "type": "function",
                 "function": {
                     "name": tool.name,
                     "description": tool.description,
-                    "parameters": tool.input_schema,
-                    "strict": true
+                    "parameters": tool.input_schema
                 }
-            })
+            });
+            if strict {
+                definition["function"]["strict"] = Value::Bool(true);
+            }
+            definition
         })
         .collect()
 }
@@ -230,12 +273,12 @@ pub(crate) fn fallback_models(kind: AgentProviderKind) -> Vec<AgentModelOption> 
         AgentProviderKind::OpenAi | AgentProviderKind::AzureOpenAi => &["gpt-5.5", "gpt-5.4-mini"],
         AgentProviderKind::Anthropic => &["claude-sonnet-4.6", "claude-opus-4.6"],
         AgentProviderKind::Gemini => &["gemini-3.5-flash", "gemini-3.5-pro"],
-        AgentProviderKind::DeepSeek => &["deepseek-chat", "deepseek-reasoner"],
-        AgentProviderKind::KimiCn => &["kimi-k2.6"],
-        AgentProviderKind::ZhipuGlm => &["glm-5", "glm-4.6v"],
-        AgentProviderKind::MinimaxCn => &["MiniMax-M2.7"],
-        AgentProviderKind::Bailian => &["qwen3-max", "qwen3-vl-plus"],
-        AgentProviderKind::VolcengineArk => &["doubao-seed-2-0-pro"],
+        AgentProviderKind::DeepSeek => &["deepseek-v4-pro", "deepseek-v4-flash"],
+        AgentProviderKind::KimiCn => &["kimi-k3", "kimi-k2.6"],
+        AgentProviderKind::ZhipuGlm => &["glm-5.2", "glm-5v-turbo"],
+        AgentProviderKind::MinimaxCn => &["MiniMax-M3", "MiniMax-M2.7"],
+        AgentProviderKind::Bailian => &["qwen3.7-max", "qwen3-vl-plus"],
+        AgentProviderKind::VolcengineArk => &["doubao-seed-2-0-lite-260215"],
         AgentProviderKind::Ollama
         | AgentProviderKind::Custom
         | AgentProviderKind::CodexCli

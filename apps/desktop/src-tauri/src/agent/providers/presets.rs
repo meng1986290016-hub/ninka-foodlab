@@ -68,7 +68,7 @@ pub fn provider_presets() -> Vec<AgentProviderConfigInput> {
             AgentProviderProtocol::OpenAiCompatible,
             KIMI_CN_ENDPOINT,
             128_000,
-            false,
+            true,
         ),
         preset(
             "zhipu_glm",
@@ -77,7 +77,7 @@ pub fn provider_presets() -> Vec<AgentProviderConfigInput> {
             AgentProviderProtocol::OpenAiCompatible,
             ZHIPU_ENDPOINT,
             128_000,
-            false,
+            true,
         ),
         preset(
             "minimax_cn",
@@ -86,7 +86,7 @@ pub fn provider_presets() -> Vec<AgentProviderConfigInput> {
             AgentProviderProtocol::OpenAiCompatible,
             MINIMAX_CN_ENDPOINT,
             128_000,
-            false,
+            true,
         ),
         preset(
             "bailian",
@@ -95,16 +95,16 @@ pub fn provider_presets() -> Vec<AgentProviderConfigInput> {
             AgentProviderProtocol::OpenAiCompatible,
             BAILIAN_ENDPOINT,
             128_000,
-            false,
+            true,
         ),
         preset(
             "volcengine_ark",
             AgentProviderKind::VolcengineArk,
             "火山引擎 Ark",
-            AgentProviderProtocol::OpenAiCompatible,
+            AgentProviderProtocol::OpenAiResponses,
             ARK_ENDPOINT,
             128_000,
-            false,
+            true,
         ),
         preset(
             "ollama",

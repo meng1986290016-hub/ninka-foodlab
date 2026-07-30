@@ -95,6 +95,27 @@ fn fresh_database_seeds_provider_cards_and_enabled_agent_preference() {
     assert_eq!(providers.len(), 14);
     assert!(providers.iter().all(|provider| !provider.enabled));
     assert!(providers.iter().all(|provider| !provider.has_secret));
+    let ark = providers
+        .iter()
+        .find(|provider| provider.id == "volcengine_ark")
+        .unwrap();
+    assert_eq!(ark.protocol, AgentProviderProtocol::OpenAiResponses);
+    for id in [
+        "kimi_cn",
+        "zhipu_glm",
+        "minimax_cn",
+        "bailian",
+        "volcengine_ark",
+    ] {
+        assert!(
+            providers
+                .iter()
+                .find(|provider| provider.id == id)
+                .unwrap()
+                .capabilities
+                .images
+        );
+    }
     assert_eq!(
         repository.get_preferences().unwrap(),
         food_rd_desktop::agent::model::AgentPreferences {

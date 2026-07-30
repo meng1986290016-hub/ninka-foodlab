@@ -7,9 +7,9 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        HttpProviderCore, emit, ensure_attachment_support, fallback_models, model_options,
-        no_op_sink, openai_response_messages, openai_tools, probe_request, result, schema_is_empty,
-        successful_test,
+        HttpProviderCore, add_structured_output_instruction, emit, ensure_attachment_support,
+        fallback_models, model_options, no_op_sink, openai_response_messages, openai_tools,
+        probe_request, result, schema_is_empty, successful_test,
     },
 };
 use crate::agent::{
@@ -79,15 +79,20 @@ impl AgentProvider for OpenAiProvider {
         request: ProviderTurnRequest,
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
-        ensure_attachment_support(&request, self.core.config.capabilities.images)?;
+        ensure_attachment_support(&request, &self.core.config)?;
+        let is_ark = self.core.config.kind == AgentProviderKind::VolcengineArk;
+        let mut input = openai_response_messages(&request);
+        if is_ark {
+            add_structured_output_instruction(&mut input, &request.output_schema);
+        }
         let mut body = json!({
             "model": self.core.config.model,
-            "input": openai_response_messages(&request),
-            "tools": openai_tools(&request.tools),
+            "input": input,
+            "tools": openai_tools(&request.tools, !is_ark),
             "parallel_tool_calls": false,
             "store": false
         });
-        if !schema_is_empty(&request.output_schema) {
+        if !is_ark && !schema_is_empty(&request.output_schema) {
             body["text"] = json!({
                 "format": {
                     "type": "json_schema",

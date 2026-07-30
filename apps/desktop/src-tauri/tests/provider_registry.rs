@@ -239,6 +239,26 @@ fn vision_follows_capable_chat_or_uses_the_selected_image_provider() {
 }
 
 #[test]
+fn vision_capability_follows_the_selected_domestic_model() {
+    let mut registry = registry(MemorySecretStore::default());
+    registry.set_secret("openai", "sk-openai").unwrap();
+    registry.set_secret("zhipu_glm", "sk-zhipu").unwrap();
+    enable_provider(&mut registry, "openai", "gpt-vision");
+    enable_provider(&mut registry, "zhipu_glm", "glm-5.2");
+    registry
+        .save_preferences(AgentPreferences {
+            enabled: true,
+            vision_provider_config_id: Some("openai".into()),
+        })
+        .unwrap();
+
+    assert_eq!(registry.vision_provider().unwrap().id, "openai");
+
+    enable_provider(&mut registry, "zhipu_glm", "glm-5v-turbo");
+    assert_eq!(registry.vision_provider().unwrap().id, "zhipu_glm");
+}
+
+#[test]
 fn ollama_does_not_require_an_api_key() {
     let mut registry = registry(MemorySecretStore::default());
     enable_provider(&mut registry, "ollama", "qwen3");
@@ -279,4 +299,26 @@ fn approved_presets_have_editable_expected_endpoints() {
             .endpoint,
         ""
     );
+    let ark = presets
+        .iter()
+        .find(|preset| preset.id == "volcengine_ark")
+        .unwrap();
+    assert_eq!(ark.protocol, AgentProviderProtocol::OpenAiResponses);
+    for id in [
+        "kimi_cn",
+        "zhipu_glm",
+        "minimax_cn",
+        "bailian",
+        "volcengine_ark",
+    ] {
+        assert!(
+            presets
+                .iter()
+                .find(|preset| preset.id == id)
+                .unwrap()
+                .capabilities
+                .images,
+            "{id} should expose its image-capable models"
+        );
+    }
 }

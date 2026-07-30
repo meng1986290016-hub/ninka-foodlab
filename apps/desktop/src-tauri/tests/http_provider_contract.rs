@@ -270,7 +270,7 @@ async fn unavailable_model_listing_falls_back_without_rejecting_manual_models() 
 
     let models = provider.list_models().await.unwrap();
 
-    assert!(models.iter().any(|model| model.id == "deepseek-chat"));
+    assert!(models.iter().any(|model| model.id == "deepseek-v4-pro"));
 }
 
 #[tokio::test]
@@ -470,8 +470,15 @@ async fn request_body_uses_only_public_tool_schema_and_selected_message_content(
         body["tools"][0]["function"]["name"],
         "create_ingredient_import_draft"
     );
-    assert_eq!(body["messages"].as_array().unwrap().len(), 1);
-    assert_eq!(body["messages"][0]["content"], "请识别所选原料资料");
+    assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(body["messages"][0]["role"], "system");
+    assert!(
+        body["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("JSON Schema")
+    );
+    assert_eq!(body["messages"][1]["content"], "请识别所选原料资料");
     assert!(requests[0].headers.get("authorization").is_none());
 }
 

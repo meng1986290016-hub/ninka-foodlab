@@ -219,7 +219,7 @@ impl<S: SecretStore> ProviderRegistry<S> {
 
     pub fn vision_provider(&self) -> Result<AgentProviderConfig, AgentError> {
         let chat = self.active_chat()?;
-        if chat.capabilities.images {
+        if http::supports_image_input(&chat) {
             return Ok(chat);
         }
         let preferences = self.repository.get_preferences()?;
@@ -227,7 +227,7 @@ impl<S: SecretStore> ProviderRegistry<S> {
             AgentError::provider_not_configured("当前聊天模型不支持图片，请选择图片识别模型")
         })?;
         let provider = self.get_config(&provider_id)?;
-        if !provider.capabilities.images || !self.is_configured(&provider)? {
+        if !http::supports_image_input(&provider) || !self.is_configured(&provider)? {
             return Err(AgentError::provider_not_configured(
                 "所选图片识别模型不可用，请检查配置",
             ));

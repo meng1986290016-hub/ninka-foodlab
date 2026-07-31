@@ -9,6 +9,8 @@ export * from "./nutrition-label-calculator.js";
 export * from "./rebalance.js";
 export * from "./recipe-calculator.js";
 export * from "./recipe-graph.js";
+export * from "./research-report.js";
+export * from "./research-report-svg.js";
 export * from "./result.js";
 export * from "./targets.js";
 export * from "./units.js";

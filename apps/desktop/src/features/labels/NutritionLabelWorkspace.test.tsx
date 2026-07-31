@@ -260,6 +260,14 @@ describe("NutritionLabelWorkspace", () => {
     );
     await screen.findByText("已发布正式标签 V1");
     expect(api.publishNutritionLabel).toHaveBeenCalledWith("label-yogurt");
+
+    await user.click(
+      screen.getByRole("button", { name: "预览研发报告" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "研发报告预览" }),
+    ).toBeTruthy();
+    expect(screen.getByText("原味高蛋白酸奶 · 配方 V2 · 标签 V1")).toBeTruthy();
   });
 
   it("switches to the 2025 mandatory rows and shows its required notice", async () => {

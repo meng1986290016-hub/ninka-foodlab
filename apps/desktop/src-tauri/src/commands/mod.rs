@@ -3,6 +3,7 @@ pub mod ingest;
 pub mod ingredients;
 pub mod labels;
 pub mod recipes;
+pub mod reports;
 
 use std::{
     collections::HashMap,
@@ -18,7 +19,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 75] = [
+pub const REGISTERED_COMMANDS: [&str; 78] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -94,6 +95,9 @@ pub const REGISTERED_COMMANDS: [&str; 75] = [
     "list_nutrition_label_versions",
     "get_nutrition_label_version",
     "publish_nutrition_label",
+    "create_research_report",
+    "list_research_reports",
+    "get_research_report",
 ];
 
 pub struct AppState {

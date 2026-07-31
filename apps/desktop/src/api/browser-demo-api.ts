@@ -27,7 +27,7 @@ import type {
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV6 as BrowserStateV5,
+  type BrowserStateV7 as BrowserStateV5,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
@@ -57,6 +57,10 @@ import type {
   RecipeVersionReference,
   RecipeVersionSnapshot,
 } from "./recipe-types";
+import type {
+  ResearchReportRecord,
+  ResearchReportRecordInput,
+} from "./research-report-types";
 import {
   DesktopApiError,
   type Category,
@@ -611,6 +615,81 @@ export class BrowserDemoApi implements DesktopApi {
         "浏览器演示模式暂不读取本机文件",
       ),
     );
+  }
+
+  async createResearchReport(
+    input: ResearchReportRecordInput,
+  ): Promise<ResearchReportRecord> {
+    const state = this.read();
+    const document = input.document;
+    if (
+      document.schemaVersion !== 1 ||
+      document.id.trim() === "" ||
+      document.title.trim() === ""
+    ) {
+      throw new DesktopApiError("invalid_input", "研发报告文档无效");
+    }
+    if (state.researchReports[document.id]) {
+      throw new DesktopApiError("invalid_state", "该研发报告记录已存在");
+    }
+    const recipeVersion =
+      state.recipeVersions[document.provenance.recipeVersionId];
+    const labelVersion =
+      state.nutritionLabelVersions[
+        document.provenance.nutritionLabelVersionId
+      ];
+    if (
+      !recipeVersion ||
+      !labelVersion ||
+      labelVersion.recipeVersionId !== recipeVersion.id ||
+      document.recipe.versionId !== recipeVersion.id ||
+      document.nutrition.labelVersionId !== labelVersion.id
+    ) {
+      throw new DesktopApiError(
+        "missing_reference",
+        "研发报告来源版本不一致",
+      );
+    }
+    if (
+      !input.svg.startsWith("<svg") ||
+      /<script|<foreignObject|(?:href|src)=["']https?:/i.test(input.svg)
+    ) {
+      throw new DesktopApiError("invalid_input", "研发报告 SVG 无效");
+    }
+    const record: ResearchReportRecord = {
+      id: document.id,
+      recipeVersionId: recipeVersion.id,
+      nutritionLabelVersionId: labelVersion.id,
+      document: cloneValue(document),
+      svg: input.svg,
+      createdAt: this.now(),
+    };
+    state.researchReports[record.id] = record;
+    this.write(state);
+    return cloneValue(record);
+  }
+
+  async listResearchReports(
+    recipeVersionId: string,
+  ): Promise<ResearchReportRecord[]> {
+    const state = this.read();
+    this.findRecipeVersion(state, recipeVersionId);
+    return Object.values(state.researchReports)
+      .filter((report) => report.recipeVersionId === recipeVersionId)
+      .sort(
+        (left, right) =>
+          right.createdAt.localeCompare(left.createdAt) ||
+          left.id.localeCompare(right.id),
+      )
+      .map(cloneValue);
+  }
+
+  async getResearchReport(id: string): Promise<ResearchReportRecord> {
+    const report = this.read().researchReports[id];
+    if (!report) {
+      throw new DesktopApiError("not_found", "找不到该研发报告记录");
+    }
+    return cloneValue(report);
   }
 
   async listNutritionLabels(recipeId: string): Promise<NutritionLabel[]> {

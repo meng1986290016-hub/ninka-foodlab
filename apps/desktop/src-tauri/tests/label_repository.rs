@@ -156,7 +156,7 @@ fn version_input(
 }
 
 #[test]
-fn migration_six_creates_label_tables_and_immutability_triggers() {
+fn latest_migration_keeps_label_tables_and_immutability_triggers() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-31T00:00:00Z").unwrap();
@@ -168,7 +168,7 @@ fn migration_six_creates_label_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     for object in [
         "nutrition_labels",
         "nutrition_label_drafts",

@@ -232,9 +232,9 @@
 - SVG 使用本地字体回退与确定性布局，不加载远程资源。
 - 报告标注“配方估算”“检测值”或“人工确认值”。
 
-- [ ] **Step 1:** 写报告模型和 SVG 金样测试。
-- [ ] **Step 2:** 实现打印预览和保存记录。
-- [ ] **Step 3:** 提交 `feat(reports): add deterministic R&D report model`。
+- [x] **Step 1:** 写报告模型和 SVG 金样测试。
+- [x] **Step 2:** 实现打印预览和保存记录。
+- [x] **Step 3:** 提交 `feat(reports): add deterministic R&D report model`。
 
 ### Task 9：实现 PNG、PDF、XLSX 与 JSON 输出
 

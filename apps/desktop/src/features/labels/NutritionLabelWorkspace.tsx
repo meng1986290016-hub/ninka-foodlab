@@ -20,6 +20,7 @@ import type {
 } from "../../api/nutrition-label-types";
 import type { Recipe, RecipeVersion } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
+import { ResearchReportPreviewWorkspace } from "../reports/ResearchReportPreviewWorkspace";
 import { NutritionFactsPreview } from "./NutritionFactsPreview";
 import { NutritionSourceEditor } from "./NutritionSourceEditor";
 import {
@@ -70,6 +71,8 @@ export function NutritionLabelWorkspace({
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reportVersion, setReportVersion] =
+    useState<NutritionLabelVersion | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,6 +264,17 @@ export function NutritionLabelWorkspace({
     );
   }
 
+  if (reportVersion !== null) {
+    return (
+      <ResearchReportPreviewWorkspace
+        api={api}
+        nutritionLabelVersion={reportVersion}
+        onBack={() => setReportVersion(null)}
+        recipeVersion={context.recipeVersion}
+      />
+    );
+  }
+
   const publishable =
     calculation?.publishable === true && !calculating && !publishing;
   return (
@@ -305,6 +319,19 @@ export function NutritionLabelWorkspace({
           ) : null}
         </div>
         <div className="nutrition-label-header__actions">
+          <button
+            className="button button--secondary"
+            disabled={context.versions.length === 0}
+            onClick={() => setReportVersion(context.versions[0] ?? null)}
+            title={
+              context.versions.length === 0
+                ? "请先发布一个正式营养标签版本"
+                : undefined
+            }
+            type="button"
+          >
+            预览研发报告
+          </button>
           <button
             className="button button--secondary"
             disabled={saving || publishing}

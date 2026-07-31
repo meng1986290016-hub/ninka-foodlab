@@ -82,7 +82,7 @@ describe("BrowserDemoApi Agent", () => {
         (provider) => provider.id === "deepseek",
       )?.hasSecret,
     ).toBe(true);
-    expect(storage.getItem("food-rd.browser-demo.v6")).not.toContain(
+    expect(storage.getItem("food-rd.browser-demo.v7")).not.toContain(
       "browser-test-secret",
     );
   });

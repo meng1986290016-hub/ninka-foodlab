@@ -241,9 +241,9 @@ describe("recipe desktop API", () => {
     );
     const copied = await reopened.copyRecipeVersionToDraft(firstVersion.id);
 
-    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v6") ?? "{}"))
+    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v7") ?? "{}"))
       .toMatchObject({
-        schemaVersion: 6,
+        schemaVersion: 7,
         recipes: {
           [recipe.id]: { name: "低糖乳饮料", latestVersionNumber: 2 },
         },
@@ -274,7 +274,7 @@ describe("recipe desktop API", () => {
     });
     await original.createAgentConversation("升级前的研发对话");
     const v5 = JSON.parse(
-      storage.getItem("food-rd.browser-demo.v6") ?? "{}",
+      storage.getItem("food-rd.browser-demo.v7") ?? "{}",
     ) as Record<string, unknown>;
     const v4 = { ...v5 };
     delete v4.recipes;
@@ -297,9 +297,9 @@ describe("recipe desktop API", () => {
     ]);
     expect(await migrated.listRecipes()).toEqual([]);
     expect(
-      JSON.parse(storage.getItem("food-rd.browser-demo.v6") ?? "{}"),
+      JSON.parse(storage.getItem("food-rd.browser-demo.v7") ?? "{}"),
     ).toMatchObject({
-      schemaVersion: 6,
+      schemaVersion: 7,
       recipes: {},
       recipeDrafts: {},
       recipeVersions: {},
@@ -307,6 +307,7 @@ describe("recipe desktop API", () => {
       nutritionLabels: {},
       nutritionLabelDrafts: {},
       nutritionLabelVersions: {},
+      researchReports: {},
     });
   });
 

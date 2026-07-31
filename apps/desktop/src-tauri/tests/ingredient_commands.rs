@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 75);
+    assert_eq!(REGISTERED_COMMANDS.len(), 78);
     for command in [
         "list_categories",
         "create_supplier",
@@ -67,6 +67,17 @@ fn every_grouped_desktop_api_method_is_registered() {
         "compare_ingredient_variants",
         "save_draft",
         "database_status",
+    ] {
+        assert!(REGISTERED_COMMANDS.contains(&command));
+    }
+}
+
+#[test]
+fn every_research_report_command_is_registered() {
+    for command in [
+        "create_research_report",
+        "list_research_reports",
+        "get_research_report",
     ] {
         assert!(REGISTERED_COMMANDS.contains(&command));
     }

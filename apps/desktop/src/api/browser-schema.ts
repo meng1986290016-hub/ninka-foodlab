@@ -31,6 +31,7 @@ import type {
   NutritionLabelDraft,
   NutritionLabelVersion,
 } from "./nutrition-label-types";
+import type { ResearchReportRecord } from "./research-report-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
@@ -38,7 +39,8 @@ export const BROWSER_V3_KEY = "food-rd.browser-demo.v3";
 export const BROWSER_V4_KEY = "food-rd.browser-demo.v4";
 export const BROWSER_V5_KEY = "food-rd.browser-demo.v5";
 export const BROWSER_V6_KEY = "food-rd.browser-demo.v6";
-export const BROWSER_SCHEMA_VERSION = 6;
+export const BROWSER_V7_KEY = "food-rd.browser-demo.v7";
+export const BROWSER_SCHEMA_VERSION = 7;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -95,6 +97,12 @@ export interface BrowserStateV6
   nutritionLabels: Record<string, NutritionLabel>;
   nutritionLabelDrafts: Record<string, NutritionLabelDraft>;
   nutritionLabelVersions: Record<string, NutritionLabelVersion>;
+}
+
+export interface BrowserStateV7
+  extends Omit<BrowserStateV6, "schemaVersion"> {
+  schemaVersion: 7;
+  researchReports: Record<string, ResearchReportRecord>;
 }
 
 export interface MigrationContext {
@@ -261,10 +269,18 @@ export function migrateV4ToV5(state: BrowserStateV4): BrowserStateV5 {
 export function migrateV5ToV6(state: BrowserStateV5): BrowserStateV6 {
   return {
     ...state,
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 6,
     nutritionLabels: {},
     nutritionLabelDrafts: {},
     nutritionLabelVersions: {},
+  };
+}
+
+export function migrateV6ToV7(state: BrowserStateV6): BrowserStateV7 {
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    researchReports: {},
   };
 }
 
@@ -272,14 +288,25 @@ export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV6 {
-  const v6 = storage.getItem(BROWSER_V6_KEY);
-  if (v6 !== null) {
-    const parsed = JSON.parse(v6) as BrowserStateV6;
+): BrowserStateV7 {
+  const v7 = storage.getItem(BROWSER_V7_KEY);
+  if (v7 !== null) {
+    const parsed = JSON.parse(v7) as BrowserStateV7;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+
+  const v6 = storage.getItem(BROWSER_V6_KEY);
+  if (v6 !== null) {
+    const parsed = JSON.parse(v6) as BrowserStateV6;
+    if (parsed.schemaVersion !== 6) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV6ToV7(parsed);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v5 = storage.getItem(BROWSER_V5_KEY);
@@ -288,7 +315,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 5) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV5ToV6(parsed);
+    const migrated = migrateV6ToV7(migrateV5ToV6(parsed));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -299,7 +326,9 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 4) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV5ToV6(migrateV4ToV5(parsed));
+    const migrated = migrateV6ToV7(
+      migrateV5ToV6(migrateV4ToV5(parsed)),
+    );
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -310,8 +339,10 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 3) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV5ToV6(
-      migrateV4ToV5(migrateV3ToV4(parsed, context)),
+    const migrated = migrateV6ToV7(
+      migrateV5ToV6(
+        migrateV4ToV5(migrateV3ToV4(parsed, context)),
+      ),
     );
     writeBrowserState(storage, migrated);
     return migrated;
@@ -323,9 +354,11 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 2) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV5ToV6(
-      migrateV4ToV5(
-        migrateV3ToV4(migrateV2ToV3(parsed), context),
+    const migrated = migrateV6ToV7(
+      migrateV5ToV6(
+        migrateV4ToV5(
+          migrateV3ToV4(migrateV2ToV3(parsed), context),
+        ),
       ),
     );
     writeBrowserState(storage, migrated);
@@ -339,11 +372,13 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV5ToV6(
-    migrateV4ToV5(
-      migrateV3ToV4(
-        migrateV2ToV3(migrateV1ToV2(legacy, context)),
-        context,
+  const migrated = migrateV6ToV7(
+    migrateV5ToV6(
+      migrateV4ToV5(
+        migrateV3ToV4(
+          migrateV2ToV3(migrateV1ToV2(legacy, context)),
+          context,
+        ),
       ),
     ),
   );
@@ -351,8 +386,8 @@ export function readBrowserState(
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV6) {
-  storage.setItem(BROWSER_V6_KEY, JSON.stringify(state));
+export function writeBrowserState(storage: Storage, state: BrowserStateV7) {
+  storage.setItem(BROWSER_V7_KEY, JSON.stringify(state));
 }
 
 function browserAgentProviderConfigs(

@@ -39,6 +39,10 @@ import type {
   RecipeVersionCreateInput,
 } from "./recipe-types";
 import type {
+  ResearchReportRecord,
+  ResearchReportRecordInput,
+} from "./research-report-types";
+import type {
   Category,
   DatabaseStatus,
   DraftRecord,
@@ -64,6 +68,13 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  createResearchReport(
+    input: ResearchReportRecordInput,
+  ): Promise<ResearchReportRecord>;
+  listResearchReports(
+    recipeVersionId: string,
+  ): Promise<ResearchReportRecord[]>;
+  getResearchReport(id: string): Promise<ResearchReportRecord>;
   listNutritionLabels(recipeId: string): Promise<NutritionLabel[]>;
   getNutritionLabel(id: string): Promise<NutritionLabel>;
   createNutritionLabel(input: NutritionLabelInput): Promise<NutritionLabel>;

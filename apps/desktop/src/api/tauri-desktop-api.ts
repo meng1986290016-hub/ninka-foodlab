@@ -41,6 +41,10 @@ import type {
   RecipeVersionComparison,
   RecipeVersionCreateInput,
 } from "./recipe-types";
+import type {
+  ResearchReportRecord,
+  ResearchReportRecordInput,
+} from "./research-report-types";
 import { DesktopApiError } from "./types";
 import type {
   Category,
@@ -116,6 +120,22 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
     });
+  }
+
+  createResearchReport(input: ResearchReportRecordInput) {
+    return this.invoke<ResearchReportRecord>("create_research_report", {
+      input,
+    });
+  }
+
+  listResearchReports(recipeVersionId: string) {
+    return this.invoke<ResearchReportRecord[]>("list_research_reports", {
+      recipeVersionId,
+    });
+  }
+
+  getResearchReport(id: string) {
+    return this.invoke<ResearchReportRecord>("get_research_report", { id });
   }
 
   listNutritionLabels(recipeId: string) {

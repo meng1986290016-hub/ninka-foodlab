@@ -98,7 +98,7 @@ fn controlled_repository() -> RecipeRepository {
 }
 
 #[test]
-fn migration_five_creates_recipe_tables_and_immutability_triggers() {
+fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-30T00:00:00Z").unwrap();
@@ -110,7 +110,7 @@ fn migration_five_creates_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     for object in [
         "recipes",
         "recipe_drafts",

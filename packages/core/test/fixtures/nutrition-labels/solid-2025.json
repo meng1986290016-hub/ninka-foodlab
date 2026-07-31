@@ -1,0 +1,136 @@
+{
+  "name": "2025版固体食品1+6并标示膳食纤维",
+  "reference": "https://www.nhc.gov.cn/sps/c100087/202509/470fa4ff5de14dd38619223cce9da4e7.shtml",
+  "input": {
+    "rulePackId": "gb-28050-2025",
+    "basis": {
+      "kind": "per_100g",
+      "quantity": "100",
+      "unit": "g"
+    },
+    "sourceValues": [
+      {
+        "nutrientCode": "protein",
+        "value": "5",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "fat",
+        "value": "3",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "saturated_fat",
+        "value": "1.2",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "value": "10",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "sugars",
+        "value": "4",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "dietary_fiber",
+        "value": "2",
+        "unit": "g",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "sodium",
+        "value": "100",
+        "unit": "mg",
+        "sourceKind": "lab_result",
+        "sourceReference": "lab-1",
+        "observedAt": "2026-07-31",
+        "completeness": "complete"
+      }
+    ],
+    "optionalNutrientCodes": [
+      "dietary_fiber"
+    ],
+    "roundingMode": "half_up"
+  },
+  "expected": {
+    "publishable": true,
+    "requiredNotice": "儿童青少年应避免过量摄入盐油糖",
+    "rows": [
+      {
+        "nutrientCode": "energy",
+        "rawValue": "382",
+        "declaredValue": "382",
+        "nrvPercent": "5"
+      },
+      {
+        "nutrientCode": "protein",
+        "rawValue": "5",
+        "declaredValue": "5.0",
+        "nrvPercent": "8"
+      },
+      {
+        "nutrientCode": "fat",
+        "rawValue": "3",
+        "declaredValue": "3.0",
+        "nrvPercent": "5"
+      },
+      {
+        "nutrientCode": "saturated_fat",
+        "rawValue": "1.2",
+        "declaredValue": "1.2",
+        "nrvPercent": "6"
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "rawValue": "10",
+        "declaredValue": "10.0",
+        "nrvPercent": "3"
+      },
+      {
+        "nutrientCode": "sugars",
+        "rawValue": "4",
+        "declaredValue": "4.0",
+        "nrvPercent": null
+      },
+      {
+        "nutrientCode": "sodium",
+        "rawValue": "100",
+        "declaredValue": "100",
+        "nrvPercent": "5"
+      },
+      {
+        "nutrientCode": "dietary_fiber",
+        "rawValue": "2",
+        "declaredValue": "2.0",
+        "nrvPercent": "8"
+      }
+    ],
+    "issues": []
+  }
+}

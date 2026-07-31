@@ -1,0 +1,130 @@
+{
+  "name": "2025版未知与不完整必填项阻止发布",
+  "reference": "https://www.nhc.gov.cn/sps/c100087/202509/470fa4ff5de14dd38619223cce9da4e7.shtml",
+  "input": {
+    "rulePackId": "gb-28050-2025",
+    "basis": {
+      "kind": "per_100g",
+      "quantity": "100",
+      "unit": "g"
+    },
+    "sourceValues": [
+      {
+        "nutrientCode": "protein",
+        "value": "0",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "fat",
+        "value": "0",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "saturated_fat",
+        "value": null,
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "unknown"
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "value": "10",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "partial"
+      },
+      {
+        "nutrientCode": "sugars",
+        "value": "0",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "sodium",
+        "value": "0",
+        "unit": "mg",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      }
+    ],
+    "optionalNutrientCodes": [],
+    "roundingMode": "half_up"
+  },
+  "expected": {
+    "publishable": false,
+    "requiredNotice": "儿童青少年应避免过量摄入盐油糖",
+    "rows": [
+      {
+        "nutrientCode": "energy",
+        "rawValue": "170",
+        "declaredValue": "170",
+        "nrvPercent": "2"
+      },
+      {
+        "nutrientCode": "protein",
+        "rawValue": "0",
+        "declaredValue": "0.0",
+        "nrvPercent": "0"
+      },
+      {
+        "nutrientCode": "fat",
+        "rawValue": "0",
+        "declaredValue": "0.0",
+        "nrvPercent": "0"
+      },
+      {
+        "nutrientCode": "saturated_fat",
+        "rawValue": null,
+        "declaredValue": null,
+        "nrvPercent": null
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "rawValue": "10",
+        "declaredValue": "10.0",
+        "nrvPercent": "3"
+      },
+      {
+        "nutrientCode": "sugars",
+        "rawValue": "0",
+        "declaredValue": "0.0",
+        "nrvPercent": null
+      },
+      {
+        "nutrientCode": "sodium",
+        "rawValue": "0",
+        "declaredValue": "0",
+        "nrvPercent": "0"
+      }
+    ],
+    "issues": [
+      {
+        "code": "required_nutrient_unknown",
+        "severity": "error",
+        "nutrientCode": "saturated_fat"
+      },
+      {
+        "code": "incomplete_source",
+        "severity": "error",
+        "nutrientCode": "carbohydrate"
+      }
+    ]
+  }
+}

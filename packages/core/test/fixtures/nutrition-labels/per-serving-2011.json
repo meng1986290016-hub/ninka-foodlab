@@ -1,0 +1,90 @@
+{
+  "name": "2011版按份标示并按每100g判断零界限",
+  "reference": "https://www.nhc.gov.cn/zwgk/zcjd/201402/6f68ec6692594cf28d190cb47b770c11.shtml",
+  "input": {
+    "rulePackId": "gb-28050-2011",
+    "basis": {
+      "kind": "per_serving",
+      "quantity": "20",
+      "unit": "g",
+      "servingDescription": "每份20g"
+    },
+    "sourceValues": [
+      {
+        "nutrientCode": "protein",
+        "value": "0.4",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "fat",
+        "value": "0.2",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "value": "2",
+        "unit": "g",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      },
+      {
+        "nutrientCode": "sodium",
+        "value": "1.1",
+        "unit": "mg",
+        "sourceKind": "recipe_estimate",
+        "sourceReference": "recipe-version-1",
+        "observedAt": null,
+        "completeness": "complete"
+      }
+    ],
+    "optionalNutrientCodes": [],
+    "roundingMode": "half_up"
+  },
+  "expected": {
+    "publishable": true,
+    "requiredNotice": null,
+    "rows": [
+      {
+        "nutrientCode": "energy",
+        "rawValue": "48.2",
+        "declaredValue": "48",
+        "nrvPercent": "1"
+      },
+      {
+        "nutrientCode": "protein",
+        "rawValue": "0.4",
+        "declaredValue": "0.4",
+        "nrvPercent": "1"
+      },
+      {
+        "nutrientCode": "fat",
+        "rawValue": "0.2",
+        "declaredValue": "0.2",
+        "nrvPercent": "0"
+      },
+      {
+        "nutrientCode": "carbohydrate",
+        "rawValue": "2",
+        "declaredValue": "2.0",
+        "nrvPercent": "1"
+      },
+      {
+        "nutrientCode": "sodium",
+        "rawValue": "1.1",
+        "declaredValue": "1",
+        "nrvPercent": "0"
+      }
+    ],
+    "issues": []
+  }
+}

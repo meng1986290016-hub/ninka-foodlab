@@ -3,6 +3,7 @@ pub mod commands;
 pub mod database;
 pub mod ingest;
 pub mod ingredients;
+pub mod labels;
 pub mod recipes;
 
 use commands::agent::{

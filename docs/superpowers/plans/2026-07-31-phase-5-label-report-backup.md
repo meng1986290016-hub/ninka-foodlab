@@ -157,10 +157,10 @@
 - 事务失败不得消耗正式版本号。
 - 重启后草稿、正式标签和来源关系保持一致。
 
-- [ ] **Step 1:** 先写迁移、不可变、事务和重启测试。
-- [ ] **Step 2:** 实现仓储与数据库约束。
-- [ ] **Step 3:** 运行全部 Rust 仓储测试。
-- [ ] **Step 4:** 提交 `feat(labels): persist immutable label versions`。
+- [x] **Step 1:** 先写迁移、不可变、事务和重启测试。
+- [x] **Step 2:** 实现仓储与数据库约束。
+- [x] **Step 3:** 运行全部 Rust 仓储测试。
+- [x] **Step 4:** 提交 `feat(labels): persist immutable label versions`。
 
 ### Task 6：补齐 DesktopApi、Tauri 命令和浏览器演示契约
 

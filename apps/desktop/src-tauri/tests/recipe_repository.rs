@@ -110,7 +110,7 @@ fn migration_five_creates_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
     for object in [
         "recipes",
         "recipe_drafts",

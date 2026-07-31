@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "archive"
   | "arrow-down"
+  | "arrow-left"
   | "arrow-up"
   | "check"
   | "chevron-down"
@@ -40,6 +41,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 5v14" />
       <path d="m7 14 5 5 5-5" />
+    </>
+  ),
+  "arrow-left": (
+    <>
+      <path d="M19 12H5" />
+      <path d="m10 7-5 5 5 5" />
     </>
   ),
   "arrow-up": (

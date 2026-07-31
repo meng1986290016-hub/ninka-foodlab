@@ -517,15 +517,19 @@ function convertCurrentIngredient(
   if (issues.length > 0) return { ok: false, issues };
 
   const ingredientId = graphIngredientId(ROOT_VERSION_ID, item.id);
+  const variantAllergens = variant.allergens ?? {
+    contains: [],
+    mayContain: [],
+  };
   const allergens: RecipeAllergenSummary = {
-    contains: unique(variant.allergens.contains),
-    mayContain: unique(variant.allergens.mayContain).filter(
-      (name) => !variant.allergens.contains.includes(name),
+    contains: unique(variantAllergens.contains),
+    mayContain: unique(variantAllergens.mayContain).filter(
+      (name) => !variantAllergens.contains.includes(name),
     ),
     sourceItemIds: Object.fromEntries(
       unique([
-        ...variant.allergens.contains,
-        ...variant.allergens.mayContain,
+        ...variantAllergens.contains,
+        ...variantAllergens.mayContain,
       ]).map((name) => [name, [item.id]]),
     ),
   };

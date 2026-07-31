@@ -22,6 +22,10 @@ import { RecipeVersionComparisonPanel } from "./RecipeVersionComparisonPanel";
 interface RecipeLibraryProps {
   api: DesktopApi;
   onOpenDraft(recipeId: string): void;
+  onOpenNutritionLabel?(
+    recipeId: string,
+    recipeVersionId: string,
+  ): void;
 }
 
 interface RecipeLibraryEntry {
@@ -52,6 +56,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
 export function RecipeLibrary({
   api,
   onOpenDraft,
+  onOpenNutritionLabel,
 }: RecipeLibraryProps) {
   const [entries, setEntries] = useState<RecipeLibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -438,6 +443,14 @@ export function RecipeLibrary({
           }}
           onCompare={() => setComparisonOpen(true)}
           onCopy={() => void copyToDraft()}
+          onOpenNutritionLabel={() => {
+            if (selectedVersion) {
+              onOpenNutritionLabel?.(
+                selectedVersion.recipeId,
+                selectedVersion.id,
+              );
+            }
+          }}
           onRecalculate={() => void recalculateCurrentPrice()}
           onSelectVersion={setSelectedVersionId}
           recalculating={recalculating}
@@ -495,6 +508,7 @@ interface RecipeVersionInspectorProps {
   copying: boolean;
   onSelectVersion(id: string): void;
   onCopy(): void;
+  onOpenNutritionLabel(): void;
   onRecalculate(): void;
   onArchive(): void;
   onCompare(): void;
@@ -508,6 +522,7 @@ function RecipeVersionInspector({
   copying,
   onSelectVersion,
   onCopy,
+  onOpenNutritionLabel,
   onRecalculate,
   onArchive,
   onCompare,
@@ -584,6 +599,15 @@ function RecipeVersionInspector({
         >
           <Icon name="formula" size={16} />
           比较版本
+        </button>
+        <button
+          className="button button--secondary"
+          disabled={selectedVersion === null || archived}
+          onClick={onOpenNutritionLabel}
+          type="button"
+        >
+          <Icon name="formula" size={16} />
+          生成营养标签
         </button>
         <button
           className="recipe-library__archive-button"

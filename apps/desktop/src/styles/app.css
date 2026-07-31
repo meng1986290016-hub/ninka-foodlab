@@ -5892,3 +5892,775 @@ tbody tr:hover {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Nutrition label workspace */
+
+.nutrition-label-workspace {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.nutrition-label-workspace--state {
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+.nutrition-label-workspace--state h1 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--font-size-title);
+}
+
+.nutrition-label-workspace--state p {
+  max-width: 460px;
+  margin: 0;
+}
+
+.nutrition-label-header {
+  display: grid;
+  flex: 0 0 auto;
+  min-height: 118px;
+  grid-template-columns: minmax(360px, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 15px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-canvas);
+}
+
+.nutrition-label-header__identity {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.nutrition-label-back {
+  display: inline-flex;
+  width: max-content;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.nutrition-label-back:hover {
+  color: var(--color-accent-hover);
+}
+
+.nutrition-label-back:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.nutrition-label-header__identity > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+}
+
+.nutrition-label-header h1 {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+.nutrition-label-header__identity p {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 13px;
+}
+
+.nutrition-label-header__standard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nutrition-label-header__standard select {
+  min-width: 182px;
+  height: 40px;
+  padding: 0 34px 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.nutrition-label-header__standard select:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px rgb(11 131 80 / 10%);
+}
+
+.nutrition-label-header__standard > span {
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.nutrition-label-header__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.nutrition-label-header__actions .button {
+  min-width: 112px;
+  height: 42px;
+  font-size: 13px;
+}
+
+.nutrition-label-header__actions .button--primary {
+  min-width: 156px;
+}
+
+.nutrition-label-settings {
+  display: grid;
+  flex: 0 0 auto;
+  min-height: 76px;
+  grid-template-columns: auto auto minmax(260px, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  margin: 14px 24px 0;
+  padding: 11px var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.nutrition-label-settings fieldset {
+  display: flex;
+  min-width: 410px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.nutrition-label-settings legend {
+  float: left;
+  margin-right: var(--space-2);
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.nutrition-basis-options {
+  display: grid;
+  grid-template-columns: repeat(3, 110px);
+}
+
+.nutrition-basis-options label {
+  position: relative;
+}
+
+.nutrition-basis-options input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nutrition-basis-options span {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-canvas);
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nutrition-basis-options label:first-child span {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.nutrition-basis-options label:last-child span {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.nutrition-basis-options label + label span {
+  margin-left: -1px;
+}
+
+.nutrition-basis-options input:checked + span {
+  position: relative;
+  z-index: 1;
+  border-color: var(--color-focus);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 650;
+}
+
+.nutrition-basis-options input:focus-visible + span {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.nutrition-rounding-field {
+  display: grid;
+  grid-template-columns: auto 160px;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--color-border);
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.nutrition-rounding-field select {
+  height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.nutrition-label-settings > p {
+  margin: 0;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--color-border);
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.nutrition-label-message {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 10px 24px 0;
+  padding: 7px var(--space-3);
+  border: 1px solid #b8d7c5;
+  border-radius: var(--radius-sm);
+  background: #f4fbf7;
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.nutrition-label-message.has-error {
+  border-color: #efc6c2;
+  background: #fff7f6;
+  color: var(--color-danger);
+}
+
+.nutrition-label-workspace__body {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(680px, 1.55fr) minmax(360px, 1fr);
+  gap: var(--space-4);
+  padding: 14px 24px 28px;
+}
+
+.nutrition-source-pane,
+.nutrition-label-preview-pane {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.nutrition-label-section-title {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nutrition-label-section-title h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.nutrition-label-section-title p {
+  margin: 3px 0 0;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.nutrition-label-section-title span {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.nutrition-source-table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.nutrition-source-table {
+  width: 100%;
+  min-width: 690px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.nutrition-source-table th,
+.nutrition-source-table td {
+  height: 58px;
+  padding: 8px 12px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  text-align: left;
+}
+
+.nutrition-source-table tr > :last-child {
+  border-right: 0;
+}
+
+.nutrition-source-table thead th {
+  height: 42px;
+  background: var(--color-table-header);
+  color: var(--color-ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nutrition-source-table thead th:nth-child(1) {
+  width: 18%;
+}
+
+.nutrition-source-table thead th:nth-child(2) {
+  width: 18%;
+}
+
+.nutrition-source-table thead th:nth-child(3) {
+  width: 24%;
+}
+
+.nutrition-source-table thead th:nth-child(4) {
+  width: 24%;
+}
+
+.nutrition-source-table thead th:nth-child(5) {
+  width: 16%;
+}
+
+.nutrition-source-table tbody tr {
+  cursor: pointer;
+}
+
+.nutrition-source-table tbody tr:hover,
+.nutrition-source-table tbody tr.is-selected {
+  background: var(--color-surface-muted);
+}
+
+.nutrition-source-table tbody th {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.nutrition-source-table td label {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.nutrition-source-table input,
+.nutrition-source-table select,
+.nutrition-source-evidence input,
+.nutrition-source-evidence select {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.nutrition-source-table input:focus,
+.nutrition-source-table select:focus,
+.nutrition-source-evidence input:focus,
+.nutrition-source-evidence select:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px rgb(11 131 80 / 10%);
+}
+
+.nutrition-source-table input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-muted);
+}
+
+.nutrition-source-table__automatic {
+  color: var(--color-ink-muted);
+}
+
+.nutrition-source-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nutrition-source-status.has-error {
+  color: var(--color-danger);
+}
+
+.nutrition-add-optional {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: #0866c5;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.nutrition-add-optional:disabled {
+  color: var(--color-ink-muted);
+}
+
+.nutrition-source-evidence {
+  padding: 16px var(--space-4) 18px;
+}
+
+.nutrition-source-evidence h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.nutrition-source-evidence h3 span {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 480;
+}
+
+.nutrition-source-evidence__fields {
+  display: grid;
+  grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.4fr) minmax(150px, .8fr);
+  gap: var(--space-4);
+}
+
+.nutrition-source-evidence__fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.nutrition-source-evidence__fields label > span {
+  color: var(--color-ink-soft);
+  font-size: 12px;
+}
+
+.nutrition-source-evidence__help,
+.nutrition-source-evidence > p {
+  margin: var(--space-3) 0 0;
+  color: var(--color-ink-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.nutrition-label-preview-pane {
+  align-self: start;
+  padding-bottom: 16px;
+}
+
+.nutrition-facts-sheet {
+  margin: 14px var(--space-4) 18px;
+  padding: 14px;
+  border: 1.5px solid var(--color-ink);
+  background: var(--color-canvas);
+}
+
+.nutrition-facts-sheet table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: #111;
+}
+
+.nutrition-facts-sheet caption {
+  padding: 0 0 12px;
+  border-bottom: 2px solid #111;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: .04em;
+}
+
+.nutrition-facts-sheet th,
+.nutrition-facts-sheet td {
+  height: 42px;
+  padding: 7px 9px;
+  border: 1px solid #aab0ad;
+  font-size: 13px;
+}
+
+.nutrition-facts-sheet thead th {
+  font-weight: 700;
+  text-align: center;
+}
+
+.nutrition-facts-sheet tbody th {
+  font-weight: 650;
+  text-align: left;
+}
+
+.nutrition-facts-sheet tbody td {
+  text-align: center;
+}
+
+.nutrition-facts-sheet__notice {
+  margin: 12px 0 0;
+  color: var(--color-ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.nutrition-publish-checks {
+  margin: 0 var(--space-4);
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+.nutrition-publish-checks .nutrition-label-section-title {
+  min-height: 50px;
+  padding: 8px 0;
+  border-bottom: 0;
+}
+
+.nutrition-publish-checks__row,
+.nutrition-publish-checks__issue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 10px;
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.nutrition-publish-checks__row.has-error,
+.nutrition-publish-checks__issue {
+  color: var(--color-danger);
+}
+
+.nutrition-publish-checks__issue {
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid #efc6c2;
+  border-radius: var(--radius-sm);
+  background: #fff7f6;
+  line-height: 1.5;
+}
+
+.nutrition-publish-checks__issue .icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.nutrition-publish-checks__source {
+  margin: 18px 0 0;
+  color: var(--color-ink-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1279px) {
+  .nutrition-label-header {
+    grid-template-columns: minmax(300px, 1fr) auto;
+  }
+
+  .nutrition-label-header__actions {
+    grid-column: 2;
+  }
+
+  .nutrition-label-settings {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nutrition-label-settings > p {
+    grid-column: 1 / -1;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .nutrition-label-workspace__body {
+    grid-template-columns: 1fr;
+  }
+
+  .nutrition-label-preview-pane {
+    width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .nutrition-label-header {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    padding: 14px var(--space-4);
+  }
+
+  .nutrition-label-header__identity > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nutrition-label-header__standard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .nutrition-label-header__standard select {
+    width: 100%;
+  }
+
+  .nutrition-label-header__actions {
+    display: grid;
+    grid-column: 1;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nutrition-label-header__actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .nutrition-label-settings {
+    grid-template-columns: 1fr;
+    margin: var(--space-3);
+  }
+
+  .nutrition-label-settings fieldset {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+
+  .nutrition-basis-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nutrition-rounding-field {
+    grid-template-columns: 100px minmax(0, 1fr);
+    padding: var(--space-3) 0 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .nutrition-label-settings > p {
+    padding-top: var(--space-3);
+  }
+
+  .nutrition-label-message {
+    margin: 0 var(--space-3) var(--space-3);
+  }
+
+  .nutrition-label-workspace__body {
+    padding: 0 var(--space-3) var(--space-5);
+  }
+
+  .nutrition-source-evidence__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .nutrition-facts-sheet {
+    margin-right: var(--space-3);
+    margin-left: var(--space-3);
+  }
+}
+
+@media (max-width: 620px) {
+  .nutrition-source-table {
+    min-width: 0;
+  }
+
+  .nutrition-source-table thead {
+    display: none;
+  }
+
+  .nutrition-source-table tbody,
+  .nutrition-source-table tr,
+  .nutrition-source-table th,
+  .nutrition-source-table td {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-right: 0;
+  }
+
+  .nutrition-source-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .nutrition-source-table tr > * {
+    padding: 7px 8px;
+    border-bottom: 0;
+  }
+
+  .nutrition-source-table tr > :first-child {
+    grid-column: 1 / -1;
+    font-size: 15px;
+  }
+
+  .nutrition-source-table td::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--color-ink-muted);
+    font-size: 10px;
+  }
+
+  .nutrition-source-table td:nth-child(2)::before {
+    content: "配方估算";
+  }
+
+  .nutrition-source-table td:nth-child(3)::before {
+    content: "检测 / 人工值";
+  }
+
+  .nutrition-source-table td:nth-child(4)::before {
+    content: "最终来源";
+  }
+
+  .nutrition-source-table td:nth-child(5)::before {
+    content: "完整性";
+  }
+}

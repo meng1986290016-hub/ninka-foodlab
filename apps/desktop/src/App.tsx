@@ -16,6 +16,7 @@ import { AppShell, type AppPage } from "./components/AppShell";
 import { AgentPanel } from "./features/agent/AgentPanel";
 import { IngredientLibrary } from "./features/ingredients/IngredientLibrary";
 import { ImportedVariantReview } from "./features/ingredients/ImportedVariantReview";
+import { NutritionLabelWorkspace } from "./features/labels/NutritionLabelWorkspace";
 import { RecipeLibrary } from "./features/recipes/RecipeLibrary";
 import { RecipeWorkbench } from "./features/recipes/RecipeWorkbench";
 import { SettingsPage } from "./features/settings/SettingsPage";
@@ -52,6 +53,10 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(
     null,
   );
+  const [activeNutritionLabel, setActiveNutritionLabel] = useState<{
+    recipeId: string;
+    recipeVersionId: string;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +70,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
 
   function navigate(page: AppPage) {
     if (page === "settings") setSettingsSection("general");
+    setActiveNutritionLabel(null);
     setActivePage(page);
   }
 
@@ -107,13 +113,33 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
         ) : activePage === "recipes" ? (
           <RecipeWorkbench api={desktopApi} recipeId={activeRecipeId} />
         ) : activePage === "recipe-library" ? (
-          <RecipeLibrary
-            api={desktopApi}
-            onOpenDraft={(recipeId) => {
-              setActiveRecipeId(recipeId);
-              setActivePage("recipes");
-            }}
-          />
+          activeNutritionLabel ? (
+            <NutritionLabelWorkspace
+              api={desktopApi}
+              onBack={() => setActiveNutritionLabel(null)}
+              recipeId={activeNutritionLabel.recipeId}
+              recipeVersionId={
+                activeNutritionLabel.recipeVersionId
+              }
+            />
+          ) : (
+            <RecipeLibrary
+              api={desktopApi}
+              onOpenDraft={(recipeId) => {
+                setActiveRecipeId(recipeId);
+                setActivePage("recipes");
+              }}
+              onOpenNutritionLabel={(
+                recipeId,
+                recipeVersionId,
+              ) =>
+                setActiveNutritionLabel({
+                  recipeId,
+                  recipeVersionId,
+                })
+              }
+            />
+          )
         ) : activePage === "settings" ? (
           <SettingsPage
             api={desktopApi}

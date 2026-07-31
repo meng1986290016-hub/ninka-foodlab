@@ -119,6 +119,22 @@ function calculate(
   });
 }
 
+it("treats a legacy ingredient without allergen fields as having no declarations", () => {
+  const legacyVariant = variant();
+  delete (legacyVariant as Partial<IngredientVariant>).allergens;
+
+  const result = calculate(draft([ingredientItem(legacyVariant)]));
+
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.value.calculation.allergens).toEqual({
+      contains: [],
+      mayContain: [],
+      sourceItemIds: {},
+    });
+  }
+});
+
 describe("recipe calculation adapter", () => {
   it("freezes the selected supplier nutrition and price into a deterministic snapshot", () => {
     const result = calculate(

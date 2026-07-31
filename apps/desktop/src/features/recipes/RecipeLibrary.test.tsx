@@ -433,6 +433,29 @@ describe("RecipeLibrary", () => {
     });
   });
 
+  it("opens the selected formal version in the nutrition label workspace", async () => {
+    const { api, yogurtVersions } = createApi();
+    const onOpenNutritionLabel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RecipeLibrary
+        api={api}
+        onOpenDraft={() => undefined}
+        onOpenNutritionLabel={onOpenNutritionLabel}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "生成营养标签",
+      }),
+    );
+    expect(onOpenNutritionLabel).toHaveBeenCalledWith(
+      "yogurt",
+      yogurtVersions[0]!.id,
+    );
+  });
+
   it("temporarily recalculates with current prices without changing the snapshot", async () => {
     const { api, yogurtVersions } = createApi();
     const user = userEvent.setup();

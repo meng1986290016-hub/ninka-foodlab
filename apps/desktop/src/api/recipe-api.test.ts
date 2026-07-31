@@ -479,4 +479,148 @@ describe("recipe desktop API", () => {
       }),
     ]);
   });
+
+  it("describes supplier and target changes with both frozen values", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `comparison-id-${++sequence}`,
+      now: () => "2026-07-30T13:00:00.000Z",
+    });
+    const recipe = await api.createRecipe({
+      name: "供应商比较酸奶",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft(
+      draftInput(recipe.id, "1000", "3.2", "第一版"),
+    );
+    const beforeSnapshot = snapshot(
+      recipe,
+      "1000",
+      "3.2",
+      "第一版",
+    );
+    beforeSnapshot.items = [
+      {
+        id: "milk",
+        position: 0,
+        kind: "ingredient",
+        amount: "300",
+        unit: "g",
+        massGrams: "300",
+        locked: false,
+        autoFill: false,
+        ingredient: {
+          ingredientVariantId: "milk-a",
+          materialGroupId: "milk-group",
+          materialName: "脱脂乳粉",
+          supplierId: "supplier-a",
+          supplierName: "乳业 A",
+          modelOrSpecification: "低热型",
+          densityGPerMl: null,
+          nutrientsPer100g: {},
+          nutrientUnits: {},
+          pricePerKg: "30",
+          allergens: {
+            contains: ["乳及乳制品"],
+            mayContain: [],
+            sourceItemIds: {},
+          },
+          source: "A 规格书",
+          ingredientUpdatedAt: "2026-07-29T00:00:00.000Z",
+        },
+      },
+    ];
+    beforeSnapshot.targets = [
+      {
+        id: "protein-target",
+        metric: {
+          kind: "nutrition_per_100g",
+          nutrientDefinitionId: "protein",
+          nutrientName: "蛋白质",
+          unit: "g",
+        },
+        minimum: "3",
+        maximum: null,
+      },
+    ];
+    beforeSnapshot.calculation.targets = [
+      {
+        targetId: "protein-target",
+        status: "met",
+        observed: "3.2",
+        deltaToMinimum: "0.2",
+        deltaToMaximum: null,
+      },
+    ];
+    const first = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: draft.id,
+      basedOnVersionId: null,
+      snapshot: beforeSnapshot,
+      dependencyVersionIds: [],
+    });
+
+    const nextDraftInput = draftInput(
+      recipe.id,
+      "1000",
+      "3.8",
+      "第二版",
+    );
+    nextDraftInput.basedOnVersionId = first.id;
+    const nextDraft = await api.saveRecipeDraft(nextDraftInput);
+    const afterSnapshot = structuredClone(beforeSnapshot);
+    afterSnapshot.markdownNotes = "第二版";
+    const afterItem = afterSnapshot.items[0];
+    if (!afterItem || afterItem.kind !== "ingredient") {
+      throw new Error("missing comparison item");
+    }
+    afterItem.amount = "280";
+    afterItem.massGrams = "280";
+    afterItem.ingredient.ingredientVariantId = "milk-b";
+    afterItem.ingredient.supplierId = "supplier-b";
+    afterItem.ingredient.supplierName = "乳业 B";
+    afterItem.ingredient.modelOrSpecification = "中热型";
+    afterSnapshot.targets[0]!.minimum = "3.5";
+    afterSnapshot.calculation.targets[0] = {
+      targetId: "protein-target",
+      status: "met",
+      observed: "3.80000000000000000000",
+      deltaToMinimum: "0.3",
+      deltaToMaximum: null,
+    };
+    const second = await api.createRecipeVersion({
+      recipeId: recipe.id,
+      sourceDraftId: nextDraft.id,
+      basedOnVersionId: first.id,
+      snapshot: afterSnapshot,
+      dependencyVersionIds: [],
+    });
+
+    const compared = await api.compareRecipeVersions(
+      first.id,
+      second.id,
+    );
+    expect(compared.itemChanges).toEqual([
+      expect.objectContaining({
+        kind: "reference_changed",
+        beforeLabel: "脱脂乳粉 · 乳业 A · 低热型",
+        afterLabel: "脱脂乳粉 · 乳业 B · 中热型",
+        beforeAmountGrams: "300",
+        afterAmountGrams: "280",
+      }),
+    ]);
+    expect(compared.targetChanges).toEqual([
+      expect.objectContaining({
+        label: "蛋白质（每 100g）",
+        unit: "g",
+        before: "≥ 3 g · 实际 3.2 · 已达到",
+        after: "≥ 3.5 g · 实际 3.8 · 已达到",
+      }),
+    ]);
+    expect(compared.notesChanged).toBe(true);
+  });
 });

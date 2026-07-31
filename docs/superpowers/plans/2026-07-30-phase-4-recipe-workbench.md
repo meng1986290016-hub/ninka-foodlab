@@ -297,8 +297,8 @@
 - 重启后草稿、版本和半成品引用保持一致。
 - 浏览器演示和 Tauri 使用相同业务契约。
 
-- [ ] **Step 1:** 写版本差异和完整研发闭环测试。
-- [ ] **Step 2:** 实现比较界面。
-- [ ] **Step 3:** 完成全量前端/Rust/core 回归。
-- [ ] **Step 4:** 编写第四阶段人工验收清单与 README。
-- [ ] **Step 5:** 提交 `test(recipes): verify recipe R&D workflow`。
+- [x] **Step 1:** 写版本差异和完整研发闭环测试。
+- [x] **Step 2:** 实现比较界面。
+- [x] **Step 3:** 完成全量前端/Rust/core 回归。
+- [x] **Step 4:** 编写第四阶段人工验收清单与 README。
+- [x] **Step 5:** 提交 `test(recipes): verify recipe R&D workflow`。

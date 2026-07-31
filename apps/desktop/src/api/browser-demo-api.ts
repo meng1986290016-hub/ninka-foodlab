@@ -276,20 +276,16 @@ function buildRecipeVersionComparison(
   for (const itemId of new Set([...beforeItems.keys(), ...afterItems.keys()])) {
     const beforeItem = beforeItems.get(itemId);
     const afterItem = afterItems.get(itemId);
-    const label = afterItem?.kind === "ingredient"
-      ? `${afterItem.ingredient.materialName} · ${afterItem.ingredient.supplierName}`
-      : afterItem?.kind === "recipe_version"
-        ? `${afterItem.recipeVersion.recipeName} v${afterItem.recipeVersion.versionNumber}`
-        : beforeItem?.kind === "ingredient"
-          ? `${beforeItem.ingredient.materialName} · ${beforeItem.ingredient.supplierName}`
-          : beforeItem?.kind === "recipe_version"
-            ? `${beforeItem.recipeVersion.recipeName} v${beforeItem.recipeVersion.versionNumber}`
-            : itemId;
+    const beforeLabel = beforeItem ? comparisonItemLabel(beforeItem) : null;
+    const afterLabel = afterItem ? comparisonItemLabel(afterItem) : null;
+    const label = afterLabel ?? beforeLabel ?? itemId;
     if (!beforeItem || !afterItem) {
       itemChanges.push({
         kind: beforeItem ? "removed" : "added",
         itemKey: itemId,
         label,
+        beforeLabel,
+        afterLabel,
         beforeAmountGrams: beforeItem?.massGrams ?? null,
         afterAmountGrams: afterItem?.massGrams ?? null,
       });
@@ -306,6 +302,8 @@ function buildRecipeVersionComparison(
         kind: "reference_changed",
         itemKey: itemId,
         label,
+        beforeLabel: beforeLabel ?? label,
+        afterLabel: afterLabel ?? label,
         beforeAmountGrams: beforeItem.massGrams,
         afterAmountGrams: afterItem.massGrams,
       });
@@ -314,6 +312,8 @@ function buildRecipeVersionComparison(
         kind: "amount_changed",
         itemKey: itemId,
         label,
+        beforeLabel: beforeLabel ?? label,
+        afterLabel: afterLabel ?? label,
         beforeAmountGrams: beforeItem.massGrams,
         afterAmountGrams: afterItem.massGrams,
       });
@@ -349,14 +349,26 @@ function buildRecipeVersionComparison(
     );
   const targets = (version: RecipeVersion) =>
     new Map(
-      version.snapshot.calculation.targets.map((target) => [
-        target.targetId,
-        {
-          label: target.targetId,
-          unit: null,
-          value: target.observed,
-        },
-      ]),
+      version.snapshot.targets.map((target) => {
+        const evaluation = version.snapshot.calculation.targets.find(
+          (candidate) => candidate.targetId === target.id,
+        );
+        return [
+          target.id,
+          {
+            label: comparisonTargetLabel(target),
+            unit:
+              target.metric.kind === "cost"
+                ? "CNY"
+                : target.metric.unit,
+            value: [
+              comparisonTargetRange(target),
+              `实际 ${comparisonObservedValue(evaluation?.observed)}`,
+              comparisonTargetStatus(evaluation?.status ?? "unknown"),
+            ].join(" · "),
+          },
+        ];
+      }),
     );
   const allergens = (version: RecipeVersion) =>
     new Map([
@@ -389,6 +401,67 @@ function buildRecipeVersionComparison(
     notesChanged:
       before.snapshot.markdownNotes !== after.snapshot.markdownNotes,
   };
+}
+
+function comparisonItemLabel(
+  item: RecipeVersion["snapshot"]["items"][number],
+) {
+  return item.kind === "ingredient"
+    ? [
+        item.ingredient.materialName,
+        item.ingredient.supplierName,
+        item.ingredient.modelOrSpecification,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : `${item.recipeVersion.recipeName} V${item.recipeVersion.versionNumber}`;
+}
+
+function comparisonTargetLabel(
+  target: RecipeVersion["snapshot"]["targets"][number],
+) {
+  if (target.metric.kind === "nutrition_per_100g") {
+    return `${target.metric.nutrientName}（每 100g）`;
+  }
+  const labels = {
+    batch: "整批成本",
+    per_kg: "每千克成本",
+    per_100g: "每 100g 成本",
+    per_serving: "每份成本",
+    per_package: "每包装成本",
+  };
+  return labels[target.metric.basis];
+}
+
+function comparisonTargetRange(
+  target: RecipeVersion["snapshot"]["targets"][number],
+) {
+  const unit =
+    target.metric.kind === "cost" ? " 元" : ` ${target.metric.unit}`;
+  if (target.minimum !== null && target.maximum !== null) {
+    return `${target.minimum}–${target.maximum}${unit}`;
+  }
+  if (target.minimum !== null) return `≥ ${target.minimum}${unit}`;
+  if (target.maximum !== null) return `≤ ${target.maximum}${unit}`;
+  return "未设置范围";
+}
+
+function comparisonTargetStatus(
+  status: "met" | "below" | "above" | "unknown",
+) {
+  return {
+    met: "已达到",
+    below: "低于目标",
+    above: "高于目标",
+    unknown: "待计算",
+  }[status];
+}
+
+function comparisonObservedValue(value: string | null | undefined) {
+  if (value === null || value === undefined) return "未知";
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return value;
+  return numericValue.toFixed(4).replace(/\.?0+$/, "");
 }
 
 function demoMediaType(extension: string) {

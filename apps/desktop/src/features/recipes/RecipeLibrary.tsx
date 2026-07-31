@@ -17,6 +17,7 @@ import {
   loadRecipeVersionClosure,
   type RecipeCurrentPriceResult,
 } from "./recipe-current-price";
+import { RecipeVersionComparisonPanel } from "./RecipeVersionComparisonPanel";
 
 interface RecipeLibraryProps {
   api: DesktopApi;
@@ -73,6 +74,7 @@ export function RecipeLibrary({
   const [archiveCandidate, setArchiveCandidate] =
     useState<RecipeSummary | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -239,7 +241,13 @@ export function RecipeLibrary({
   }
 
   return (
-    <section className="recipe-library">
+    <section
+      className={
+        comparisonOpen
+          ? "recipe-library is-comparing"
+          : "recipe-library"
+      }
+    >
       <div className="recipe-library__main">
         <header className="recipe-library__header">
           <div>
@@ -413,19 +421,30 @@ export function RecipeLibrary({
         </div>
       </div>
 
-      <RecipeVersionInspector
-        currentPrice={currentPrice}
-        entry={selectedEntry}
-        onArchive={() => {
-          if (selectedEntry) setArchiveCandidate(selectedEntry.summary);
-        }}
-        onCopy={() => void copyToDraft()}
-        onRecalculate={() => void recalculateCurrentPrice()}
-        onSelectVersion={setSelectedVersionId}
-        recalculating={recalculating}
-        selectedVersion={selectedVersion}
-        copying={copying}
-      />
+      {comparisonOpen && selectedEntry ? (
+        <RecipeVersionComparisonPanel
+          api={api}
+          key={selectedEntry.summary.recipe.id}
+          onClose={() => setComparisonOpen(false)}
+          recipeName={selectedEntry.summary.recipe.name}
+          versions={selectedEntry.versions}
+        />
+      ) : (
+        <RecipeVersionInspector
+          currentPrice={currentPrice}
+          entry={selectedEntry}
+          onArchive={() => {
+            if (selectedEntry) setArchiveCandidate(selectedEntry.summary);
+          }}
+          onCompare={() => setComparisonOpen(true)}
+          onCopy={() => void copyToDraft()}
+          onRecalculate={() => void recalculateCurrentPrice()}
+          onSelectVersion={setSelectedVersionId}
+          recalculating={recalculating}
+          selectedVersion={selectedVersion}
+          copying={copying}
+        />
+      )}
 
       {archiveCandidate ? (
         <div className="recipe-library-dialog-backdrop">
@@ -478,6 +497,7 @@ interface RecipeVersionInspectorProps {
   onCopy(): void;
   onRecalculate(): void;
   onArchive(): void;
+  onCompare(): void;
 }
 
 function RecipeVersionInspector({
@@ -490,6 +510,7 @@ function RecipeVersionInspector({
   onCopy,
   onRecalculate,
   onArchive,
+  onCompare,
 }: RecipeVersionInspectorProps) {
   if (entry === null) {
     return (
@@ -549,6 +570,20 @@ function RecipeVersionInspector({
         >
           <Icon name="trend" size={16} />
           {recalculating ? "正在重算…" : "按当前价格重算"}
+        </button>
+        <button
+          className="button button--secondary recipe-library__compare-button"
+          disabled={entry.versions.length < 2}
+          onClick={onCompare}
+          title={
+            entry.versions.length < 2
+              ? "至少需要两个正式版本"
+              : undefined
+          }
+          type="button"
+        >
+          <Icon name="formula" size={16} />
+          比较版本
         </button>
         <button
           className="recipe-library__archive-button"

@@ -376,6 +376,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
             (Some(before_item), Some(after_item)) => {
                 let before_reference = item_reference(before_item);
                 let after_reference = item_reference(after_item);
+                let before_label = item_label(before_item);
+                let after_label = item_label(after_item);
                 let before_mass = string_at(before_item, "/massGrams").unwrap_or("0");
                 let after_mass = string_at(after_item, "/massGrams").unwrap_or("0");
                 if before_reference != after_reference {
@@ -383,6 +385,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
                         "kind": "reference_changed",
                         "itemKey": key,
                         "label": label,
+                        "beforeLabel": before_label,
+                        "afterLabel": after_label,
                         "beforeAmountGrams": before_mass,
                         "afterAmountGrams": after_mass,
                     }));
@@ -391,6 +395,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
                         "kind": "amount_changed",
                         "itemKey": key,
                         "label": label,
+                        "beforeLabel": before_label,
+                        "afterLabel": after_label,
                         "beforeAmountGrams": before_mass,
                         "afterAmountGrams": after_mass,
                     }));
@@ -400,6 +406,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
                 "kind": "removed",
                 "itemKey": key,
                 "label": label,
+                "beforeLabel": item_label(before_item),
+                "afterLabel": null,
                 "beforeAmountGrams": string_at(before_item, "/massGrams"),
                 "afterAmountGrams": null,
             })),
@@ -407,6 +415,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
                 "kind": "added",
                 "itemKey": key,
                 "label": label,
+                "beforeLabel": null,
+                "afterLabel": item_label(after_item),
                 "beforeAmountGrams": null,
                 "afterAmountGrams": string_at(after_item, "/massGrams"),
             })),
@@ -539,6 +549,12 @@ fn cost_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, Comparis
 fn target_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
     let targets = version
         .snapshot
+        .get("targets")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let evaluations = version
+        .snapshot
         .pointer("/calculation/targets")
         .and_then(Value::as_array)
         .cloned()
@@ -546,27 +562,114 @@ fn target_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, Compar
     let mut keys = Vec::new();
     let mut cells = HashMap::new();
     for target in targets {
-        let Some(key) = target
-            .get("targetId")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-        else {
+        let Some(key) = target.get("id").and_then(Value::as_str).map(str::to_string) else {
             continue;
         };
+        let evaluation = evaluations.iter().find(|candidate| {
+            candidate.get("targetId").and_then(Value::as_str) == Some(key.as_str())
+        });
+        let (label, unit) = target_metric_label_and_unit(&target);
+        let observed = evaluation
+            .and_then(|value| value.get("observed"))
+            .and_then(Value::as_str)
+            .map(format_observed_value)
+            .unwrap_or_else(|| "未知".into());
+        let status = evaluation
+            .and_then(|value| value.get("status"))
+            .and_then(Value::as_str)
+            .map(target_status_label)
+            .unwrap_or("待计算");
         keys.push(key.clone());
         cells.insert(
-            key.clone(),
+            key,
             ComparisonCell {
-                label: key,
-                unit: None,
-                value: target
-                    .get("observed")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
+                label,
+                unit,
+                value: Some(format!(
+                    "{} · 实际 {} · {}",
+                    target_range_label(&target),
+                    observed,
+                    status
+                )),
             },
         );
     }
     (keys, cells)
+}
+
+fn format_observed_value(value: &str) -> String {
+    let Ok(number) = value.parse::<f64>() else {
+        return value.to_string();
+    };
+    if !number.is_finite() {
+        return value.to_string();
+    }
+    let formatted = format!("{number:.4}");
+    formatted
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
+}
+
+fn target_metric_label_and_unit(target: &Value) -> (String, Option<String>) {
+    let Some(metric) = target.get("metric") else {
+        return ("未命名目标".into(), None);
+    };
+    match metric.get("kind").and_then(Value::as_str) {
+        Some("nutrition_per_100g") => (
+            format!(
+                "{}（每 100g）",
+                metric
+                    .get("nutrientName")
+                    .and_then(Value::as_str)
+                    .unwrap_or("营养素")
+            ),
+            metric
+                .get("unit")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        ),
+        Some("cost") => {
+            let label = match metric.get("basis").and_then(Value::as_str) {
+                Some("batch") => "整批成本",
+                Some("per_kg") => "每千克成本",
+                Some("per_100g") => "每 100g 成本",
+                Some("per_serving") => "每份成本",
+                Some("per_package") => "每包装成本",
+                _ => "成本",
+            };
+            (label.into(), Some("CNY".into()))
+        }
+        _ => ("未命名目标".into(), None),
+    }
+}
+
+fn target_range_label(target: &Value) -> String {
+    let minimum = target.get("minimum").and_then(Value::as_str);
+    let maximum = target.get("maximum").and_then(Value::as_str);
+    let unit = match target.pointer("/metric/kind").and_then(Value::as_str) {
+        Some("cost") => " 元".to_string(),
+        _ => target
+            .pointer("/metric/unit")
+            .and_then(Value::as_str)
+            .map(|value| format!(" {value}"))
+            .unwrap_or_default(),
+    };
+    match (minimum, maximum) {
+        (Some(minimum), Some(maximum)) => format!("{minimum}–{maximum}{unit}"),
+        (Some(minimum), None) => format!("≥ {minimum}{unit}"),
+        (None, Some(maximum)) => format!("≤ {maximum}{unit}"),
+        (None, None) => "未设置范围".into(),
+    }
+}
+
+fn target_status_label(status: &str) -> &'static str {
+    match status {
+        "met" => "已达到",
+        "below" => "低于目标",
+        "above" => "高于目标",
+        _ => "待计算",
+    }
 }
 
 fn allergen_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
@@ -641,13 +744,17 @@ fn item_reference(item: &Value) -> Option<String> {
 
 fn item_label(item: &Value) -> String {
     match item.get("kind").and_then(Value::as_str) {
-        Some("ingredient") => format!(
-            "{} · {}",
+        Some("ingredient") => [
             string_at(item, "/ingredient/materialName").unwrap_or("未命名原料"),
             string_at(item, "/ingredient/supplierName").unwrap_or("未指定供应商"),
-        ),
+            string_at(item, "/ingredient/modelOrSpecification").unwrap_or_default(),
+        ]
+        .into_iter()
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · "),
         Some("recipe_version") => format!(
-            "{} v{}",
+            "{} V{}",
             string_at(item, "/recipeVersion/recipeName").unwrap_or("未命名配方"),
             item.pointer("/recipeVersion/versionNumber")
                 .and_then(Value::as_i64)
@@ -754,5 +861,12 @@ mod tests {
                 "after": "0"
             }])
         );
+    }
+
+    #[test]
+    fn comparison_observed_values_use_readable_precision() {
+        assert_eq!(format_observed_value("0.25347368421052631579"), "0.2535");
+        assert_eq!(format_observed_value("3.80000000000000000000"), "3.8");
+        assert_eq!(format_observed_value("未知"), "未知");
     }
 }

@@ -227,6 +227,10 @@ function createApi() {
     version(yogurt, 2, "42"),
     version(yogurt, 1, "30"),
   ];
+  yogurtVersions[0]!.snapshot.markdownNotes =
+    "发酵温度 42℃，口感更顺滑。";
+  yogurtVersions[1]!.snapshot.markdownNotes =
+    "发酵温度 40℃，酸感偏弱。";
   const base = recipe("base", "乳基底", {
     kind: "semi_finished",
     tags: ["基底"],
@@ -279,6 +283,72 @@ function createApi() {
         found.recipe.archivedAt = "2026-07-31T09:00:00.000Z";
       }
     }),
+    compareRecipeVersions: vi.fn(async () => ({
+      before: {
+        id: yogurtVersions[1]!.id,
+        recipeId: yogurt.id,
+        recipeName: yogurt.name,
+        versionNumber: 1,
+        outputMassGrams: "1000",
+        createdAt: yogurtVersions[1]!.createdAt,
+      },
+      after: {
+        id: yogurtVersions[0]!.id,
+        recipeId: yogurt.id,
+        recipeName: yogurt.name,
+        versionNumber: 2,
+        outputMassGrams: "1000",
+        createdAt: yogurtVersions[0]!.createdAt,
+      },
+      itemChanges: [
+        {
+          kind: "reference_changed",
+          itemKey: "milk",
+          label: "脱脂乳粉 · 乳业 B · 中热型",
+          beforeLabel: "脱脂乳粉 · 乳业 A · 低热型",
+          afterLabel: "脱脂乳粉 · 乳业 B · 中热型",
+          beforeAmountGrams: "300",
+          afterAmountGrams: "280",
+        },
+      ],
+      nutritionChanges: [
+        {
+          key: "protein",
+          label: "蛋白质",
+          unit: "g",
+          before: null,
+          after: "0",
+        },
+      ],
+      costChanges: [
+        {
+          key: "batchTotal",
+          label: "整批成本",
+          unit: "CNY",
+          before: "30",
+          after: "42",
+        },
+      ],
+      targetChanges: [
+        {
+          key: "target-cost",
+          label: "每 100g 成本",
+          unit: "CNY",
+          before: "≤ 3 元 · 实际 3 · 已达到",
+          after: "≤ 4.2 元 · 实际 4.2 · 已达到",
+        },
+      ],
+      allergenChanges: [
+        {
+          key: "mayContain",
+          label: "可能含有",
+          unit: null,
+          before: "",
+          after: "大豆",
+        },
+      ],
+      notesChanged: true,
+    })),
   } as unknown as DesktopApi;
   return { api, yogurt, yogurtVersions, base };
 }
@@ -332,7 +402,9 @@ describe("RecipeLibrary", () => {
     expect(
       (await within(inspector).findAllByText("¥42")).length,
     ).toBeGreaterThan(0);
-    expect(within(inspector).getByText("发酵温度保持 42℃。")).toBeTruthy();
+    expect(
+      within(inspector).getByText("发酵温度 42℃，口感更顺滑。"),
+    ).toBeTruthy();
     expect(within(inspector).getByText("乳业 A · 低热型")).toBeTruthy();
 
     await user.click(
@@ -420,5 +492,54 @@ describe("RecipeLibrary", () => {
       ).disabled,
     ).toBe(true);
     expect(api.archiveRecipe).not.toHaveBeenCalled();
+  });
+
+  it("compares supplier, amount, nutrition, cost, target, allergen and notes changes", async () => {
+    const { api, yogurtVersions } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "比较版本" }),
+    );
+    const panel = await screen.findByLabelText("高蛋白酸奶版本比较");
+    await within(panel).findByText("共 6 项变化");
+
+    expect(
+      (
+        within(panel).getByRole("combobox", {
+          name: "基准版本",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe(yogurtVersions[1]!.id);
+    expect(
+      (
+        within(panel).getByRole("combobox", {
+          name: "对比版本",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe(yogurtVersions[0]!.id);
+    expect(
+      within(panel).getByText("脱脂乳粉 · 乳业 A · 低热型"),
+    ).toBeTruthy();
+    expect(
+      within(panel).getByText("脱脂乳粉 · 乳业 B · 中热型"),
+    ).toBeTruthy();
+    expect(within(panel).getByText("来源变化")).toBeTruthy();
+    expect(within(panel).getByText("未知 → 0 g")).toBeTruthy();
+    expect(within(panel).getByText("+¥12")).toBeTruthy();
+    expect(
+      within(panel).getByText("发酵温度 40℃，酸感偏弱。"),
+    ).toBeTruthy();
+    expect(
+      within(panel).getByText("发酵温度 42℃，口感更顺滑。"),
+    ).toBeTruthy();
+
+    await user.click(
+      within(panel).getByRole("button", { name: "关闭版本比较" }),
+    );
+    expect(
+      await screen.findByLabelText("高蛋白酸奶版本详情"),
+    ).toBeTruthy();
   });
 });

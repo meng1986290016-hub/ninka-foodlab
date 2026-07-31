@@ -325,6 +325,8 @@ export type RecipeVersionItemChange =
       kind: "added" | "removed";
       itemKey: string;
       label: string;
+      beforeLabel: string | null;
+      afterLabel: string | null;
       beforeAmountGrams: RecipeDecimal | null;
       afterAmountGrams: RecipeDecimal | null;
     }
@@ -332,6 +334,8 @@ export type RecipeVersionItemChange =
       kind: "amount_changed" | "reference_changed";
       itemKey: string;
       label: string;
+      beforeLabel: string;
+      afterLabel: string;
       beforeAmountGrams: RecipeDecimal;
       afterAmountGrams: RecipeDecimal;
     };

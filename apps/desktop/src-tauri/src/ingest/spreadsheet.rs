@@ -219,22 +219,19 @@ pub fn parse_ingredient_table(
 
         let nutrients = NUTRIENT_COLUMNS
             .iter()
-            .filter_map(|nutrient| {
-                headers
-                    .contains_key(nutrient.header)
-                    .then(|| ImportedNutrientValue {
-                        definition_id: Some(nutrient.definition_id.into()),
-                        name: nutrient.name.into(),
-                        unit: nutrient.unit.into(),
-                        value: decimal_cell(
-                            row,
-                            &headers,
-                            nutrient.header,
-                            &format!("nutrients.{}.value", nutrient.definition_id),
-                            human_row,
-                            &mut row_issues,
-                        ),
-                    })
+            .filter(|nutrient| headers.contains_key(nutrient.header))
+            .map(|nutrient| ImportedNutrientValue {
+                definition_id: Some(nutrient.definition_id.into()),
+                name: nutrient.name.into(),
+                unit: nutrient.unit.into(),
+                value: decimal_cell(
+                    row,
+                    &headers,
+                    nutrient.header,
+                    &format!("nutrients.{}.value", nutrient.definition_id),
+                    human_row,
+                    &mut row_issues,
+                ),
             })
             .collect::<Vec<_>>();
         let contains_allergens = split_allergens(cell(row, &headers, "含有过敏原"));

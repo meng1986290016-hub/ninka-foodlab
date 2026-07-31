@@ -16,6 +16,7 @@ import { AppShell, type AppPage } from "./components/AppShell";
 import { AgentPanel } from "./features/agent/AgentPanel";
 import { IngredientLibrary } from "./features/ingredients/IngredientLibrary";
 import { ImportedVariantReview } from "./features/ingredients/ImportedVariantReview";
+import { RecipeLibrary } from "./features/recipes/RecipeLibrary";
 import { RecipeWorkbench } from "./features/recipes/RecipeWorkbench";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import "./styles/app.css";
@@ -48,6 +49,9 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     useState<IngredientImportDraft | null>(null);
   const [ingredientRefreshToken, setIngredientRefreshToken] = useState(0);
   const [draftRefreshToken, setDraftRefreshToken] = useState(0);
+  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -101,19 +105,22 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
             refreshToken={ingredientRefreshToken}
           />
         ) : activePage === "recipes" ? (
-          <RecipeWorkbench api={desktopApi} />
+          <RecipeWorkbench api={desktopApi} recipeId={activeRecipeId} />
+        ) : activePage === "recipe-library" ? (
+          <RecipeLibrary
+            api={desktopApi}
+            onOpenDraft={(recipeId) => {
+              setActiveRecipeId(recipeId);
+              setActivePage("recipes");
+            }}
+          />
         ) : activePage === "settings" ? (
           <SettingsPage
             api={desktopApi}
             initialSection={settingsSection}
             key={settingsSection}
           />
-        ) : (
-          <section className="future-page">
-            <h1>配方库</h1>
-            <p>该功能将在后续阶段开放，当前原料库和设置可正常使用。</p>
-          </section>
-        )}
+        ) : null}
       </AppShell>
       {reviewDraft ? (
         <ImportedVariantReview

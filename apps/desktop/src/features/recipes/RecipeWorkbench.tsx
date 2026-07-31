@@ -40,11 +40,15 @@ import { useRecipeDraft } from "./useRecipeDraft";
 
 interface RecipeWorkbenchProps {
   api: DesktopApi;
+  recipeId?: string | null;
 }
 
 type NarrowView = "formula" | "results" | "targets";
 
-export function RecipeWorkbench({ api }: RecipeWorkbenchProps) {
+export function RecipeWorkbench({
+  api,
+  recipeId = null,
+}: RecipeWorkbenchProps) {
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -69,6 +73,11 @@ export function RecipeWorkbench({ api }: RecipeWorkbenchProps) {
   }, [refresh]);
 
   const active =
+    recipes.find(
+      (summary) =>
+        summary.recipe.id === recipeId &&
+        summary.recipe.archivedAt === null,
+    ) ??
     recipes.find(
       (summary) =>
         summary.recipe.kind === "formula" &&

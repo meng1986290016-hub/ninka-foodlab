@@ -30,3 +30,53 @@ pub struct BackupManifest {
     pub attachments: Vec<BackupFileEntry>,
     pub totals: BackupTotals,
 }
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupDataCounts {
+    pub material_groups: u64,
+    pub ingredient_variants: u64,
+    pub recipes: u64,
+    pub recipe_versions: u64,
+    pub nutrition_labels: u64,
+    pub nutrition_label_versions: u64,
+    pub research_reports: u64,
+    pub agent_conversations: u64,
+}
+
+impl BackupDataCounts {
+    pub fn total(&self) -> u64 {
+        self.material_groups
+            + self.ingredient_variants
+            + self.recipes
+            + self.recipe_versions
+            + self.nutrition_labels
+            + self.nutrition_label_versions
+            + self.research_reports
+            + self.agent_conversations
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupPreflight {
+    pub created_at: String,
+    pub application_version: String,
+    pub source_schema_version: i64,
+    pub target_schema_version: i64,
+    pub requires_migration: bool,
+    pub database_bytes: u64,
+    pub attachment_count: u64,
+    pub attachment_bytes: u64,
+    pub total_bytes: u64,
+    pub data_record_count: u64,
+    pub counts: BackupDataCounts,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRestoreResult {
+    pub preflight: BackupPreflight,
+    pub safety_backup_file_name: String,
+    pub restored_schema_version: i64,
+}

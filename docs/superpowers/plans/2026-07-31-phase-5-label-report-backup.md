@@ -284,10 +284,10 @@
 - 任一步失败均回滚到恢复前状态。
 - 支持从当前已发布历史 schema 升级，不支持静默降级覆盖。
 
-- [ ] **Step 1:** 写成功、损坏、旧版升级和失败回滚测试。
-- [ ] **Step 2:** 实现恢复协调器。
-- [ ] **Step 3:** 完成真实文件数据库重启测试。
-- [ ] **Step 4:** 提交 `feat(backup): restore with atomic rollback`。
+- [x] **Step 1:** 写成功、损坏、旧版升级和失败回滚测试。
+- [x] **Step 2:** 实现恢复协调器。
+- [x] **Step 3:** 完成真实文件数据库重启测试。
+- [x] **Step 4:** 提交 `feat(backup): restore with atomic rollback`。
 
 ### Task 12：实现数据管理界面与阶段验收
 

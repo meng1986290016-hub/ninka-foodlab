@@ -173,6 +173,50 @@ pub fn inspect_offline_backup(path: &Path) -> Result<BackupManifest, RepositoryE
     Ok(manifest)
 }
 
+pub(crate) fn extract_verified_backup(
+    path: &Path,
+    destination: &Path,
+) -> Result<BackupManifest, RepositoryError> {
+    let manifest = inspect_offline_backup(path)?;
+    fs::create_dir(destination).map_err(RepositoryError::io)?;
+    let file = File::open(path).map_err(RepositoryError::io)?;
+    let mut archive = ZipArchive::new(file).map_err(zip_invalid)?;
+    let current_manifest = {
+        let mut entry = archive
+            .by_name(MANIFEST_ARCHIVE_PATH)
+            .map_err(|_| invalid_backup("备份清单缺失"))?;
+        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut bytes).map_err(RepositoryError::io)?;
+        serde_json::from_slice::<BackupManifest>(&bytes)
+            .map_err(|_| invalid_backup("备份清单无效"))?
+    };
+    if current_manifest != manifest || archive.len() != manifest.attachments.len() + 2 {
+        return Err(invalid_backup("备份文件在校验期间发生变化"));
+    }
+    for expected in std::iter::once(&manifest.database).chain(manifest.attachments.iter()) {
+        let mut source = archive
+            .by_name(&expected.path)
+            .map_err(|_| invalid_backup("备份包文件不完整"))?;
+        let output = destination.join(&expected.path);
+        let parent = output
+            .parent()
+            .ok_or_else(|| invalid_backup("备份包路径无效"))?;
+        fs::create_dir_all(parent).map_err(RepositoryError::io)?;
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&output)
+            .map_err(RepositoryError::io)?;
+        std::io::copy(&mut source, &mut file).map_err(RepositoryError::io)?;
+        file.sync_all().map_err(RepositoryError::io)?;
+        let actual = file_entry(&output, &expected.path)?;
+        if actual != *expected {
+            return Err(invalid_backup("备份文件校验和不一致"));
+        }
+    }
+    Ok(manifest)
+}
+
 fn validate_create_request(
     source: &BackupSource<'_>,
     destination: &Path,

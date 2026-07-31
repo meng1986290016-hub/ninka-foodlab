@@ -1,5 +1,6 @@
 import {
   createResearchReportDocument,
+  researchReportDocumentHash,
   renderResearchReportSvg,
 } from "@food-rd/core";
 import { describe, expect, it, vi } from "vitest";
@@ -7,7 +8,10 @@ import { describe, expect, it, vi } from "vitest";
 import { BrowserDemoApi } from "./browser-demo-api";
 import type { NutritionLabelDraftSaveInput } from "./nutrition-label-types";
 import type { RecipeDraftSaveInput } from "./recipe-types";
-import type { ResearchReportRecordInput } from "./research-report-types";
+import type {
+  ResearchReportExportRequest,
+  ResearchReportRecordInput,
+} from "./research-report-types";
 import { TauriDesktopApi } from "./tauri-desktop-api";
 
 class MemoryStorage implements Storage {
@@ -214,12 +218,62 @@ describe("research report desktop API", () => {
     await api.createResearchReport(input);
     await api.listResearchReports("recipe-version-1");
     await api.getResearchReport("report-record-1");
+    const request: ResearchReportExportRequest = {
+      reportId: "report-record-1",
+      format: "json",
+      destinationPath: "/tmp/report.json",
+      fileName: "report.json",
+      documentHash: "sha256:example",
+      bytesBase64: "e30=",
+    };
+    await api.exportResearchReport(request);
 
     expect(invoke.mock.calls).toEqual([
       ["create_research_report", { input }],
       ["list_research_reports", { recipeVersionId: "recipe-version-1" }],
       ["get_research_report", { id: "report-record-1" }],
+      ["export_research_report", { request }],
     ]);
+  });
+
+  it("downloads validated export bytes in browser mode without exposing a path", async () => {
+    const storage = new MemoryStorage();
+    const api = new BrowserDemoApi({ storage });
+    const { recipeVersion, labelVersion } = await createFormalSources(api);
+    const input = reportInput(recipeVersion.id, labelVersion.id);
+    const saved = await api.createResearchReport(input);
+    const createObjectURL = vi.fn(() => "blob:report-export");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperties(URL, {
+      createObjectURL: { configurable: true, value: createObjectURL },
+      revokeObjectURL: { configurable: true, value: revokeObjectURL },
+    });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    const request: ResearchReportExportRequest = {
+      reportId: saved.id,
+      format: "png",
+      destinationPath: "/private/path-must-not-be-used/report.png",
+      fileName: "酸奶研发报告.png",
+      documentHash: await researchReportDocumentHash(saved.document),
+      bytesBase64: btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47)),
+    };
+
+    await api.exportResearchReport(request);
+
+    expect(createObjectURL).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "image/png" }),
+    );
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:report-export");
+    await expect(
+      api.exportResearchReport({
+        ...request,
+        documentHash: "sha256:wrong",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    click.mockRestore();
   });
 
   it("migrates v6 state and keeps immutable report records after reopening", async () => {

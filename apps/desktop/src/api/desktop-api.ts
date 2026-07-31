@@ -40,6 +40,7 @@ import type {
 } from "./recipe-types";
 import type {
   ResearchReportRecord,
+  ResearchReportExportRequest,
   ResearchReportRecordInput,
 } from "./research-report-types";
 import type {
@@ -68,6 +69,7 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  exportResearchReport(request: ResearchReportExportRequest): Promise<void>;
   createResearchReport(
     input: ResearchReportRecordInput,
   ): Promise<ResearchReportRecord>;

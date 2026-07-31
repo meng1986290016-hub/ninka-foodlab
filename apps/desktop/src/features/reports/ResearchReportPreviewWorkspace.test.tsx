@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DesktopApi } from "../../api/desktop-api";
 import type { NutritionLabelVersion } from "../../api/nutrition-label-types";
 import type { RecipeVersion } from "../../api/recipe-types";
+import type { ResearchReportFilePicker } from "../../api/research-report-file-picker";
 import type { ResearchReportRecordInput } from "../../api/research-report-types";
 import { ResearchReportPreviewWorkspace } from "./ResearchReportPreviewWorkspace";
 
@@ -160,9 +161,14 @@ function createApi() {
       createdAt: "2026-07-31T06:31:00.000Z",
     }),
   );
+  const exportResearchReport = vi.fn(async () => undefined);
   return {
-    api: { createResearchReport } as unknown as DesktopApi,
+    api: {
+      createResearchReport,
+      exportResearchReport,
+    } as unknown as DesktopApi,
     createResearchReport,
+    exportResearchReport,
   };
 }
 
@@ -194,12 +200,9 @@ describe("ResearchReportPreviewWorkspace", () => {
     expect(screen.getByText("营养标签正式版本")).toBeTruthy();
     expect(screen.getByText("2011.1")).toBeTruthy();
     expect(
-      (
-        screen.getByRole("button", {
-          name: "导出报告（下一步支持）",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
+      (screen.getByRole("button", { name: "导出报告" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 
   it("saves the exact document and SVG once, then marks the record immutable", async () => {
@@ -269,5 +272,47 @@ describe("ResearchReportPreviewWorkspace", () => {
 
     expect(print).toHaveBeenCalledTimes(1);
     print.mockRestore();
+  });
+
+  it("saves an immutable record before exporting a structured JSON snapshot", async () => {
+    const { recipeVersion, nutritionLabelVersion } = fixture();
+    const { api, createResearchReport, exportResearchReport } = createApi();
+    const filePicker: ResearchReportFilePicker = {
+      pickDestination: vi.fn(async () => "/tmp/原味高蛋白酸奶.json"),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <ResearchReportPreviewWorkspace
+        api={api}
+        createId={() => "report-fixed"}
+        filePicker={filePicker}
+        now={() => "2026-07-31T06:30:00.000Z"}
+        nutritionLabelVersion={nutritionLabelVersion}
+        onBack={() => undefined}
+        recipeVersion={recipeVersion}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "导出报告" }));
+    await user.click(screen.getByRole("menuitem", { name: /JSON 快照/ }));
+
+    await waitFor(() => expect(exportResearchReport).toHaveBeenCalledTimes(1));
+    expect(createResearchReport).toHaveBeenCalledTimes(1);
+    expect(filePicker.pickDestination).toHaveBeenCalledWith(
+      "json",
+      "原味高蛋白酸奶-研发报告-V2",
+    );
+    expect(exportResearchReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reportId: "report-fixed",
+        format: "json",
+        destinationPath: "/tmp/原味高蛋白酸奶.json",
+        fileName: "原味高蛋白酸奶-研发报告-V2.json",
+        documentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        bytesBase64: expect.any(String),
+      }),
+    );
+    expect(await screen.findByText("JSON 快照 已导出")).toBeTruthy();
   });
 });

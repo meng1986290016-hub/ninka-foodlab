@@ -40,7 +40,9 @@ use commands::recipes::{
     create_recipe_version, get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions,
     list_recipes, save_recipe_draft, update_recipe,
 };
-use commands::reports::{create_research_report, get_research_report, list_research_reports};
+use commands::reports::{
+    create_research_report, export_research_report, get_research_report, list_research_reports,
+};
 use tauri::Manager;
 
 pub fn run() {
@@ -141,6 +143,7 @@ pub fn run() {
             create_research_report,
             list_research_reports,
             get_research_report,
+            export_research_report,
         ])
         .run(tauri::generate_context!())
         .expect("食研工作台启动失败");

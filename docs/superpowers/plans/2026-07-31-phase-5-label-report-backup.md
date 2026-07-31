@@ -248,10 +248,10 @@
 - 输出到临时文件后原子替换目标文件，失败不留下损坏文件。
 - 文件名安全，公式字符串防注入，不泄露本机绝对路径。
 
-- [ ] **Step 1:** 写各格式解析回读测试。
-- [ ] **Step 2:** 实现 Tauri 文件导出与浏览器下载模拟。
-- [ ] **Step 3:** 比对所有格式的关键字段一致性。
-- [ ] **Step 4:** 提交 `feat(reports): export label and R&D reports`。
+- [x] **Step 1:** 写各格式解析回读测试。
+- [x] **Step 2:** 实现 Tauri 文件导出与浏览器下载模拟。
+- [x] **Step 3:** 比对所有格式的关键字段一致性。
+- [x] **Step 4:** 提交 `feat(reports): export label and R&D reports`。
 
 ---
 

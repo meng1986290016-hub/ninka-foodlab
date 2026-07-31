@@ -1554,8 +1554,54 @@
   font-size: 13px;
 }
 
-.research-report-header__actions .button:last-child {
+.research-report-export {
+  position: relative;
   min-width: 180px;
+}
+
+.research-report-export > .button {
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.research-report-export__popover {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 232px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  box-shadow: 0 12px 30px rgb(22 42 32 / 14%);
+}
+
+.research-report-export__popover button {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 8px var(--space-3);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.research-report-export__popover button:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.research-report-export__popover span {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.research-report-export__popover small {
+  color: var(--color-ink-muted);
+  font-size: 11px;
 }
 
 .research-report-message {
@@ -1570,6 +1616,12 @@
   background: #fff7f6;
   color: var(--color-danger);
   font-size: 12px;
+}
+
+.research-report-message.is-success {
+  border-color: #bad9c8;
+  background: #f1faf5;
+  color: var(--color-accent);
 }
 
 .research-report-workspace__body {
@@ -1773,12 +1825,12 @@
   }
 
   .research-report-header__actions .button,
-  .research-report-header__actions .button:last-child {
+  .research-report-export {
     width: 100%;
     min-width: 0;
   }
 
-  .research-report-header__actions .button:last-child {
+  .research-report-export {
     grid-column: 1 / -1;
   }
 
@@ -1802,8 +1854,14 @@
     grid-template-columns: 1fr;
   }
 
-  .research-report-header__actions .button:last-child {
+  .research-report-export {
     grid-column: 1;
+  }
+
+  .research-report-export__popover {
+    right: auto;
+    left: 0;
+    width: 100%;
   }
 
   .research-report-preview-canvas {

@@ -3,6 +3,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use calamine::{Reader, open_workbook_auto};
 use food_rd_desktop::{
     database::{self, migrations},
     labels::{
@@ -13,10 +15,21 @@ use food_rd_desktop::{
         model::{RecipeDraftInput, RecipeInput, RecipeKind, RecipeVersionInput},
         repository::RecipeRepository,
     },
-    reports::{model::ResearchReportInput, repository::ResearchReportRepository},
+    reports::{
+        export::{
+            ResearchReportExportFormat, ResearchReportExportRequest, export_research_report,
+            research_report_document_hash,
+        },
+        model::ResearchReportInput,
+        repository::ResearchReportRepository,
+    },
 };
+use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
+use lopdf::{Document, Object, dictionary};
 use rusqlite::Connection;
+use rust_xlsxwriter::Workbook;
 use serde_json::{Value, json};
+use std::io::Cursor;
 
 fn temporary_database(name: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
@@ -296,4 +309,234 @@ fn report_keeps_json_null_and_zero_as_distinct_values() {
     assert_eq!(saved.document["values"]["measuredZero"], "0");
     drop(repository);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn all_export_formats_are_atomically_written_and_readable() {
+    let path = temporary_database("report-export-formats");
+    let export_root = unique_export_directory("report-exports");
+    fs::create_dir(&export_root).unwrap();
+    let (recipe_version_id, label_version_id) = seed_formal_sources(&path, "报告导出酸奶");
+    let mut repository = ResearchReportRepository::open(&path).unwrap();
+    let report = repository
+        .create_report(report_input(
+            "report-export-all",
+            &recipe_version_id,
+            &label_version_id,
+        ))
+        .unwrap();
+    let hash = research_report_document_hash(&report.document).unwrap();
+
+    let json_bytes = serde_json::to_vec_pretty(&json!({
+        "schemaVersion": 1,
+        "kind": "food-rd-research-report",
+        "reportId": report.id,
+        "generatedAt": report.document["generatedAt"],
+        "rulePack": {
+            "id": "gb-28050-2011",
+            "revision": "2011.1",
+            "standardCode": "GB 28050-2011"
+        },
+        "snapshotHash": hash,
+        "document": report.document
+    }))
+    .unwrap();
+    let json_path = export_root.join("报告.json");
+    export_research_report(
+        &report,
+        export_request(
+            &report.id,
+            ResearchReportExportFormat::Json,
+            &json_path,
+            "报告.json",
+            &hash,
+            &json_bytes,
+        ),
+    )
+    .unwrap();
+    let parsed: Value = serde_json::from_slice(&fs::read(&json_path).unwrap()).unwrap();
+    assert_eq!(parsed["snapshotHash"], hash);
+    assert_eq!(parsed["document"], report.document);
+
+    let png_bytes = png_fixture();
+    let png_path = export_root.join("报告.png");
+    export_research_report(
+        &report,
+        export_request(
+            &report.id,
+            ResearchReportExportFormat::Png,
+            &png_path,
+            "报告.png",
+            &hash,
+            &png_bytes,
+        ),
+    )
+    .unwrap();
+    assert_eq!(image::open(&png_path).unwrap().width(), 2);
+
+    let pdf_bytes = pdf_fixture();
+    let pdf_path = export_root.join("报告.pdf");
+    export_research_report(
+        &report,
+        export_request(
+            &report.id,
+            ResearchReportExportFormat::Pdf,
+            &pdf_path,
+            "报告.pdf",
+            &hash,
+            &pdf_bytes,
+        ),
+    )
+    .unwrap();
+    assert_eq!(Document::load(&pdf_path).unwrap().get_pages().len(), 1);
+
+    let xlsx_bytes = xlsx_fixture();
+    let xlsx_path = export_root.join("报告.xlsx");
+    export_research_report(
+        &report,
+        export_request(
+            &report.id,
+            ResearchReportExportFormat::Xlsx,
+            &xlsx_path,
+            "报告.xlsx",
+            &hash,
+            &xlsx_bytes,
+        ),
+    )
+    .unwrap();
+    let workbook = open_workbook_auto(&xlsx_path).unwrap();
+    assert_eq!(
+        workbook.sheet_names(),
+        [
+            "配方",
+            "原料",
+            "营养",
+            "成本",
+            "目标",
+            "标签与来源",
+            "研发备注"
+        ]
+    );
+
+    drop(repository);
+    fs::remove_dir_all(export_root).unwrap();
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn failed_export_preserves_existing_target_and_removes_temporary_file() {
+    let path = temporary_database("report-export-atomic-failure");
+    let export_root = unique_export_directory("report-atomic");
+    fs::create_dir(&export_root).unwrap();
+    let (recipe_version_id, label_version_id) = seed_formal_sources(&path, "原子导出酸奶");
+    let mut repository = ResearchReportRepository::open(&path).unwrap();
+    let report = repository
+        .create_report(report_input(
+            "report-export-atomic",
+            &recipe_version_id,
+            &label_version_id,
+        ))
+        .unwrap();
+    let destination = export_root.join("原报告.png");
+    fs::write(&destination, b"existing-safe-file").unwrap();
+
+    let error = export_research_report(
+        &report,
+        export_request(
+            &report.id,
+            ResearchReportExportFormat::Png,
+            &destination,
+            "原报告.png",
+            "sha256:wrong",
+            &png_fixture(),
+        ),
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code(), "invalid_input");
+    assert_eq!(fs::read(&destination).unwrap(), b"existing-safe-file");
+    assert_eq!(fs::read_dir(&export_root).unwrap().count(), 1);
+    drop(repository);
+    fs::remove_dir_all(export_root).unwrap();
+    fs::remove_file(path).unwrap();
+}
+
+fn unique_export_directory(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "food-rd-{name}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
+
+fn export_request(
+    report_id: &str,
+    format: ResearchReportExportFormat,
+    destination: &std::path::Path,
+    file_name: &str,
+    document_hash: &str,
+    bytes: &[u8],
+) -> ResearchReportExportRequest {
+    ResearchReportExportRequest {
+        report_id: report_id.into(),
+        format,
+        destination_path: destination.to_string_lossy().into_owned(),
+        file_name: file_name.into(),
+        document_hash: document_hash.into(),
+        bytes_base64: STANDARD.encode(bytes),
+    }
+}
+
+fn png_fixture() -> Vec<u8> {
+    let image = DynamicImage::ImageRgb8(RgbImage::from_pixel(2, 2, Rgb([255, 255, 255])));
+    let mut output = Cursor::new(Vec::new());
+    image.write_to(&mut output, ImageFormat::Png).unwrap();
+    output.into_inner()
+}
+
+fn pdf_fixture() -> Vec<u8> {
+    let mut document = Document::with_version("1.7");
+    let pages_id = document.new_object_id();
+    let page_id = document.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages_id,
+        "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
+    });
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_id.into()],
+            "Count" => 1,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn xlsx_fixture() -> Vec<u8> {
+    let mut workbook = Workbook::new();
+    for name in [
+        "配方",
+        "原料",
+        "营养",
+        "成本",
+        "目标",
+        "标签与来源",
+        "研发备注",
+    ] {
+        let sheet = workbook.add_worksheet();
+        sheet.set_name(name).unwrap();
+        sheet.write_string(0, 0, "可回读").unwrap();
+    }
+    workbook.save_to_buffer().unwrap()
 }

@@ -1,12 +1,24 @@
 import { useState } from "react";
-import { renderResearchReportSvg } from "@food-rd/core";
+import {
+  renderResearchReportSvg,
+  type ResearchReportExportFormat,
+} from "@food-rd/core";
 
 import type { DesktopApi } from "../../api/desktop-api";
 import type { NutritionLabelVersion } from "../../api/nutrition-label-types";
 import type { RecipeVersion } from "../../api/recipe-types";
+import {
+  createResearchReportFilePicker,
+  type ResearchReportFilePicker,
+} from "../../api/research-report-file-picker";
 import type { ResearchReportRecord } from "../../api/research-report-types";
 import { Icon, type IconName } from "../../components/Icon";
 import { buildResearchReportDocument } from "./research-report-document";
+import {
+  buildResearchReportExport,
+  bytesToBase64,
+  type ResearchReportRasterizer,
+} from "./research-report-export";
 
 interface ResearchReportPreviewWorkspaceProps {
   api: DesktopApi;
@@ -15,6 +27,8 @@ interface ResearchReportPreviewWorkspaceProps {
   onBack(): void;
   now?: () => string;
   createId?: () => string;
+  filePicker?: ResearchReportFilePicker;
+  rasterize?: ResearchReportRasterizer;
 }
 
 interface ReportContentItem {
@@ -34,6 +48,17 @@ const reportContent: ReportContentItem[] = [
 
 const defaultNow = () => new Date().toISOString();
 
+const exportFormats: Array<{
+  format: ResearchReportExportFormat;
+  label: string;
+  detail: string;
+}> = [
+  { format: "png", label: "PNG 图片", detail: "适合预览和分享" },
+  { format: "pdf", label: "PDF 文档", detail: "适合归档和打印" },
+  { format: "xlsx", label: "XLSX 数据", detail: "七个结构化工作表" },
+  { format: "json", label: "JSON 快照", detail: "完整机器可读记录" },
+];
+
 function defaultCreateId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -48,7 +73,10 @@ export function ResearchReportPreviewWorkspace({
   onBack,
   now = defaultNow,
   createId = defaultCreateId,
+  filePicker,
+  rasterize,
 }: ResearchReportPreviewWorkspaceProps) {
+  const [defaultFilePicker] = useState(createResearchReportFilePicker);
   const [artifact] = useState(() => {
     const document = buildResearchReportDocument({
       id: createId(),
@@ -64,22 +92,68 @@ export function ResearchReportPreviewWorkspace({
   const [savedRecord, setSavedRecord] =
     useState<ResearchReportRecord | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] =
+    useState<ResearchReportExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const previewSource = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     artifact.svg,
   )}`;
 
-  async function saveRecord() {
-    if (savedRecord !== null || saving) return;
+  async function saveRecord(): Promise<ResearchReportRecord | null> {
+    if (savedRecord !== null) return savedRecord;
+    if (saving) return null;
     setSaving(true);
     setError(null);
     try {
       const saved = await api.createResearchReport(artifact);
       setSavedRecord(saved);
+      return saved;
     } catch (cause) {
       setError(messageFrom(cause, "研发报告记录无法保存"));
+      return null;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function exportReport(format: ResearchReportExportFormat) {
+    if (exporting !== null || saving) return;
+    setExporting(format);
+    setExportMenuOpen(false);
+    setError(null);
+    setNotice(null);
+    try {
+      const record = await saveRecord();
+      if (record === null) return;
+      const exportArtifact = await buildResearchReportExport(
+        record,
+        format,
+        rasterize,
+      );
+      const suffix = `.${format}`;
+      const defaultName = exportArtifact.fileName.endsWith(suffix)
+        ? exportArtifact.fileName.slice(0, -suffix.length)
+        : exportArtifact.fileName;
+      const destinationPath = await (
+        filePicker ?? defaultFilePicker
+      ).pickDestination(format, defaultName);
+      if (destinationPath === null) return;
+      await api.exportResearchReport({
+        reportId: record.id,
+        format,
+        destinationPath,
+        fileName: exportArtifact.fileName,
+        documentHash: exportArtifact.documentHash,
+        bytesBase64: bytesToBase64(exportArtifact.bytes),
+      });
+      const label = exportFormats.find((item) => item.format === format)?.label;
+      setNotice(`${label ?? format.toUpperCase()} 已导出`);
+    } catch (cause) {
+      setError(messageFrom(cause, "研发报告无法导出"));
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -124,16 +198,47 @@ export function ResearchReportPreviewWorkspace({
           >
             打印
           </button>
-          <button
-            className="button button--secondary"
-            disabled
-            title="下一步将支持 PDF、SVG 与结构化数据导出"
-            type="button"
-          >
-            导出报告（下一步支持）
-          </button>
+          <div className="research-report-export">
+            <button
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="menu"
+              className="button button--secondary"
+              disabled={exporting !== null || saving}
+              onClick={() => setExportMenuOpen((open) => !open)}
+              type="button"
+            >
+              {exporting !== null ? "正在导出…" : "导出报告"}
+              <Icon name="chevron-down" size={15} />
+            </button>
+            {exportMenuOpen ? (
+              <div
+                aria-label="选择研发报告导出格式"
+                className="research-report-export__popover"
+                role="menu"
+              >
+                {exportFormats.map((item) => (
+                  <button
+                    key={item.format}
+                    onClick={() => void exportReport(item.format)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span>{item.label}</span>
+                    <small>{item.detail}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
+
+      {notice !== null ? (
+        <p className="research-report-message is-success" role="status">
+          <Icon name="check" size={16} />
+          {notice}
+        </p>
+      ) : null}
 
       {error !== null ? (
         <p className="research-report-message has-error" role="alert">

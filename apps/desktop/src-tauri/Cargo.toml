@@ -23,6 +23,7 @@ getrandom = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+lopdf = "0.38"
 mime_guess = "2"
 pdf-extract = "0.10"
 quick-xml = "0.38"

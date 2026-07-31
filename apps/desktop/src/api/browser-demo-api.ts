@@ -1,4 +1,8 @@
-import { calculateNutritionLabel as calculateCoreNutritionLabel } from "@food-rd/core";
+import {
+  calculateNutritionLabel as calculateCoreNutritionLabel,
+  researchReportDocumentHash,
+  type ResearchReportExportFormat,
+} from "@food-rd/core";
 import type {
   AgentEvent,
   AgentConversation,
@@ -58,6 +62,7 @@ import type {
   RecipeVersionSnapshot,
 } from "./recipe-types";
 import type {
+  ResearchReportExportRequest,
   ResearchReportRecord,
   ResearchReportRecordInput,
 } from "./research-report-types";
@@ -690,6 +695,47 @@ export class BrowserDemoApi implements DesktopApi {
       throw new DesktopApiError("not_found", "找不到该研发报告记录");
     }
     return cloneValue(report);
+  }
+
+  async exportResearchReport(
+    request: ResearchReportExportRequest,
+  ): Promise<void> {
+    const report = this.read().researchReports[request.reportId];
+    if (!report) {
+      throw new DesktopApiError("not_found", "找不到该研发报告记录");
+    }
+    const expectedHash = await researchReportDocumentHash(report.document);
+    if (
+      request.documentHash !== expectedHash ||
+      !validExportFileName(request.fileName, request.format)
+    ) {
+      throw new DesktopApiError("invalid_input", "研发报告导出请求无效");
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = decodeBase64(request.bytesBase64);
+    } catch {
+      throw new DesktopApiError("invalid_input", "研发报告导出数据无效");
+    }
+    if (!validExportBytes(request.format, bytes)) {
+      throw new DesktopApiError("invalid_input", "研发报告导出数据无效");
+    }
+    const copy = new Uint8Array(bytes);
+    const blob = new Blob([copy.buffer], {
+      type: researchReportMimeType(request.format),
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.hidden = true;
+    anchor.href = url;
+    anchor.download = request.fileName;
+    document.body.append(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }
   }
 
   async listNutritionLabels(recipeId: string): Promise<NutritionLabel[]> {
@@ -2855,6 +2901,78 @@ export class BrowserDemoApi implements DesktopApi {
       archivedAt: group.archivedAt,
     };
   }
+}
+
+function validExportFileName(
+  fileName: string,
+  format: ResearchReportExportFormat,
+) {
+  return (
+    fileName.trim() !== "" &&
+    !/[\\/\u0000-\u001f]/.test(fileName) &&
+    fileName.toLowerCase().endsWith(`.${format}`)
+  );
+}
+
+function validExportBytes(
+  format: ResearchReportExportFormat,
+  bytes: Uint8Array,
+) {
+  if (format === "png") {
+    return (
+      bytes.length >= 4 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    );
+  }
+  if (format === "pdf") {
+    return startsWithText(bytes, "%PDF-");
+  }
+  if (format === "xlsx") {
+    return (
+      bytes.length >= 4 &&
+      bytes[0] === 0x50 &&
+      bytes[1] === 0x4b &&
+      bytes[2] === 0x03 &&
+      bytes[3] === 0x04
+    );
+  }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes)) as {
+      kind?: unknown;
+    };
+    return value.kind === "food-rd-research-report";
+  } catch {
+    return false;
+  }
+}
+
+function decodeBase64(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function startsWithText(bytes: Uint8Array, value: string) {
+  const expected = new TextEncoder().encode(value);
+  return (
+    bytes.length >= expected.length &&
+    expected.every((byte, index) => bytes[index] === byte)
+  );
+}
+
+function researchReportMimeType(format: ResearchReportExportFormat) {
+  if (format === "png") return "image/png";
+  if (format === "pdf") return "application/pdf";
+  if (format === "xlsx") {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+  return "application/json";
 }
 
 function dependencyReachesRecipe(

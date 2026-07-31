@@ -19,7 +19,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 78] = [
+pub const REGISTERED_COMMANDS: [&str; 79] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -98,6 +98,7 @@ pub const REGISTERED_COMMANDS: [&str; 78] = [
     "create_research_report",
     "list_research_reports",
     "get_research_report",
+    "export_research_report",
 ];
 
 pub struct AppState {

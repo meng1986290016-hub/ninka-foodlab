@@ -42,6 +42,7 @@ import type {
   RecipeVersionCreateInput,
 } from "./recipe-types";
 import type {
+  ResearchReportExportRequest,
   ResearchReportRecord,
   ResearchReportRecordInput,
 } from "./research-report-types";
@@ -136,6 +137,10 @@ export class TauriDesktopApi implements DesktopApi {
 
   getResearchReport(id: string) {
     return this.invoke<ResearchReportRecord>("get_research_report", { id });
+  }
+
+  exportResearchReport(request: ResearchReportExportRequest) {
+    return this.invoke<void>("export_research_report", { request });
   }
 
   listNutritionLabels(recipeId: string) {

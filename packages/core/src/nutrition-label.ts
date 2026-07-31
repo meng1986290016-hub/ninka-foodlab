@@ -55,6 +55,8 @@ export interface NutritionLabelNutrientRule {
   order: number;
   required: boolean;
   nrv: DecimalString | null;
+  roundingInterval: DecimalString;
+  zeroThreshold: DecimalString;
 }
 
 export interface NutritionLabelRulePack
@@ -74,7 +76,12 @@ export interface NutritionLabelSourceValue {
   sourceKind: NutritionLabelValueSourceKind;
   sourceReference: string | null;
   observedAt: string | null;
+  completeness?: "complete" | "partial" | "unknown";
 }
+
+export type NutritionLabelRowSourceKind =
+  | NutritionLabelValueSourceKind
+  | "derived_calculation";
 
 export interface NutritionLabelRowSnapshot {
   nutrientCode: string;
@@ -83,7 +90,7 @@ export interface NutritionLabelRowSnapshot {
   rawValue: DecimalString | null;
   declaredValue: DecimalString | null;
   nrvPercent: DecimalString | null;
-  sourceKind: NutritionLabelValueSourceKind;
+  sourceKind: NutritionLabelRowSourceKind;
   sourceReference: string | null;
 }
 
@@ -95,7 +102,9 @@ export type NutritionLabelIssueCode =
   | "invalid_value"
   | "incomplete_source"
   | "unsupported_basis"
-  | "rule_pack_not_found";
+  | "rule_pack_not_found"
+  | "duplicate_nutrient"
+  | "unsupported_nutrient";
 
 export interface NutritionLabelIssue {
   code: NutritionLabelIssueCode;
@@ -111,6 +120,26 @@ export interface NutritionLabelDraftInput {
   rulePackId: NutritionLabelRulePackId;
   basis: NutritionLabelBasis;
   sourceValues: NutritionLabelSourceValue[];
+}
+
+export type NutritionLabelRoundingMode = "half_up" | "half_even";
+
+export interface NutritionLabelCalculationInput {
+  rulePackId: NutritionLabelRulePackId;
+  basis: NutritionLabelBasis;
+  sourceValues: NutritionLabelSourceValue[];
+  optionalNutrientCodes: string[];
+  roundingMode: NutritionLabelRoundingMode;
+}
+
+export interface NutritionLabelCalculation {
+  rulePack: NutritionLabelRulePackReference;
+  basis: NutritionLabelBasis;
+  roundingMode: NutritionLabelRoundingMode;
+  rows: NutritionLabelRowSnapshot[];
+  issues: NutritionLabelIssue[];
+  publishable: boolean;
+  requiredNotice: string | null;
 }
 
 export interface NutritionLabelSnapshot {

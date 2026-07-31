@@ -13,25 +13,46 @@ function nutrient(
   order: number,
   required: boolean,
   nrv: string | null,
+  roundingInterval: string,
+  zeroThreshold: string,
 ): NutritionLabelNutrientRule {
-  return { nutrientCode, name, unit, order, required, nrv };
+  return {
+    nutrientCode,
+    name,
+    unit,
+    order,
+    required,
+    nrv,
+    roundingInterval,
+    zeroThreshold,
+  };
 }
 
 const COMMON_NUTRIENTS = [
-  ["energy", "能量", "kJ", "8400"],
-  ["protein", "蛋白质", "g", "60"],
-  ["fat", "脂肪", "g", "60"],
-  ["saturated_fat", "饱和脂肪", "g", "20"],
-  ["carbohydrate", "碳水化合物", "g", "300"],
-  ["sugars", "糖", "g", null],
-  ["dietary_fiber", "膳食纤维", "g", "25"],
-  ["sodium", "钠", "mg", "2000"],
+  ["energy", "能量", "kJ", "8400", "1", "17"],
+  ["protein", "蛋白质", "g", "60", "0.1", "0.5"],
+  ["fat", "脂肪", "g", "60", "0.1", "0.5"],
+  ["saturated_fat", "饱和脂肪", "g", "20", "0.1", "0.1"],
+  ["carbohydrate", "碳水化合物", "g", "300", "0.1", "0.5"],
+  ["sugars", "糖", "g", null, "0.1", "0.5"],
+  ["dietary_fiber", "膳食纤维", "g", "25", "0.1", "0.5"],
+  ["sodium", "钠", "mg", "2000", "1", "5"],
 ] as const;
 
 function nutrientRules(requiredCodes: readonly string[]) {
   const required = new Set(requiredCodes);
-  return COMMON_NUTRIENTS.map(([code, name, unit, nrv], order) =>
-    nutrient(code, name, unit, order, required.has(code), nrv)
+  return COMMON_NUTRIENTS.map(
+    ([code, name, unit, nrv, roundingInterval, zeroThreshold], order) =>
+      nutrient(
+        code,
+        name,
+        unit,
+        order,
+        required.has(code),
+        nrv,
+        roundingInterval,
+        zeroThreshold,
+      )
   );
 }
 

@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod backup;
 pub mod ingest;
 pub mod ingredients;
 pub mod labels;
@@ -19,7 +20,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 79] = [
+pub const REGISTERED_COMMANDS: [&str; 82] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -99,10 +100,13 @@ pub const REGISTERED_COMMANDS: [&str; 79] = [
     "list_research_reports",
     "get_research_report",
     "export_research_report",
+    "create_data_backup",
+    "inspect_data_backup",
+    "restore_data_backup",
 ];
 
 pub struct AppState {
-    pub(crate) coordinator: Mutex<IngredientIngestCoordinator>,
+    pub(crate) coordinator: Mutex<Option<IngredientIngestCoordinator>>,
     pub(crate) database_path: PathBuf,
     pub(crate) attachment_root: PathBuf,
     pub(crate) active_agent_runs: Arc<Mutex<HashMap<String, AgentRuntimeControl>>>,
@@ -115,7 +119,7 @@ impl AppState {
         attachment_root: PathBuf,
     ) -> Self {
         Self {
-            coordinator: Mutex::new(coordinator),
+            coordinator: Mutex::new(Some(coordinator)),
             database_path,
             attachment_root,
             active_agent_runs: Arc::new(Mutex::new(HashMap::new())),

@@ -322,6 +322,9 @@ pub fn list_agent_import_drafts(
         .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
+    let coordinator = coordinator
+        .as_ref()
+        .ok_or_else(CommandError::state_unavailable)?;
     coordinator.list_drafts(&job_id).map_err(Into::into)
 }
 

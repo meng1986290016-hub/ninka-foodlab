@@ -189,6 +189,12 @@ export type DesktopErrorCode =
   | "invalid_model_output"
   | "tool_denied"
   | "cancelled"
+  | "invalid_backup"
+  | "unsupported_backup"
+  | "confirmation_required"
+  | "restore_rollback_failed"
+  | "restore_completed_restart_required"
+  | "unsupported_operation"
   | "storage_failure"
   | "unknown";
 

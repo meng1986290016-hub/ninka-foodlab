@@ -22,7 +22,10 @@ fn with_coordinator<T>(
         .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
-    action(&mut coordinator).map_err(Into::into)
+    let coordinator = coordinator
+        .as_mut()
+        .ok_or_else(CommandError::state_unavailable)?;
+    action(coordinator).map_err(Into::into)
 }
 
 #[tauri::command(rename_all = "camelCase")]

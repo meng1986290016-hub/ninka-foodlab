@@ -22,6 +22,12 @@ describe("App navigation", () => {
     await user.click(screen.getByRole("button", { name: "LLM 模型" }));
     expect(screen.getByRole("heading", { name: "LLM 模型" })).toBeTruthy();
 
+    await user.click(screen.getByRole("button", { name: "数据管理" }));
+    expect(screen.getByRole("heading", { name: "数据管理" })).toBeTruthy();
+    expect(
+      screen.getByText("浏览器演示模式不执行真实本机备份"),
+    ).toBeTruthy();
+
     await user.click(screen.getByRole("button", { name: "配方工作台" }));
     expect(screen.getByRole("heading", { name: "配方工作台" })).toBeTruthy();
     expect(

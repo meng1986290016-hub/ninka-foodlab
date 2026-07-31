@@ -20,6 +20,9 @@
 - 正式版本冻结原料、供应商、营养、价格、成本、目标、过敏原和备注；原料后续改价不会覆盖历史版本。
 - 配方库支持搜索筛选、版本历史、冻结详情、按当前原料价格临时重算、复制为草稿和安全归档。
 - 支持比较两个正式版本的原料增删、供应商/规格、用量、营养、成本、目标、过敏原和研发备注。
+- 可从正式配方版本建立 GB 28050-2011 或 GB 28050-2025 营养标签，分层复核配方估算、检测和人工确认值，并发布不可变版本。
+- 可保存统一研发报告，并从同一报告快照导出 SVG 预览、PNG、PDF、XLSX 和 JSON。
+- 桌面版可创建、预检和恢复 `.foodrd-backup` 离线备份；恢复前自动保留当前状态，失败时自动回滚。
 - 浏览器演示数据保存在 `localStorage`；Tauri 桌面版使用本地 SQLite。
 
 ## 环境要求
@@ -50,6 +53,8 @@ pnpm dev:desktop
 
 浏览器中的 Agent 是本机离线模拟，适合体验上传、草稿卡和人工保存流程。它不会启动 Codex CLI 或 Claude Code CLI，也不会调用真实模型服务和产生费用。
 
+浏览器演示版可以体验营养标签和报告导出，但不会执行真实本机备份或恢复。“设置 → 数据管理”会明确显示这一限制；请使用 Tauri 桌面版保护正式研发数据。
+
 ## Tauri 桌面版
 
 先确认 Rust 可用：
@@ -75,6 +80,17 @@ pnpm tauri:dev
 - Linux：`$XDG_DATA_HOME/com.foodrd.studio/food-rd.sqlite3`（未设置时通常位于 `~/.local/share` 下）
 
 重置桌面数据前请先退出应用，然后把数据库文件重命名为备份，例如 `food-rd.sqlite3.backup`；再次启动会自动创建新数据库。确认不再需要旧数据后，再自行删除备份。不要在应用运行时移动数据库文件。
+
+## 营养标签、报告与数据保护
+
+1. 在配方库选择一个正式版本，点击“生成营养标签”。
+2. 明确选择 GB 28050-2011 或 GB 28050-2025，复核配方估算、检测或人工确认来源；缺少强制项目时只能预览和保存草稿，不能发布。
+3. 发布后的标签固定配方版本、规则包修订、来源值和最终标示值，不会因以后改配方或规则而自动变化。
+4. 从正式标签预览并保存研发报告，可导出 PNG、PDF、XLSX 或 JSON；SVG 用作应用内确定性预览。
+5. 桌面版进入“设置 → 数据管理”创建 `.foodrd-backup`。备份包含 SQLite 和已登记附件，不包含 API Key、缓存或临时文件。
+6. 恢复时必须先检查备份，再明确勾选影响确认。系统会先备份当前数据，恢复失败自动回滚，成功后无需重启应用即可读取恢复数据。
+
+备份包有完整性校验但未加密，请像保护配方和供应商资料一样妥善保存。详细格式、升级和安全边界见 [备份格式](../../docs/backup-format.md)、[升级说明](../../docs/upgrade-guide.md)及[数据安全说明](../../docs/data-safety.md)。第五阶段人工验收见[营养标签清单](../../docs/testing/phase-5-nutrition-label-checklist.md)、[研发报告清单](../../docs/testing/phase-5-research-report-checklist.md)和[数据管理清单](../../docs/testing/phase-5-data-management-checklist.md)。
 
 ## 食品研发 Agent
 
@@ -122,4 +138,6 @@ cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- 
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets
 ```
 
-GitHub Actions 会在 macOS 和 Windows 上执行同一组前端与 Rust 检查。Tauri capability 当前只启用 `core:default`，没有 shell 权限或不受限制的文件系统权限。
+GitHub Actions 会在 macOS 和 Windows 上执行同一组前端与 Rust 检查。Tauri capability 当前启用 `core:default` 以及备份/导出所需的原生打开、保存对话框权限，没有 shell 权限或不受限制的文件系统权限。
+
+项目进度与后续候选见[路线图](../../docs/roadmap.md)。

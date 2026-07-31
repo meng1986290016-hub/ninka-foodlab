@@ -44,7 +44,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [activePage, setActivePage] = useState<AppPage>("ingredients");
   const [agentOpen, setAgentOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
-    "general" | "models"
+    "general" | "models" | "data"
   >("general");
   const [reviewDraft, setReviewDraft] =
     useState<IngredientImportDraft | null>(null);
@@ -78,6 +78,15 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     setSettingsSection(section);
     setActivePage("settings");
     setAgentOpen(true);
+  }
+
+  async function refreshAfterRestore() {
+    const status = await desktopApi.getDatabaseStatus();
+    setDatabaseStatus(status);
+    setIngredientRefreshToken((current) => current + 1);
+    setDraftRefreshToken((current) => current + 1);
+    setActiveRecipeId(null);
+    setActiveNutritionLabel(null);
   }
 
   return (
@@ -145,6 +154,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
             api={desktopApi}
             initialSection={settingsSection}
             key={settingsSection}
+            onDataRestored={refreshAfterRestore}
           />
         ) : null}
       </AppShell>

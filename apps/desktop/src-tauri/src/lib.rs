@@ -16,6 +16,7 @@ use commands::agent::{
     save_agent_preferences, save_agent_provider_config, set_agent_provider_secret, start_agent_run,
     test_agent_provider,
 };
+use commands::backup::{create_data_backup, inspect_data_backup, restore_data_backup};
 use commands::ingest::{
     cancel_ingredient_import_job, cleanup_orphan_attachments, commit_ingredient_import_job,
     commit_reviewed_ingredient_import_draft, create_ingredient_import_job,
@@ -145,6 +146,9 @@ pub fn run() {
             list_research_reports,
             get_research_report,
             export_research_report,
+            create_data_backup,
+            inspect_data_backup,
+            restore_data_backup,
         ])
         .run(tauri::generate_context!())
         .expect("食研工作台启动失败");

@@ -20,6 +20,11 @@ import type {
 import type { BrowserAgentEventSource } from "./agent-event-source";
 import type { DesktopApi } from "./desktop-api";
 import type {
+  BackupManifest,
+  BackupPreflight,
+  BackupRestoreResult,
+} from "./backup-types";
+import type {
   IngredientExchangeFormat,
   IngredientImportCommitResult,
   IngredientImportDraft,
@@ -601,6 +606,21 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
 }
 
 export class BrowserDemoApi implements DesktopApi {
+  async createDataBackup(_destinationPath: string): Promise<BackupManifest> {
+    throw browserBackupUnavailable();
+  }
+
+  async inspectDataBackup(_sourcePath: string): Promise<BackupPreflight> {
+    throw browserBackupUnavailable();
+  }
+
+  async restoreDataBackup(
+    _sourcePath: string,
+    _confirmed: boolean,
+  ): Promise<BackupRestoreResult> {
+    throw browserBackupUnavailable();
+  }
+
   private readonly storage: Storage;
   private readonly createId: () => string;
   private readonly now: () => string;
@@ -2994,5 +3014,12 @@ function dependencyReachesRecipe(
         recipeId,
         visited,
       ),
+  );
+}
+
+function browserBackupUnavailable() {
+  return new DesktopApiError(
+    "unsupported_operation",
+    "浏览器演示模式不执行真实本机备份或恢复，请使用桌面版",
   );
 }

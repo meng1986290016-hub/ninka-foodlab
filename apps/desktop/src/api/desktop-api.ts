@@ -13,6 +13,11 @@ import type {
   CliDetectionResult,
 } from "./agent-types";
 import type {
+  BackupManifest,
+  BackupPreflight,
+  BackupRestoreResult,
+} from "./backup-types";
+import type {
   IngredientExchangeFormat,
   IngredientImportCommitResult,
   IngredientImportDraft,
@@ -69,6 +74,12 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  createDataBackup(destinationPath: string): Promise<BackupManifest>;
+  inspectDataBackup(sourcePath: string): Promise<BackupPreflight>;
+  restoreDataBackup(
+    sourcePath: string,
+    confirmed: boolean,
+  ): Promise<BackupRestoreResult>;
   exportResearchReport(request: ResearchReportExportRequest): Promise<void>;
   createResearchReport(
     input: ResearchReportRecordInput,

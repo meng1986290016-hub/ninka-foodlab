@@ -300,11 +300,11 @@
 - 完成“正式配方 → 双标准标签 → 发布 → 多格式报告 → 备份 → 清空测试库 → 恢复”的完整闭环。
 - 编写人工验收清单、升级说明和开源数据安全说明。
 
-- [ ] **Step 1:** 写数据管理界面和完整恢复闭环测试。
-- [ ] **Step 2:** 实现界面与状态反馈。
-- [ ] **Step 3:** 运行 core、前端、Rust 全量回归和真实浏览器验收。
-- [ ] **Step 4:** 更新 README、路线图与验收文档。
-- [ ] **Step 5:** 提交 `test(phase5): verify labels reports and recovery`。
+- [x] **Step 1:** 写数据管理界面和完整恢复闭环测试。
+- [x] **Step 2:** 实现界面与状态反馈。
+- [x] **Step 3:** 运行 core、前端、Rust 全量回归和真实浏览器验收。
+- [x] **Step 4:** 更新 README、路线图与验收文档。
+- [x] **Step 5:** 提交 `test(phase5): verify labels reports and recovery`。
 
 ## 完成定义
 

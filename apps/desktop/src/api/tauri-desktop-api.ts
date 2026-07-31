@@ -16,6 +16,11 @@ import type {
 } from "./agent-types";
 import type { DesktopApi } from "./desktop-api";
 import type {
+  BackupManifest,
+  BackupPreflight,
+  BackupRestoreResult,
+} from "./backup-types";
+import type {
   IngredientExchangeFormat,
   IngredientImportCommitResult,
   IngredientImportDraft,
@@ -90,6 +95,12 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "invalid_model_output",
   "tool_denied",
   "cancelled",
+  "invalid_backup",
+  "unsupported_backup",
+  "confirmation_required",
+  "restore_rollback_failed",
+  "restore_completed_restart_required",
+  "unsupported_operation",
   "storage_failure",
   "unknown",
 ]);
@@ -120,6 +131,25 @@ export class TauriDesktopApi implements DesktopApi {
   private invoke<T>(command: string, args?: Record<string, unknown>) {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
+    });
+  }
+
+  createDataBackup(destinationPath: string) {
+    return this.invoke<BackupManifest>("create_data_backup", {
+      destinationPath,
+    });
+  }
+
+  inspectDataBackup(sourcePath: string) {
+    return this.invoke<BackupPreflight>("inspect_data_backup", {
+      sourcePath,
+    });
+  }
+
+  restoreDataBackup(sourcePath: string, confirmed: boolean) {
+    return this.invoke<BackupRestoreResult>("restore_data_backup", {
+      sourcePath,
+      confirmed,
     });
   }
 

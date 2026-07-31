@@ -17,6 +17,9 @@ fn with_repository<T>(
         .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
+    let coordinator = coordinator
+        .as_ref()
+        .ok_or_else(CommandError::state_unavailable)?;
     action(coordinator.ingredients()).map_err(Into::into)
 }
 
@@ -30,6 +33,9 @@ fn with_repository_mut<T>(
         .coordinator
         .lock()
         .map_err(|_| CommandError::state_unavailable())?;
+    let coordinator = coordinator
+        .as_mut()
+        .ok_or_else(CommandError::state_unavailable)?;
     action(coordinator.ingredients_mut()).map_err(Into::into)
 }
 

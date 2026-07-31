@@ -135,6 +135,7 @@ fn version_input(
         snapshot: json!({
             "schemaVersion": 1,
             "recipeVersionId": recipe_version_id,
+            "basis": { "kind": "per_100g", "quantity": "100", "unit": "g" },
             "rulePack": {
                 "id": "gb-28050-2011",
                 "revision": "2011.1"
@@ -147,7 +148,9 @@ fn version_input(
                 { "nutrientCode": "protein", "declaredValue": "0" },
                 { "nutrientCode": "sodium", "declaredValue": null }
             ],
-            "issues": []
+            "issues": [],
+            "publishable": true,
+            "requiredNotice": null
         }),
     }
 }

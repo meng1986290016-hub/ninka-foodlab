@@ -1,3 +1,4 @@
+import { calculateNutritionLabel as calculateCoreNutritionLabel } from "@food-rd/core";
 import type {
   AgentEvent,
   AgentConversation,
@@ -26,11 +27,19 @@ import type {
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV5,
+  type BrowserStateV6 as BrowserStateV5,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
 } from "./browser-schema";
+import type {
+  NutritionLabel,
+  NutritionLabelCalculation,
+  NutritionLabelDraft,
+  NutritionLabelDraftSaveInput,
+  NutritionLabelInput,
+  NutritionLabelVersion,
+} from "./nutrition-label-types";
 import type {
   Recipe,
   RecipeDraft,
@@ -602,6 +611,200 @@ export class BrowserDemoApi implements DesktopApi {
         "浏览器演示模式暂不读取本机文件",
       ),
     );
+  }
+
+  async listNutritionLabels(recipeId: string): Promise<NutritionLabel[]> {
+    const state = this.read();
+    this.findRecipe(state, recipeId);
+    return Object.values(state.nutritionLabels)
+      .filter((label) => label.recipeId === recipeId)
+      .sort(
+        (left, right) =>
+          Number(left.archivedAt !== null) -
+            Number(right.archivedAt !== null) ||
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          left.name.localeCompare(right.name, "zh-CN"),
+      )
+      .map(cloneValue);
+  }
+
+  async getNutritionLabel(id: string): Promise<NutritionLabel> {
+    return cloneValue(this.findNutritionLabel(this.read(), id));
+  }
+
+  async createNutritionLabel(
+    input: NutritionLabelInput,
+  ): Promise<NutritionLabel> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, input.recipeId);
+    if (recipe.archivedAt !== null) {
+      throw new DesktopApiError(
+        "missing_reference",
+        "找不到可用的配方",
+      );
+    }
+    const timestamp = this.now();
+    const label: NutritionLabel = {
+      id: this.createId(),
+      recipeId: recipe.id,
+      name: this.requiredName(input.name, "请填写营养标签名称"),
+      currentDraftId: null,
+      latestVersionNumber: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+    };
+    state.nutritionLabels[label.id] = label;
+    this.write(state);
+    return cloneValue(label);
+  }
+
+  async getNutritionLabelDraft(
+    labelId: string,
+  ): Promise<NutritionLabelDraft | null> {
+    const state = this.read();
+    this.findNutritionLabel(state, labelId);
+    const draft = state.nutritionLabelDrafts[labelId];
+    return draft ? cloneValue(draft) : null;
+  }
+
+  async calculateNutritionLabelPreview(
+    input: NutritionLabelDraftSaveInput,
+  ): Promise<NutritionLabelCalculation> {
+    const state = this.read();
+    this.assertNutritionLabelInputReferences(state, input);
+    try {
+      return cloneValue(calculateCoreNutritionLabel({
+        rulePackId: input.rulePackId,
+        basis: cloneValue(input.basis),
+        sourceValues: cloneValue(input.sourceValues),
+        optionalNutrientCodes: [...input.optionalNutrientCodes],
+        roundingMode: input.roundingMode,
+      }));
+    } catch {
+      throw new DesktopApiError(
+        "invalid_input",
+        "营养标签计算输入无效",
+      );
+    }
+  }
+
+  async saveNutritionLabelDraft(
+    input: NutritionLabelDraftSaveInput,
+  ): Promise<NutritionLabelDraft> {
+    const state = this.read();
+    const label = this.assertNutritionLabelInputReferences(state, input);
+    const calculation = await this.calculateNutritionLabelPreview(input);
+    const existing = state.nutritionLabelDrafts[label.id];
+    const timestamp = this.now();
+    const draft: NutritionLabelDraft = {
+      id: existing?.id ?? this.createId(),
+      labelId: label.id,
+      recipeVersionId: input.recipeVersionId,
+      rulePackId: input.rulePackId,
+      basis: cloneValue(input.basis),
+      sourceValues: cloneValue(input.sourceValues),
+      optionalNutrientCodes: [...input.optionalNutrientCodes],
+      roundingMode: input.roundingMode,
+      calculation,
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    };
+    state.nutritionLabelDrafts[label.id] = draft;
+    state.nutritionLabels[label.id] = {
+      ...label,
+      currentDraftId: draft.id,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return cloneValue(draft);
+  }
+
+  async listNutritionLabelVersions(
+    labelId: string,
+  ): Promise<NutritionLabelVersion[]> {
+    const state = this.read();
+    this.findNutritionLabel(state, labelId);
+    return Object.values(state.nutritionLabelVersions)
+      .filter((version) => version.labelId === labelId)
+      .sort((left, right) => right.versionNumber - left.versionNumber)
+      .map(cloneValue);
+  }
+
+  async getNutritionLabelVersion(
+    id: string,
+  ): Promise<NutritionLabelVersion> {
+    return cloneValue(this.findNutritionLabelVersion(this.read(), id));
+  }
+
+  async publishNutritionLabel(
+    labelId: string,
+  ): Promise<NutritionLabelVersion> {
+    const state = this.read();
+    const label = this.findNutritionLabel(state, labelId);
+    if (label.archivedAt !== null) {
+      throw new DesktopApiError(
+        "archived",
+        "已归档营养标签不能发布正式版本",
+      );
+    }
+    const draft = state.nutritionLabelDrafts[label.id];
+    if (!draft || draft.id !== label.currentDraftId) {
+      throw new DesktopApiError(
+        "missing_reference",
+        "找不到正式标签对应的草稿",
+      );
+    }
+    const calculation = await this.calculateNutritionLabelPreview(draft);
+    if (!calculation.publishable) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "营养标签仍有必填数据问题，不能发布正式版本",
+      );
+    }
+    const versionNumber =
+      Math.max(
+        0,
+        ...Object.values(state.nutritionLabelVersions)
+          .filter((version) => version.labelId === label.id)
+          .map((version) => version.versionNumber),
+      ) + 1;
+    const timestamp = this.now();
+    const id = this.createId();
+    const version: NutritionLabelVersion = {
+      id,
+      labelId: label.id,
+      versionNumber,
+      sourceDraftId: draft.id,
+      recipeVersionId: draft.recipeVersionId,
+      rulePackId: calculation.rulePack.id,
+      rulePackRevision: calculation.rulePack.revision,
+      snapshot: {
+        schemaVersion: 1,
+        id,
+        labelId: label.id,
+        labelVersionNumber: versionNumber,
+        recipeId: label.recipeId,
+        recipeVersionId: draft.recipeVersionId,
+        rulePack: cloneValue(calculation.rulePack),
+        basis: cloneValue(calculation.basis),
+        sourceValues: cloneValue(draft.sourceValues),
+        rows: cloneValue(calculation.rows),
+        issues: cloneValue(calculation.issues),
+        publishable: calculation.publishable,
+        requiredNotice: calculation.requiredNotice,
+        generatedAt: timestamp,
+      },
+      createdAt: timestamp,
+    };
+    state.nutritionLabelVersions[id] = version;
+    state.nutritionLabels[label.id] = {
+      ...label,
+      latestVersionNumber: versionNumber,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return cloneValue(version);
   }
 
   async listRecipes(): Promise<RecipeSummary[]> {
@@ -2152,6 +2355,46 @@ export class BrowserDemoApi implements DesktopApi {
       throw new DesktopApiError("not_found", "找不到该配方版本");
     }
     return version;
+  }
+
+  private findNutritionLabel(state: BrowserStateV5, id: string) {
+    const label = state.nutritionLabels[id];
+    if (!label) {
+      throw new DesktopApiError("not_found", "找不到该营养标签");
+    }
+    return label;
+  }
+
+  private findNutritionLabelVersion(state: BrowserStateV5, id: string) {
+    const version = state.nutritionLabelVersions[id];
+    if (!version) {
+      throw new DesktopApiError("not_found", "找不到该营养标签版本");
+    }
+    return version;
+  }
+
+  private assertNutritionLabelInputReferences(
+    state: BrowserStateV5,
+    input: NutritionLabelDraftSaveInput,
+  ) {
+    const label = this.findNutritionLabel(state, input.labelId);
+    if (label.archivedAt !== null) {
+      throw new DesktopApiError(
+        "archived",
+        "已归档营养标签不能保存草稿",
+      );
+    }
+    const recipeVersion = this.findRecipeVersion(
+      state,
+      input.recipeVersionId,
+    );
+    if (recipeVersion.recipeId !== label.recipeId) {
+      throw new DesktopApiError(
+        "missing_reference",
+        "找不到该配方的正式版本",
+      );
+    }
+    return label;
   }
 
   private materializeRecipeDraft(

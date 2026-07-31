@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 66);
+    assert_eq!(REGISTERED_COMMANDS.len(), 75);
     for command in [
         "list_categories",
         "create_supplier",
@@ -89,6 +89,26 @@ fn every_recipe_command_is_registered() {
         "compare_recipe_versions",
     ] {
         assert!(REGISTERED_COMMANDS.contains(&command));
+    }
+}
+
+#[test]
+fn every_nutrition_label_command_is_registered() {
+    for command in [
+        "list_nutrition_labels",
+        "get_nutrition_label",
+        "create_nutrition_label",
+        "get_nutrition_label_draft",
+        "calculate_nutrition_label_preview",
+        "save_nutrition_label_draft",
+        "list_nutrition_label_versions",
+        "get_nutrition_label_version",
+        "publish_nutrition_label",
+    ] {
+        assert!(
+            food_rd_desktop::commands::REGISTERED_COMMANDS.contains(&command),
+            "missing command {command}"
+        );
     }
 }
 

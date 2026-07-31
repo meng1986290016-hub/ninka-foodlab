@@ -2,6 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -59,9 +60,12 @@ impl NutritionLabelRepository {
 
     pub fn list_labels(&self, recipe_id: &str) -> Result<Vec<NutritionLabel>, RepositoryError> {
         assert_recipe_exists(&self.connection, recipe_id)?;
-        let mut statement = self
-            .connection
-            .prepare(&format!("{LABEL_SELECT} WHERE label.recipe_id = ?1"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{LABEL_SELECT}
+                 WHERE label.recipe_id = ?1
+                 ORDER BY label.archived_at IS NOT NULL,
+                          label.updated_at DESC, label.name"
+        ))?;
         let rows = statement
             .query_map([recipe_id], map_label_row)?
             .collect::<Result<Vec<_>, _>>()?;
@@ -157,18 +161,22 @@ impl NutritionLabelRepository {
                 timestamp,
             ],
         )?;
+        self.connection.execute(
+            "UPDATE nutrition_labels SET updated_at = ?1 WHERE id = ?2",
+            params![timestamp, label.id],
+        )?;
         self.get_draft(&label.id)?
             .ok_or_else(|| domain("not_found", "找不到营养标签草稿"))
     }
 
     pub fn create_version(
         &mut self,
-        input: NutritionLabelVersionInput,
+        mut input: NutritionLabelVersionInput,
     ) -> Result<NutritionLabelVersion, RepositoryError> {
         validate_version_input(&self.connection, &input)?;
+        let label = self.get_label(&input.label_id)?;
         let id = (self.create_id)();
         let timestamp = (self.clock)();
-        let snapshot_json = serde_json::to_string(&input.snapshot)?;
         let transaction = self.connection.transaction()?;
         let version_number = transaction.query_row(
             "SELECT COALESCE(MAX(version_number), 0) + 1
@@ -176,6 +184,36 @@ impl NutritionLabelRepository {
             [&input.label_id],
             |row| row.get::<_, i64>(0),
         )?;
+        let snapshot = input
+            .snapshot
+            .as_object_mut()
+            .ok_or_else(|| domain("invalid_input", "营养标签版本快照无效"))?;
+        snapshot.insert(
+            "schemaVersion".into(),
+            Value::Number(input.snapshot_schema_version.into()),
+        );
+        snapshot.insert("id".into(), Value::String(id.clone()));
+        snapshot.insert("labelId".into(), Value::String(input.label_id.clone()));
+        snapshot.insert(
+            "labelVersionNumber".into(),
+            Value::Number(version_number.into()),
+        );
+        snapshot.insert("recipeId".into(), Value::String(label.recipe_id));
+        snapshot.insert(
+            "recipeVersionId".into(),
+            Value::String(input.recipe_version_id.clone()),
+        );
+        snapshot.insert("generatedAt".into(), Value::String(timestamp.clone()));
+        let rule_pack = snapshot
+            .get_mut("rulePack")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| domain("invalid_input", "营养标签版本快照无效"))?;
+        rule_pack.insert("id".into(), Value::String(input.rule_pack_id.clone()));
+        rule_pack.insert(
+            "revision".into(),
+            Value::String(input.rule_pack_revision.clone()),
+        );
+        let snapshot_json = serde_json::to_string(&input.snapshot)?;
         transaction.execute(
             "INSERT INTO nutrition_label_versions (
                id, label_id, version_number, source_draft_id,
@@ -194,6 +232,10 @@ impl NutritionLabelRepository {
                 snapshot_json,
                 timestamp,
             ],
+        )?;
+        transaction.execute(
+            "UPDATE nutrition_labels SET updated_at = ?1 WHERE id = ?2",
+            params![timestamp, input.label_id],
         )?;
         transaction.commit()?;
         self.get_version(&id)
@@ -402,6 +444,7 @@ fn validate_version_input(
     if input.snapshot_schema_version <= 0 || !input.snapshot.is_object() {
         return Err(domain("invalid_input", "营养标签版本快照无效"));
     }
+    validate_snapshot_shape(&input.snapshot)?;
     assert_recipe_version_belongs_to_recipe(
         connection,
         &input.recipe_version_id,
@@ -430,6 +473,28 @@ fn validate_version_input(
             "invalid_input",
             "正式标签的配方版本或规则包与草稿不一致",
         ));
+    }
+    Ok(())
+}
+
+fn validate_snapshot_shape(snapshot: &Value) -> Result<(), RepositoryError> {
+    let required_array = |field: &str| {
+        snapshot
+            .get(field)
+            .is_some_and(Value::is_array)
+            .then_some(())
+            .ok_or_else(|| domain("invalid_input", "营养标签版本快照缺少必要数据"))
+    };
+    required_array("sourceValues")?;
+    required_array("rows")?;
+    required_array("issues")?;
+    if snapshot.get("basis").is_none_or(|value| !value.is_object())
+        || snapshot
+            .get("rulePack")
+            .is_none_or(|value| !value.is_object())
+        || snapshot.get("publishable").and_then(Value::as_bool) != Some(true)
+    {
+        return Err(domain("invalid_input", "营养标签版本快照无效"));
     }
     Ok(())
 }

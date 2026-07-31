@@ -24,6 +24,14 @@ import type {
   ReviewedIngredientImportDraft,
 } from "./import-types";
 import type {
+  NutritionLabel,
+  NutritionLabelCalculation,
+  NutritionLabelDraft,
+  NutritionLabelDraftSaveInput,
+  NutritionLabelInput,
+  NutritionLabelVersion,
+} from "./nutrition-label-types";
+import type {
   Recipe,
   RecipeDraft,
   RecipeDraftSaveInput,
@@ -65,6 +73,7 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "duplicate_variant",
   "reference_conflict",
   "missing_reference",
+  "recipe_cycle",
   "archived",
   "conversion_unavailable",
   "import_failure",
@@ -106,6 +115,60 @@ export class TauriDesktopApi implements DesktopApi {
   private invoke<T>(command: string, args?: Record<string, unknown>) {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
+    });
+  }
+
+  listNutritionLabels(recipeId: string) {
+    return this.invoke<NutritionLabel[]>("list_nutrition_labels", {
+      recipeId,
+    });
+  }
+
+  getNutritionLabel(id: string) {
+    return this.invoke<NutritionLabel>("get_nutrition_label", { id });
+  }
+
+  createNutritionLabel(input: NutritionLabelInput) {
+    return this.invoke<NutritionLabel>("create_nutrition_label", { input });
+  }
+
+  getNutritionLabelDraft(labelId: string) {
+    return this.invoke<NutritionLabelDraft | null>(
+      "get_nutrition_label_draft",
+      { labelId },
+    );
+  }
+
+  calculateNutritionLabelPreview(input: NutritionLabelDraftSaveInput) {
+    return this.invoke<NutritionLabelCalculation>(
+      "calculate_nutrition_label_preview",
+      { input },
+    );
+  }
+
+  saveNutritionLabelDraft(input: NutritionLabelDraftSaveInput) {
+    return this.invoke<NutritionLabelDraft>("save_nutrition_label_draft", {
+      input,
+    });
+  }
+
+  listNutritionLabelVersions(labelId: string) {
+    return this.invoke<NutritionLabelVersion[]>(
+      "list_nutrition_label_versions",
+      { labelId },
+    );
+  }
+
+  getNutritionLabelVersion(id: string) {
+    return this.invoke<NutritionLabelVersion>(
+      "get_nutrition_label_version",
+      { id },
+    );
+  }
+
+  publishNutritionLabel(labelId: string) {
+    return this.invoke<NutritionLabelVersion>("publish_nutrition_label", {
+      labelId,
     });
   }
 

@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod ingest;
 pub mod ingredients;
+pub mod labels;
 pub mod recipes;
 
 use std::{
@@ -17,7 +18,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 66] = [
+pub const REGISTERED_COMMANDS: [&str; 75] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -84,6 +85,15 @@ pub const REGISTERED_COMMANDS: [&str; 66] = [
     "create_recipe_version",
     "copy_recipe_version_to_draft",
     "compare_recipe_versions",
+    "list_nutrition_labels",
+    "get_nutrition_label",
+    "create_nutrition_label",
+    "get_nutrition_label_draft",
+    "calculate_nutrition_label_preview",
+    "save_nutrition_label_draft",
+    "list_nutrition_label_versions",
+    "get_nutrition_label_version",
+    "publish_nutrition_label",
 ];
 
 pub struct AppState {

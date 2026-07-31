@@ -89,16 +89,16 @@ describe("BrowserDemoApi", () => {
     });
   });
 
-  it("migrates v2 storage to v5 without changing ingredient data", async () => {
+  it("migrates v2 storage to v6 without changing ingredient data", async () => {
     const v2 = emptyV2Storage();
     const migrated = new BrowserDemoApi({ storage: v2 });
 
     expect(await migrated.listMaterialGroups()).toEqual([]);
     const stored = JSON.parse(
-      v2.getItem("food-rd.browser-demo.v5") ?? "null",
+      v2.getItem("food-rd.browser-demo.v6") ?? "null",
     ) as Record<string, unknown>;
     expect(stored).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       categories: [],
       suppliers: [],
       materialGroups: [],
@@ -116,6 +116,9 @@ describe("BrowserDemoApi", () => {
       recipeDrafts: {},
       recipeVersions: {},
       recipeVersionDependencies: {},
+      nutritionLabels: {},
+      nutritionLabelDrafts: {},
+      nutritionLabelVersions: {},
     });
   });
 
@@ -240,7 +243,7 @@ describe("BrowserDemoApi", () => {
       sourceAttachments: [],
       updatedAt: "2026-07-12T01:15:00.000Z",
     });
-    expect(storage.getItem("food-rd.browser-demo.v5")).not.toBeNull();
+    expect(storage.getItem("food-rd.browser-demo.v6")).not.toBeNull();
     expect(await migrated.getSetting("appearance.compact")).toBe(true);
   });
 

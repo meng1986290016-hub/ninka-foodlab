@@ -184,10 +184,10 @@
 - Tauri 与浏览器返回相同 JSON 形状和错误码。
 - API 不接受客户端伪造的正式计算结果；正式发布必须在受信任路径重新计算。
 
-- [ ] **Step 1:** 写双适配器契约测试。
-- [ ] **Step 2:** 实现命令与浏览器持久化。
-- [ ] **Step 3:** 验证未知/零值和规则包修订往返。
-- [ ] **Step 4:** 提交 `feat(labels): expose nutrition label desktop api`。
+- [x] **Step 1:** 写双适配器契约测试。
+- [x] **Step 2:** 实现命令与浏览器持久化。
+- [x] **Step 3:** 验证未知/零值和规则包修订往返。
+- [x] **Step 4:** 提交 `feat(labels): expose nutrition label desktop api`。
 
 ### Task 7：设计并实现营养标签工作台
 

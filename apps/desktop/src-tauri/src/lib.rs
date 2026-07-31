@@ -29,6 +29,11 @@ use commands::ingredients::{
     rename_category, save_draft, save_ingredient_variant, set_setting, update_material_group,
     update_supplier,
 };
+use commands::labels::{
+    calculate_nutrition_label_preview, create_nutrition_label, get_nutrition_label,
+    get_nutrition_label_draft, get_nutrition_label_version, list_nutrition_label_versions,
+    list_nutrition_labels, publish_nutrition_label, save_nutrition_label_draft,
+};
 use commands::recipes::{
     archive_recipe, compare_recipe_versions, copy_recipe_version_to_draft, create_recipe,
     create_recipe_version, get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions,
@@ -122,6 +127,15 @@ pub fn run() {
             create_recipe_version,
             copy_recipe_version_to_draft,
             compare_recipe_versions,
+            list_nutrition_labels,
+            get_nutrition_label,
+            create_nutrition_label,
+            get_nutrition_label_draft,
+            calculate_nutrition_label_preview,
+            save_nutrition_label_draft,
+            list_nutrition_label_versions,
+            get_nutrition_label_version,
+            publish_nutrition_label,
         ])
         .run(tauri::generate_context!())
         .expect("食研工作台启动失败");

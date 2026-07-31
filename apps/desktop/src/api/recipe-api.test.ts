@@ -193,7 +193,7 @@ describe("recipe desktop API", () => {
     ]);
   });
 
-  it("persists drafts and immutable versions in browser schema v5", async () => {
+  it("persists drafts and immutable versions in browser schema v6", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;
     const api = new BrowserDemoApi({
@@ -241,9 +241,9 @@ describe("recipe desktop API", () => {
     );
     const copied = await reopened.copyRecipeVersionToDraft(firstVersion.id);
 
-    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v5") ?? "{}"))
+    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v6") ?? "{}"))
       .toMatchObject({
-        schemaVersion: 5,
+        schemaVersion: 6,
         recipes: {
           [recipe.id]: { name: "低糖乳饮料", latestVersionNumber: 2 },
         },
@@ -274,7 +274,7 @@ describe("recipe desktop API", () => {
     });
     await original.createAgentConversation("升级前的研发对话");
     const v5 = JSON.parse(
-      storage.getItem("food-rd.browser-demo.v5") ?? "{}",
+      storage.getItem("food-rd.browser-demo.v6") ?? "{}",
     ) as Record<string, unknown>;
     const v4 = { ...v5 };
     delete v4.recipes;
@@ -297,13 +297,16 @@ describe("recipe desktop API", () => {
     ]);
     expect(await migrated.listRecipes()).toEqual([]);
     expect(
-      JSON.parse(storage.getItem("food-rd.browser-demo.v5") ?? "{}"),
+      JSON.parse(storage.getItem("food-rd.browser-demo.v6") ?? "{}"),
     ).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       recipes: {},
       recipeDrafts: {},
       recipeVersions: {},
       recipeVersionDependencies: {},
+      nutritionLabels: {},
+      nutritionLabelDrafts: {},
+      nutritionLabelVersions: {},
     });
   });
 

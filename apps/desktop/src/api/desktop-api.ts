@@ -21,6 +21,14 @@ import type {
   ReviewedIngredientImportDraft,
 } from "./import-types";
 import type {
+  NutritionLabel,
+  NutritionLabelCalculation,
+  NutritionLabelDraft,
+  NutritionLabelDraftSaveInput,
+  NutritionLabelInput,
+  NutritionLabelVersion,
+} from "./nutrition-label-types";
+import type {
   Recipe,
   RecipeDraft,
   RecipeDraftSaveInput,
@@ -56,6 +64,23 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  listNutritionLabels(recipeId: string): Promise<NutritionLabel[]>;
+  getNutritionLabel(id: string): Promise<NutritionLabel>;
+  createNutritionLabel(input: NutritionLabelInput): Promise<NutritionLabel>;
+  getNutritionLabelDraft(
+    labelId: string,
+  ): Promise<NutritionLabelDraft | null>;
+  calculateNutritionLabelPreview(
+    input: NutritionLabelDraftSaveInput,
+  ): Promise<NutritionLabelCalculation>;
+  saveNutritionLabelDraft(
+    input: NutritionLabelDraftSaveInput,
+  ): Promise<NutritionLabelDraft>;
+  listNutritionLabelVersions(
+    labelId: string,
+  ): Promise<NutritionLabelVersion[]>;
+  getNutritionLabelVersion(id: string): Promise<NutritionLabelVersion>;
+  publishNutritionLabel(labelId: string): Promise<NutritionLabelVersion>;
   listRecipes(): Promise<RecipeSummary[]>;
   getRecipe(id: string): Promise<Recipe>;
   createRecipe(input: RecipeInput): Promise<Recipe>;

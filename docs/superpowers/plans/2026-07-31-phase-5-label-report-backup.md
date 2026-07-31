@@ -268,9 +268,9 @@
 - 使用临时目录生成完整包后再原子移动。
 - 中断或空间不足时不破坏当前数据库。
 
-- [ ] **Step 1:** 写包结构、秘密排除和损坏检测测试。
-- [ ] **Step 2:** 实现 `.foodrd-backup` 本地备份包。
-- [ ] **Step 3:** 提交 `feat(backup): create verified offline backups`。
+- [x] **Step 1:** 写包结构、秘密排除和损坏检测测试。
+- [x] **Step 2:** 实现 `.foodrd-backup` 本地备份包。
+- [x] **Step 3:** 提交 `feat(backup): create verified offline backups`。
 
 ### Task 11：实现恢复预检、迁移与原子回滚
 

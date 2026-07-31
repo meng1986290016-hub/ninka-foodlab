@@ -28,7 +28,7 @@ mime_guess = "2"
 pdf-extract = "0.10"
 quick-xml = "0.38"
 reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
-rusqlite = { version = "0.40.1", features = ["bundled"] }
+rusqlite = { version = "0.40.1", features = ["backup", "bundled"] }
 rust_xlsxwriter = "0.92"
 rust_decimal = { version = "1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }

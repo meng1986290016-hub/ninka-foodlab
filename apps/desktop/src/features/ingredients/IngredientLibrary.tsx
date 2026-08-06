@@ -41,7 +41,7 @@ export function IngredientLibrary({
 }: IngredientLibraryProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [selection, setSelection] = useState<VariantSelection | null>(null);
   const [comparison, setComparison] = useState<VariantComparison | null>(null);
@@ -64,30 +64,34 @@ export function IngredientLibrary({
   async function handleCreateGroup(input: MaterialGroupInput) {
     const group = await api.createMaterialGroup(input);
     refresh();
-    setExpandedIds((current) => new Set(current).add(group.id));
+    setActiveGroupId(group.id);
     openEditor({ kind: "variant", group, variant: null });
   }
 
   function handleVariantSaved(group: MaterialGroup) {
     refresh();
-    setExpandedIds((current) => new Set(current).add(group.id));
+    setActiveGroupId(group.id);
     setEditor(null);
   }
 
   async function handleArchiveVariant(variant: IngredientVariant) {
-    if (!window.confirm(`确认归档“${variant.supplierName}”的供应商版本吗？`)) {
+    const specification =
+      variant.modelOrSpecification.trim() || "未填写型号/规格";
+    if (
+      !window.confirm(
+        `确认归档“${variant.supplierName} · ${specification}”的原料版本吗？`,
+      )
+    ) {
       return;
     }
     await archiveVariant(variant);
   }
 
-  function toggleGroup(groupId: string) {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
+  function selectGroup(groupId: string) {
+    setActiveGroupId(groupId);
+    setSelection(null);
+    setComparison(null);
+    setComparisonError(null);
   }
 
   function changeVariantSelection(
@@ -122,7 +126,7 @@ export function IngredientLibrary({
       setComparison(result);
     } catch (cause) {
       setComparisonError(
-        cause instanceof Error ? cause.message : "供应商版本比较失败",
+        cause instanceof Error ? cause.message : "原料版本比较失败",
       );
     }
   }
@@ -151,7 +155,9 @@ export function IngredientLibrary({
         <div className="library-header">
           <div>
             <h1>原料库</h1>
-            <p>按通用原料归类，维护各供应商的价格、营养与研发记录。</p>
+            <p>
+              按通用原料归类，分别维护不同供应商、型号与规格的价格、营养和研发记录。
+            </p>
           </div>
           <div className="library-header-actions">
             <IngredientExchangeMenu
@@ -192,7 +198,7 @@ export function IngredientLibrary({
               onClick={() => void openComparison()}
               type="button"
             >
-              比较 {selection.ids.size} 个供应商版本
+              比较 {selection.ids.size} 个原料版本
             </button>
           ) : null}
         </div>
@@ -209,7 +215,7 @@ export function IngredientLibrary({
         ) : null}
 
         <IngredientTable
-          expandedIds={expandedIds}
+          activeGroupId={activeGroupId}
           loading={loading}
           materialGroups={materialGroups}
           onAddVariant={(group) =>
@@ -219,7 +225,7 @@ export function IngredientLibrary({
           onEditVariant={(group, variant) =>
             openEditor({ kind: "variant", group, variant })
           }
-          onToggle={toggleGroup}
+          onSelectGroup={selectGroup}
           onVariantSelectionChange={changeVariantSelection}
           selectedVariantIds={selection?.ids ?? new Set()}
         />
@@ -255,11 +261,8 @@ export function IngredientLibrary({
           onClose={() => setImporting(false)}
           onCommitted={(result) => {
             refresh();
-            setExpandedIds((current) => {
-              const next = new Set(current);
-              result.variants.forEach((variant) => next.add(variant.materialGroupId));
-              return next;
-            });
+            const firstImportedGroupId = result.variants[0]?.materialGroupId;
+            if (firstImportedGroupId) setActiveGroupId(firstImportedGroupId);
             setImporting(false);
           }}
         />

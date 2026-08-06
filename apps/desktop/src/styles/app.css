@@ -3357,7 +3357,7 @@
 
 .search-field {
   display: flex;
-  width: min(360px, 50%);
+  width: min(330px, 50%);
   height: var(--control-height);
   align-items: center;
   gap: var(--space-2);
@@ -3465,86 +3465,248 @@ th:nth-child(6) {
   width: 92px;
 }
 
-.ingredient-hierarchy-table {
-  min-width: 980px;
+.ingredient-split-frame {
+  min-height: 420px;
 }
 
-.ingredient-hierarchy-table th:first-child {
-  width: 18%;
+.ingredient-split-view {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 330px minmax(0, 1fr);
 }
 
-.ingredient-hierarchy-table th:nth-child(2) {
-  width: 10%;
+.material-master-pane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+  background: #f8faf9;
 }
 
-.ingredient-hierarchy-table th:nth-child(3) {
-  width: 12%;
-}
-
-.ingredient-hierarchy-table th:nth-child(4) {
-  width: 13%;
-}
-
-.ingredient-hierarchy-table th:nth-child(5) {
-  width: 12%;
-}
-
-.ingredient-hierarchy-table th:nth-child(6) {
-  width: 11%;
-}
-
-.ingredient-hierarchy-table th:nth-child(7) {
-  width: 13%;
-}
-
-.ingredient-hierarchy-table .actions-column {
-  width: 112px;
-}
-
-.material-group-row {
-  background: var(--color-accent-soft);
+.material-master-pane__header {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
   color: var(--color-ink-soft);
-  font-weight: 610;
+  font-size: 12px;
 }
 
-.material-group-row:hover {
-  background: #e2f0e8;
-}
-
-.material-group-name {
+.material-master-pane__header strong {
   color: var(--color-ink);
+  font-size: 13px;
 }
 
-.disclosure-button {
-  display: inline-flex;
-  max-width: 100%;
+.material-master-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  padding: var(--space-2);
+}
+
+.material-master-item {
+  position: relative;
+  display: grid;
+  min-height: 58px;
   align-items: center;
   gap: var(--space-2);
-  padding: 0;
-  border: 0;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 680;
+  color: var(--color-ink-soft);
   text-align: left;
 }
 
-.disclosure-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
+.material-master-item:hover {
+  background: #f0f6f2;
+}
+
+.material-master-item.is-selected {
+  border-color: #c7ded1;
+  background: #eaf5ef;
   color: var(--color-accent);
+}
+
+.material-master-item.is-selected::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+  content: "";
+}
+
+.material-master-item:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.material-master-item__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.material-master-item__content strong,
+.material-master-item__content small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-master-item__content strong {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 670;
+}
+
+.material-master-item__content small {
+  color: var(--color-ink-muted);
+  font-size: 10px;
+}
+
+.material-master-item__count {
+  color: var(--color-ink-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.material-master-item__arrow {
+  display: inline-flex;
+  color: var(--color-ink-muted);
   transform: rotate(-90deg);
-  transition: transform var(--motion-fast) ease;
 }
 
-.disclosure-icon.is-expanded {
-  transform: rotate(0deg);
+.material-master-item.is-selected .material-master-item__arrow {
+  color: var(--color-accent);
 }
 
+.material-detail-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-canvas);
+}
+
+.material-detail-header {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.material-detail-header > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.material-detail-header h2 {
+  overflow: hidden;
+  margin: 0 var(--space-1) 0 0;
+  color: var(--color-ink);
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-group-category-badge,
 .variant-count {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
   color: var(--color-ink-soft);
   font-size: var(--font-size-caption);
   font-weight: 560;
+}
+
+.material-group-category-badge {
+  background: rgb(255 255 255 / 72%);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.variant-count {
+  background: rgb(11 131 80 / 8%);
+  color: var(--color-accent);
+}
+
+.material-detail-add-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.material-detail-table-scroll {
+  min-height: 0;
+  flex: 1;
+}
+
+.ingredient-variant-table {
+  min-width: 760px;
+}
+
+.ingredient-variant-table th:first-child {
+  width: 7%;
+}
+
+.ingredient-variant-table th:nth-child(2) {
+  width: 19%;
+}
+
+.ingredient-variant-table th:nth-child(3) {
+  width: 21%;
+}
+
+.ingredient-variant-table th:nth-child(4) {
+  width: 15%;
+}
+
+.ingredient-variant-table th:nth-child(5) {
+  width: 13%;
+}
+
+.ingredient-variant-table th:nth-child(6) {
+  width: 14%;
+}
+
+.ingredient-variant-table th:nth-child(7) {
+  width: 11%;
+}
+
+.ingredient-variant-table th {
+  height: 42px;
+  background: #f7f9f8;
+  color: var(--color-ink-muted);
+  font-size: 11px;
+  font-weight: 610;
+}
+
+.ingredient-variant-table .actions-column {
+  text-align: right;
+}
+
+.variant-select-column {
+  padding: 0;
 }
 
 .variant-row td {
@@ -3557,8 +3719,8 @@ th:nth-child(6) {
 }
 
 .variant-row td:first-child {
-  position: relative;
-  padding-left: 48px;
+  padding: 0;
+  text-align: center;
 }
 
 .variant-row--selected td {
@@ -3569,28 +3731,23 @@ th:nth-child(6) {
   box-shadow: inset 3px 0 var(--color-accent);
 }
 
-.variant-branch {
-  position: absolute;
-  top: 0;
-  bottom: 50%;
-  left: 28px;
-  width: 14px;
-  border-bottom: 1px solid var(--color-border-strong);
-  border-left: 1px solid var(--color-border-strong);
-}
-
 .variant-select {
-  position: absolute;
-  top: 50%;
-  left: 50px;
   width: 16px;
   height: 16px;
   accent-color: var(--color-accent);
-  transform: translateY(-50%);
 }
 
-.variant-category-placeholder {
-  color: var(--color-ink-muted);
+.variant-supplier-cell strong {
+  font: inherit;
+}
+
+.variant-supplier-cell small,
+.variant-price-cell small {
+  display: none;
+}
+
+.material-detail-empty {
+  flex: 1;
 }
 
 .icon-button:disabled {
@@ -4542,6 +4699,24 @@ tbody tr:hover {
     display: none;
   }
 
+  .library-toolbar .search-field {
+    width: 100%;
+  }
+
+  .ingredient-split-view {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .material-master-pane__header,
+  .material-detail-header {
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
+  }
+
+  .material-detail-header h2 {
+    max-width: 180px;
+  }
+
   .ingredient-workspace.is-editing:not(.is-importing) {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4666,6 +4841,41 @@ tbody tr:hover {
 
   .search-field {
     width: 100%;
+  }
+
+  .ingredient-split-frame {
+    min-height: 520px;
+  }
+
+  .ingredient-split-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 184px minmax(0, 1fr);
+  }
+
+  .material-master-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .material-master-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .material-master-item {
+    min-height: 52px;
+  }
+
+  .material-detail-header {
+    min-height: 66px;
+  }
+
+  .material-detail-header .material-group-category-badge {
+    display: none;
+  }
+
+  .material-detail-header h2 {
+    max-width: 150px;
   }
 
   .ingredient-form {

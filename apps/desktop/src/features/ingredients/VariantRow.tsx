@@ -32,12 +32,20 @@ export function VariantRow({
   selected,
   variant,
 }: VariantRowProps) {
-  const recordName = `${materialName} · ${variant.supplierName}`;
+  const specification =
+    variant.modelOrSpecification.trim() || "未填写型号/规格";
+  const recordName = `${materialName} · ${variant.supplierName} · ${specification}`;
+  const formattedDate = dateFormatter.format(new Date(variant.updatedAt));
+  const formattedPrice =
+    variant.currentPrice === null
+      ? "—"
+      : `¥${variant.currentPrice}/${variant.priceUnit}`;
 
   return (
-    <tr className={selected ? "variant-row variant-row--selected" : "variant-row"}>
-      <td>
-        <span className="variant-branch" aria-hidden="true" />
+    <tr
+      className={selected ? "variant-row variant-row--selected" : "variant-row"}
+    >
+      <td className="variant-select-cell">
         <input
           aria-label={`选择 ${recordName} 进行比较`}
           checked={selected}
@@ -46,23 +54,27 @@ export function VariantRow({
           type="checkbox"
         />
       </td>
-      <td className="variant-category-placeholder">—</td>
-      <td>{variant.supplierName}</td>
-      <td title={variant.modelOrSpecification || undefined}>
+      <td className="variant-supplier-cell">
+        <strong>{variant.supplierName}</strong>
+        <small>{specification}</small>
+      </td>
+      <td
+        className="variant-specification-cell"
+        title={variant.modelOrSpecification || undefined}
+      >
         {variant.modelOrSpecification || "—"}
       </td>
-      <td className="mono-cell">
-        {variant.currentPrice === null
-          ? "—"
-          : `¥${variant.currentPrice}/${variant.priceUnit}`}
+      <td className="mono-cell variant-price-cell">
+        <span>{formattedPrice}</span>
+        <small>更新于 {formattedDate}</small>
       </td>
-      <td>
+      <td className="variant-completeness-cell">
         <span className={completenessClass(variant.completeness.percent)}>
           {variant.completeness.percent}%
         </span>
       </td>
-      <td className="mono-cell">
-        {dateFormatter.format(new Date(variant.updatedAt))}
+      <td className="mono-cell variant-date-cell">
+        {formattedDate}
       </td>
       <td className="row-actions">
         <button

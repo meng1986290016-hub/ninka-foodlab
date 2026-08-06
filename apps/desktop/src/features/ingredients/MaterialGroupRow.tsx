@@ -2,55 +2,39 @@ import type { MaterialGroup } from "../../api/types";
 import { Icon } from "../../components/Icon";
 
 interface MaterialGroupRowProps {
-  expanded: boolean;
   group: MaterialGroup;
-  onAddVariant: () => void;
-  onToggle: () => void;
+  onSelect: () => void;
+  selected: boolean;
 }
 
 export function MaterialGroupRow({
-  expanded,
   group,
-  onAddVariant,
-  onToggle,
+  onSelect,
+  selected,
 }: MaterialGroupRowProps) {
-  const action = expanded ? "收起" : "展开";
-
   return (
-    <tr className="material-group-row">
-      <td className="material-group-name">
-        <button
-          aria-expanded={expanded}
-          aria-label={`${action} ${group.name}`}
-          className="disclosure-button"
-          onClick={onToggle}
-          type="button"
-        >
-          <span className={expanded ? "disclosure-icon is-expanded" : "disclosure-icon"}>
-            <Icon name="chevron-down" size={16} />
-          </span>
-          <span>{group.name}</span>
-        </button>
-      </td>
-      <td>{group.categoryName ?? "—"}</td>
-      <td>
-        <span className="variant-count">{group.variants.length} 家供应商</span>
-      </td>
-      <td aria-label="组级型号规格不适用">—</td>
-      <td aria-label="组级价格不适用">—</td>
-      <td aria-label="组级完整度不适用">—</td>
-      <td aria-label="组级更新日期不显示">—</td>
-      <td className="row-actions">
-        <button
-          aria-label={`为 ${group.name} 添加供应商版本`}
-          className="icon-button"
-          onClick={onAddVariant}
-          title="添加供应商版本"
-          type="button"
-        >
-          <Icon name="plus" size={17} />
-        </button>
-      </td>
-    </tr>
+    <button
+      aria-label={`查看 ${group.name} 的具体原料`}
+      aria-pressed={selected}
+      className={
+        selected ? "material-master-item is-selected" : "material-master-item"
+      }
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="material-master-item__content">
+        <strong>{group.name}</strong>
+        <small>{group.categoryName ?? "未分类"}</small>
+      </span>
+      <span
+        className="material-master-item__count"
+        title="每一组供应商与型号/规格计为一款；同一供应商的不同型号分别计数"
+      >
+        {group.variants.length} 款
+      </span>
+      <span className="material-master-item__arrow">
+        <Icon name="chevron-down" size={15} />
+      </span>
+    </button>
   );
 }

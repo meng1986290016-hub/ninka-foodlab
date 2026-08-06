@@ -30,18 +30,18 @@ export function VariantComparisonDrawer({
 }: VariantComparisonDrawerProps) {
   return (
     <aside
-      aria-label="供应商版本比较"
+      aria-label="原料版本比较"
       aria-modal="true"
       className="ingredient-drawer comparison-drawer"
       role="dialog"
     >
       <div className="drawer-header">
         <div>
-          <h2>供应商版本比较</h2>
+          <h2>原料版本比较</h2>
           <p>{materialName}</p>
         </div>
         <button
-          aria-label="关闭供应商版本比较"
+          aria-label="关闭原料版本比较"
           className="icon-button"
           onClick={onClose}
           type="button"
@@ -55,14 +55,19 @@ export function VariantComparisonDrawer({
           <thead>
             <tr>
               <th>项目</th>
-              {comparison.variants.map((variant) => (
-                <th aria-label={variant.supplierName} key={variant.id}>
-                  <strong>{variant.supplierName}</strong>
-                  <small aria-hidden="true">
-                    {variant.modelOrSpecification || "未填写型号"}
-                  </small>
-                </th>
-              ))}
+              {comparison.variants.map((variant) => {
+                const specification =
+                  variant.modelOrSpecification.trim() || "未填写型号/规格";
+                return (
+                  <th
+                    aria-label={`${variant.supplierName} · ${specification}`}
+                    key={variant.id}
+                  >
+                    <strong>{variant.supplierName}</strong>
+                    <small aria-hidden="true">{specification}</small>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

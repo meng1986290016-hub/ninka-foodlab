@@ -128,45 +128,109 @@ describe("ingredient library supplier hierarchy", () => {
     await seedSupplierVariants(api);
   });
 
-  it("expands a common material to show supplier-specific rows", async () => {
+  it("selects a common material to show its supplier-specific rows", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
 
-    await screen.findByText("脱脂乳粉");
-    expect(screen.queryByText("供应商A")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "展开 脱脂乳粉" }));
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
+    await user.click(
+      screen.getByRole("button", { name: "查看 白砂糖 的具体原料" }),
+    );
+    expect(screen.queryByText("乳益康 MD-300")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "查看 脱脂乳粉 的具体原料" }),
+    );
 
     expect(await screen.findByText("供应商A")).not.toBeNull();
     expect(screen.getByText("供应商B")).not.toBeNull();
     expect(screen.getByText("供应商C")).not.toBeNull();
-    expect(screen.getByText("3 家供应商")).not.toBeNull();
+    expect(screen.getByText("共 3 款")).not.toBeNull();
+  });
+
+  it("counts different models from the same supplier as separate material versions", async () => {
+    const milkGroup = (await api.listMaterialGroups("脱脂乳粉"))[0];
+    const supplierA = milkGroup?.variants.find(
+      (variant) => variant.supplierName === "供应商A",
+    );
+    if (milkGroup === undefined || supplierA === undefined) {
+      throw new Error("missing seeded material version");
+    }
+    await api.saveIngredientVariant({
+      materialGroupId: milkGroup.id,
+      supplierId: supplierA.supplierId,
+      modelOrSpecification: "速溶型 SMP-200",
+      internalCode: null,
+      currentPrice: "32.00",
+      priceUnit: "kg",
+      densityGPerMl: null,
+      source: "供应商规格书",
+      researchNotes: "同一供应商的另一型号",
+      nutrition: { basis: "per_100g", values: [] },
+    });
+
+    const user = userEvent.setup();
+    render(<App api={api} />);
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
+    expect(screen.getByText("共 4 款")).not.toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "查看 脱脂乳粉 的具体原料" }),
+    );
+    expect(screen.getAllByText("供应商A")).toHaveLength(2);
+    expect(screen.getAllByText("干燥脱脂乳粉")).toHaveLength(2);
+    expect(screen.getAllByText("速溶型 SMP-200")).toHaveLength(2);
   });
 
   it("searches supplier, model and research notes", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
     const search = screen.getByRole("searchbox", { name: "搜索原料" });
     await user.type(search, "DailySkim");
     await waitFor(() => expect(screen.queryByText("白砂糖")).toBeNull());
-    expect(await screen.findByText("脱脂乳粉")).not.toBeNull();
+    expect(
+      await screen.findByRole("button", {
+        name: "查看 脱脂乳粉 的具体原料",
+      }),
+    ).not.toBeNull();
 
     await user.clear(search);
     await user.type(search, "溶解性好");
     await waitFor(() => expect(screen.queryByText("白砂糖")).toBeNull());
-    expect(await screen.findByText("脱脂乳粉")).not.toBeNull();
+    expect(
+      await screen.findByRole("button", {
+        name: "查看 脱脂乳粉 的具体原料",
+      }),
+    ).not.toBeNull();
   });
 
   it("shows update dates only on supplier variants", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
-    const groupRow = screen.getByRole("row", { name: /脱脂乳粉/ });
-    expect(within(groupRow).queryByText("2026/07/16")).toBeNull();
+    const groupButton = screen.getByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
+    expect(within(groupButton).queryByText("2026/07/16")).toBeNull();
+    expect(within(groupButton).queryByText("—")).toBeNull();
+    expect(within(groupButton).getByText("3 款")).not.toBeNull();
 
-    await user.click(within(groupRow).getByRole("button", { name: "展开 脱脂乳粉" }));
+    await user.click(
+      groupButton,
+    );
+    expect(
+      screen.getByRole("button", { name: "为 脱脂乳粉 添加一款" }),
+    ).not.toBeNull();
     const supplierRow = screen.getByRole("row", { name: /供应商A/ });
     expect(within(supplierRow).getByText("2026/07/16")).not.toBeNull();
   });
@@ -174,7 +238,9 @@ describe("ingredient library supplier hierarchy", () => {
   it("creates the common material before opening its first supplier version", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
     await user.click(screen.getByRole("button", { name: "新建原料" }));
     expect(
@@ -192,7 +258,9 @@ describe("ingredient library supplier hierarchy", () => {
   it("opens ingredient data exchange from the library toolbar", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
     await user.click(screen.getByRole("button", { name: "数据交换" }));
     await user.click(screen.getByRole("button", { name: "导入原料资料" }));
@@ -205,10 +273,15 @@ describe("ingredient library supplier hierarchy", () => {
   it("adds or edits a supplier version from an expanded material group", async () => {
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
     await user.click(
-      screen.getByRole("button", { name: "为 脱脂乳粉 添加供应商版本" }),
+      screen.getByRole("button", { name: "查看 脱脂乳粉 的具体原料" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "为 脱脂乳粉 添加一款" }),
     );
     expect(
       screen.getByRole("dialog", { name: "新建供应商版本" }),
@@ -217,9 +290,10 @@ describe("ingredient library supplier hierarchy", () => {
       screen.getByRole("button", { name: "关闭供应商版本编辑器" }),
     );
 
-    await user.click(screen.getByRole("button", { name: "展开 脱脂乳粉" }));
     await user.click(
-      screen.getByRole("button", { name: "编辑 脱脂乳粉 · 供应商B" }),
+      screen.getByRole("button", {
+        name: "编辑 脱脂乳粉 · 供应商B · 乳益康 MD-300",
+      }),
     );
     expect(
       screen.getByRole("dialog", { name: "编辑供应商版本" }),

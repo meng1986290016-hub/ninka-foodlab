@@ -37,57 +37,77 @@ describe("supplier variant comparison", () => {
     });
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
+    });
 
-    await user.click(screen.getByRole("button", { name: "展开 脱脂乳粉" }));
+    await user.click(
+      screen.getByRole("button", { name: "查看 脱脂乳粉 的具体原料" }),
+    );
     await user.click(
       screen.getByRole("checkbox", {
-        name: "选择 脱脂乳粉 · 演示供应商 进行比较",
+        name: "选择 脱脂乳粉 · 演示供应商 · 未填写型号/规格 进行比较",
       }),
     );
     await user.click(
       screen.getByRole("checkbox", {
-        name: "选择 脱脂乳粉 · 供应商B 进行比较",
+        name: "选择 脱脂乳粉 · 供应商B · 乳益康 MD-300 进行比较",
       }),
     );
     await user.click(
-      screen.getByRole("button", { name: "比较 2 个供应商版本" }),
+      screen.getByRole("button", { name: "比较 2 个原料版本" }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "供应商版本比较" }),
+      await screen.findByRole("dialog", { name: "原料版本比较" }),
     ).not.toBeNull();
-    expect(screen.getByRole("columnheader", { name: "演示供应商" })).not.toBeNull();
-    expect(screen.getByRole("columnheader", { name: "供应商B" })).not.toBeNull();
+    expect(
+      screen.getByRole("columnheader", {
+        name: "演示供应商 · 未填写型号/规格",
+      }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("columnheader", {
+        name: "供应商B · 乳益康 MD-300",
+      }),
+    ).not.toBeNull();
     expect(screen.getAllByRole("cell", { name: "未知" }).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "新建原料" }));
     expect(
-      screen.queryByRole("dialog", { name: "供应商版本比较" }),
+      screen.queryByRole("dialog", { name: "原料版本比较" }),
     ).toBeNull();
     expect(screen.getByRole("heading", { name: "新建通用原料" })).not.toBeNull();
   });
 
-  it("asks before replacing a selection from another material group", async () => {
+  it("clears the comparison selection when switching common materials", async () => {
     const api = new BrowserDemoApi({ storage: window.localStorage });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     render(<App api={api} />);
-    await screen.findByText("脱脂乳粉");
-
-    await user.click(screen.getByRole("button", { name: "展开 脱脂乳粉" }));
-    await user.click(screen.getByRole("button", { name: "展开 白砂糖" }));
-    const milk = screen.getByRole("checkbox", {
-      name: "选择 脱脂乳粉 · 演示供应商 进行比较",
+    await screen.findByRole("button", {
+      name: "查看 脱脂乳粉 的具体原料",
     });
-    const sugar = screen.getByRole("checkbox", {
-      name: "选择 白砂糖 · 演示供应商 进行比较",
+
+    await user.click(
+      screen.getByRole("button", { name: "查看 脱脂乳粉 的具体原料" }),
+    );
+    const milk = screen.getByRole("checkbox", {
+      name: "选择 脱脂乳粉 · 演示供应商 · 未填写型号/规格 进行比较",
     });
     await user.click(milk);
+    await user.click(
+      screen.getByRole("button", { name: "查看 白砂糖 的具体原料" }),
+    );
+    const sugar = screen.getByRole("checkbox", {
+      name: "选择 白砂糖 · 演示供应商 · 未填写型号/规格 进行比较",
+    });
     await user.click(sugar);
 
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect((milk as HTMLInputElement).checked).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
     expect((sugar as HTMLInputElement).checked).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "比较 2 个原料版本" }),
+    ).toBeNull();
   });
 });

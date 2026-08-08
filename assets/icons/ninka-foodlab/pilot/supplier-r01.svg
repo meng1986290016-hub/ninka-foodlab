@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">供应商</title>
+  <metadata>Ninka FoodLab supplier r01; measured from approved direction-02 reference; 24px grid; 1.75px rounded stroke; status: approved.</metadata>
+  <g stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8.5" r="2.15"/>
+    <circle cx="7" cy="14.3" r="2.05"/>
+    <circle cx="17" cy="14.3" r="2.05"/>
+    <path d="M3.35 21c.45-2.45 1.9-3.9 3.65-3.9s3.2 1.45 3.65 3.9"/>
+    <path d="M13.35 21c.45-2.45 1.9-3.9 3.65-3.9s3.2 1.45 3.65 3.9"/>
+  </g>
+</svg>

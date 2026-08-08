@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400">
+  <rect width="1400" height="1400" fill="#FFFAF0" />
+  <text x="64" y="76" fill="#153D36" font-family="Inter, PingFang SC, sans-serif" font-size="30" font-weight="700">Ninka FoodLab · 第一批图标 SVG 评审</text>
+  <text x="64" y="110" fill="#64756F" font-family="Inter, PingFang SC, sans-serif" font-size="15">第二方向 · 24px 母版 · 1.75px 圆角描边 · 尚未接入应用</text>
+  <line x1="64" y1="140" x2="1336" y2="140" stroke="#153D36" stroke-opacity=".18" />
+
+  <g font-family="Inter, PingFang SC, sans-serif" text-anchor="middle">
+    <g transform="translate(54 176)">
+      <rect width="248" height="590" rx="22" fill="#FFFFFF" fill-opacity=".64" stroke="#153D36" stroke-opacity=".14" />
+      <rect x="20" y="20" width="208" height="262" rx="16" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12" />
+      <image href="ingredient-library.svg" x="64" y="69" width="120" height="120" />
+      <text x="124" y="332" fill="#153D36" font-size="22" font-weight="700">原料库</text>
+      <text x="124" y="360" fill="#85918D" font-size="12">ingredient-library.svg</text>
+      <image href="ingredient-library.svg" x="50" y="424" width="16" height="16" />
+      <image href="ingredient-library.svg" x="114" y="422" width="20" height="20" />
+      <image href="ingredient-library.svg" x="180" y="420" width="24" height="24" />
+      <text x="58" y="468" fill="#85918D" font-size="11">16px</text>
+      <text x="124" y="468" fill="#85918D" font-size="11">20px</text>
+      <text x="192" y="468" fill="#85918D" font-size="11">24px</text>
+    </g>
+
+    <g transform="translate(315 176)">
+      <rect width="248" height="590" rx="22" fill="#FFFFFF" fill-opacity=".64" stroke="#153D36" stroke-opacity=".14" />
+      <rect x="20" y="20" width="208" height="262" rx="16" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12" />
+      <image href="ingredient.svg" x="64" y="69" width="120" height="120" />
+      <text x="124" y="332" fill="#153D36" font-size="22" font-weight="700">原料</text>
+      <text x="124" y="360" fill="#85918D" font-size="12">ingredient.svg</text>
+      <image href="ingredient.svg" x="50" y="424" width="16" height="16" />
+      <image href="ingredient.svg" x="114" y="422" width="20" height="20" />
+      <image href="ingredient.svg" x="180" y="420" width="24" height="24" />
+      <text x="58" y="468" fill="#85918D" font-size="11">16px</text>
+      <text x="124" y="468" fill="#85918D" font-size="11">20px</text>
+      <text x="192" y="468" fill="#85918D" font-size="11">24px</text>
+    </g>
+
+    <g transform="translate(576 176)">
+      <rect width="248" height="590" rx="22" fill="#FFFFFF" fill-opacity=".64" stroke="#153D36" stroke-opacity=".14" />
+      <rect x="20" y="20" width="208" height="262" rx="16" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12" />
+      <image href="supplier.svg" x="64" y="69" width="120" height="120" />
+      <text x="124" y="332" fill="#153D36" font-size="22" font-weight="700">供应商</text>
+      <text x="124" y="360" fill="#85918D" font-size="12">supplier.svg</text>
+      <image href="supplier.svg" x="50" y="424" width="16" height="16" />
+      <image href="supplier.svg" x="114" y="422" width="20" height="20" />
+      <image href="supplier.svg" x="180" y="420" width="24" height="24" />
+      <text x="58" y="468" fill="#85918D" font-size="11">16px</text>
+      <text x="124" y="468" fill="#85918D" font-size="11">20px</text>
+      <text x="192" y="468" fill="#85918D" font-size="11">24px</text>
+    </g>
+
+    <g transform="translate(837 176)">
+      <rect width="248" height="590" rx="22" fill="#FFFFFF" fill-opacity=".64" stroke="#153D36" stroke-opacity=".14" />
+      <rect x="20" y="20" width="208" height="262" rx="16" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12" />
+      <image href="ingredient-version.svg" x="64" y="69" width="120" height="120" />
+      <text x="124" y="332" fill="#153D36" font-size="22" font-weight="700">原料版本</text>
+      <text x="124" y="360" fill="#85918D" font-size="12">ingredient-version.svg</text>
+      <image href="ingredient-version.svg" x="50" y="424" width="16" height="16" />
+      <image href="ingredient-version.svg" x="114" y="422" width="20" height="20" />
+      <image href="ingredient-version.svg" x="180" y="420" width="24" height="24" />
+      <text x="58" y="468" fill="#85918D" font-size="11">16px</text>
+      <text x="124" y="468" fill="#85918D" font-size="11">20px</text>
+      <text x="192" y="468" fill="#85918D" font-size="11">24px</text>
+    </g>
+
+    <g transform="translate(1098 176)">
+      <rect width="248" height="590" rx="22" fill="#FFFFFF" fill-opacity=".64" stroke="#153D36" stroke-opacity=".14" />
+      <rect x="20" y="20" width="208" height="262" rx="16" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12" />
+      <image href="recipe-library.svg" x="64" y="69" width="120" height="120" />
+      <text x="124" y="332" fill="#153D36" font-size="22" font-weight="700">配方库</text>
+      <text x="124" y="360" fill="#85918D" font-size="12">recipe-library.svg</text>
+      <image href="recipe-library.svg" x="50" y="424" width="16" height="16" />
+      <image href="recipe-library.svg" x="114" y="422" width="20" height="20" />
+      <image href="recipe-library.svg" x="180" y="420" width="24" height="24" />
+      <text x="58" y="468" fill="#85918D" font-size="11">16px</text>
+      <text x="124" y="468" fill="#85918D" font-size="11">20px</text>
+      <text x="192" y="468" fill="#85918D" font-size="11">24px</text>
+    </g>
+  </g>
+
+  <rect x="54" y="792" width="1292" height="54" rx="16" fill="#153D36" />
+  <text x="80" y="825" fill="#EFBD50" font-family="Inter, PingFang SC, sans-serif" font-size="14" font-weight="700">评审重点</text>
+  <text x="158" y="825" fill="#FFF7E7" font-family="Inter, PingFang SC, sans-serif" font-size="14">语义是否直观 · 四粒标记是否过重 · 16px 是否粘连</text>
+  <text x="1318" y="825" fill="#FFF7E7" font-family="Inter, sans-serif" text-anchor="end" font-size="13">REVIEW</text>
+</svg>

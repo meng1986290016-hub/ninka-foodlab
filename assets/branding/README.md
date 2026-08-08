@@ -64,9 +64,9 @@ App 图标只包含图形，不包含名称、首字母或标语。
 - 不得在低对比度照片上直接放置彩色标志，也不得以 Grain/Tomato 单独承载关键小字。
 - 字标中 `FoodLab` 不得比 `Ninka` 更粗或更醒目，正式名称不得写为 `NInka`、`NINKA` 或 `Food Lab`。
 
-## 未来 Tauri 2 接入目标
+## Tauri 2 接入
 
-Tauri 桌面应用创建后，将已验证资产复制到 `apps/desktop/src-tauri/icons/`：
+已验证资产同步到 `apps/desktop/src-tauri/icons/`，映射如下：
 
 | 品牌源资产 | Tauri 目标 |
 | --- | --- |
@@ -77,4 +77,4 @@ Tauri 桌面应用创建后，将已验证资产复制到 `apps/desktop/src-taur
 | `png/ninka-icon-256.png` | `apps/desktop/src-tauri/icons/128x128@2x.png` |
 | `png/ninka-icon-512.png` | `apps/desktop/src-tauri/icons/icon.png` |
 
-仅在 Tauri 壳创建后更新 `apps/desktop/src-tauri/tauri.conf.json` 的 `bundle.icon` 路径；当前品牌生成器不修改计算包或其依赖。
+`apps/desktop/src-tauri/tauri.conf.json` 的 `bundle.icon` 已使用上述目标路径。当前品牌生成器仍不修改应用计算包或其依赖；品牌源资产重新生成后，需要再次同步这些目标文件并运行 `pnpm brand:verify`。

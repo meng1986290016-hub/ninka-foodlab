@@ -1,0 +1,41 @@
+{
+  "collection": "Ninka FoodLab / Batch 01",
+  "status": "review",
+  "sourceBoard": "/Users/andrew/.codex/generated_images/019f789f-aaf8-7aa2-a3c1-c3c440b9dc9e/exec-7539c9c5-8aa2-40d1-99ad-aaa4eca80217.png",
+  "grid": 24,
+  "stroke": 1.75,
+  "linecap": "round",
+  "linejoin": "round",
+  "colors": {
+    "forest": "#153D36",
+    "grain": "#EFBD50"
+  },
+  "baseLibrary": "Tabler Icons 3.46.0",
+  "icons": [
+    {
+      "id": "ingredient-library",
+      "label": "原料库",
+      "file": "ingredient-library.svg"
+    },
+    {
+      "id": "ingredient",
+      "label": "原料",
+      "file": "ingredient.svg"
+    },
+    {
+      "id": "supplier",
+      "label": "供应商",
+      "file": "supplier.svg"
+    },
+    {
+      "id": "ingredient-version",
+      "label": "原料版本",
+      "file": "ingredient-version.svg"
+    },
+    {
+      "id": "recipe-library",
+      "label": "配方库",
+      "file": "recipe-library.svg"
+    }
+  ]
+}

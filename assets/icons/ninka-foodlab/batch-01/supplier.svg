@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">供应商</title>
+  <metadata>Built from Tabler Icons 3.46.0; Ninka FoodLab batch 01; 24px grid; 1.75px rounded stroke.</metadata>
+  <g fill="none" stroke="#153D36" stroke-width="4.375" stroke-linecap="round" stroke-linejoin="round" transform="translate(7.2 0.6) scale(.4)">
+    <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />
+    <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+  </g>
+  <g fill="none" stroke="#153D36" stroke-width="4.375" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 10.2) scale(.4)">
+    <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />
+    <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+  </g>
+  <g fill="none" stroke="#153D36" stroke-width="4.375" stroke-linecap="round" stroke-linejoin="round" transform="translate(12.4 10.2) scale(.4)">
+    <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />
+    <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+  </g>
+</svg>

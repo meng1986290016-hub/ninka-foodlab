@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">原料</title>
+  <metadata>Built from Tabler Icons 3.46.0; Ninka FoodLab batch 01; 24px grid; 1.75px rounded stroke.</metadata>
+  <defs>
+    <symbol id="ninka-seed" viewBox="0 0 24 24">
+      <path d="M10.708 2.372a2.382 2.382 0 0 0 -.71 .686l-4.892 7.26c-1.981 3.314 -1.22 7.466 1.767 9.882c2.969 2.402 7.286 2.402 10.254 0c2.987 -2.416 3.748 -6.569 1.795 -9.836l-4.919 -7.306c-.722 -1.075 -2.192 -1.376 -3.295 -.686z" />
+    </symbol>
+  </defs>
+  <g fill="none" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 6h8v-2a1 1 0 0 0 -1 -1h-6a1 1 0 0 0 -1 1v2" />
+    <path d="M16 6l1.094 1.759a6 6 0 0 1 .906 3.17v8.071a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-8.071a6 6 0 0 1 .906 -3.17l1.094 -1.759" />
+  </g>
+  <g fill="none" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 13l6 0" />
+    <path d="M9 17l6 0" />
+  </g>
+  <use href="#ninka-seed" fill="#EFBD50" transform="translate(12 9.2) rotate(0) scale(0.15) translate(-12 -12)" />
+</svg>

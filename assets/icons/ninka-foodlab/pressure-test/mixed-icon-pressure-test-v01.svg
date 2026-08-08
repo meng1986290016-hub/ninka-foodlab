@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" fill="none">
+  <title>Ninka FoodLab mixed icon pressure test v01</title>
+  <defs>
+    <style>
+      .title{font:700 34px Manrope,Arial,sans-serif;fill:#153D36}.sub{font:500 16px Manrope,Arial,sans-serif;fill:#5D746F}.label{font:700 15px Manrope,Arial,sans-serif;fill:#153D36}.body{font:500 14px Manrope,Arial,sans-serif;fill:#506762}.small{font:600 12px Manrope,Arial,sans-serif;fill:#71837F}.tabler{fill:none;stroke:#153D36;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <symbol id="settings" viewBox="0 0 24 24"><g class="tabler"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37c1 .608 2.296.07 2.572-1.065"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0-6 0"/></g></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><g class="tabler"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0-14 0"/><path d="M21 21l-6-6"/></g></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><g class="tabler"><path d="M12 5v14M5 12h14"/></g></symbol>
+    <symbol id="pencil" viewBox="0 0 24 24"><g class="tabler"><path d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16v4"/><path d="M13.5 6.5l4 4"/></g></symbol>
+    <symbol id="trash" viewBox="0 0 24 24"><g class="tabler"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></g></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path class="tabler" d="M5 12l5 5L20 7"/></symbol>
+  </defs>
+
+  <rect width="1600" height="1100" rx="38" fill="#FFF7E7"/>
+  <text class="title" x="64" y="72">Ninka FoodLab · 混排压力测试 v01</text>
+  <text class="sub" x="64" y="104">Approved custom icons × Tabler defaults · 24px grid · 1.75px round stroke · no app integration</text>
+
+  <rect x="64" y="142" width="1472" height="186" rx="24" fill="#FFFCF5" stroke="#D9E0DB"/>
+  <text class="label" x="92" y="176">A. 主导航 20px · 1:1 尺寸</text>
+  <g transform="translate(92 202)">
+    <rect width="220" height="82" rx="16" fill="#E6EFEA"/>
+    <image href="../pilot/ingredient-library-r02.svg" x="18" y="29" width="20" height="20"/><text class="body" x="52" y="44">原料库</text>
+  </g>
+  <g transform="translate(328 202)">
+    <rect width="220" height="82" rx="16" fill="#E6EFEA"/>
+    <image href="../pilot/recipe-library-r05.svg" x="18" y="29" width="20" height="20"/><text class="body" x="52" y="44">配方库</text>
+  </g>
+  <g transform="translate(564 202)">
+    <rect width="220" height="82" rx="16" fill="#E6EFEA"/>
+    <use href="#settings" x="18" y="29" width="20" height="20"/><text class="body" x="52" y="44">设置</text>
+  </g>
+  <text class="small" x="826" y="225">检查：相同线宽下的视觉重量、图形占框与黄色强调</text>
+  <text class="body" x="826" y="253">定制图标更有识别度，但不应压过“设置”或像插画。</text>
+  <text class="body" x="826" y="278">若偏重，仅调整界面渲染比例，不修改批准母版。</text>
+
+  <rect x="64" y="352" width="1472" height="190" rx="24" fill="#FFFCF5" stroke="#D9E0DB"/>
+  <text class="label" x="92" y="386">B. 工具栏 17px · 业务图标与通用操作混排</text>
+  <g transform="translate(92 414)">
+    <rect width="750" height="82" rx="16" fill="#F3F6F2"/>
+    <image href="../pilot/recipe-workbench-r02.svg" x="22" y="31" width="17" height="17"/>
+    <text class="body" x="51" y="47">配方工作台</text>
+    <path d="M174 21v40" stroke="#D6DED9"/>
+    <use href="#search" x="198" y="31" width="17" height="17"/><text class="body" x="225" y="47">搜索</text>
+    <use href="#plus" x="304" y="31" width="17" height="17"/><text class="body" x="331" y="47">添加</text>
+    <use href="#pencil" x="410" y="31" width="17" height="17"/><text class="body" x="437" y="47">编辑</text>
+    <use href="#trash" x="516" y="31" width="17" height="17"/><text class="body" x="543" y="47">删除</text>
+    <use href="#check" x="622" y="31" width="17" height="17"/><text class="body" x="649" y="47">完成</text>
+  </g>
+  <text class="small" x="886" y="437">检查：17px 下的负空间与识别速度</text>
+  <text class="body" x="886" y="465">品牌图标只标记业务对象；操作图标继续保持单色。</text>
+
+  <rect x="64" y="566" width="1472" height="372" rx="24" fill="#FFFCF5" stroke="#D9E0DB"/>
+  <text class="label" x="92" y="600">C. 全套已批准图标 · 16 / 20 / 24 / 32px</text>
+  <text class="small" x="92" y="632">尺寸</text><text class="small" x="180" y="632">原料库</text><text class="small" x="350" y="632">原料</text><text class="small" x="520" y="632">供应商</text><text class="small" x="690" y="632">原料版本</text><text class="small" x="860" y="632">配方库</text><text class="small" x="1030" y="632">配方工作台</text><text class="small" x="1240" y="632">默认参照</text>
+
+  <g transform="translate(0 650)">
+    <text class="label" x="92" y="22">16px</text>
+    <image href="../pilot/ingredient-library-r02.svg" x="194" y="3" width="16" height="16"/><image href="../pilot/ingredient-r01.svg" x="364" y="3" width="16" height="16"/><image href="../pilot/supplier-r01.svg" x="534" y="3" width="16" height="16"/><image href="../pilot/ingredient-version-r01.svg" x="704" y="3" width="16" height="16"/><image href="../pilot/recipe-library-r05.svg" x="874" y="3" width="16" height="16"/><image href="../pilot/recipe-workbench-r02.svg" x="1064" y="3" width="16" height="16"/><use href="#search" x="1260" y="3" width="16" height="16"/><use href="#settings" x="1304" y="3" width="16" height="16"/><use href="#trash" x="1348" y="3" width="16" height="16"/>
+  </g>
+  <path d="M92 700H1478" stroke="#E4E8E4"/>
+  <g transform="translate(0 718)">
+    <text class="label" x="92" y="24">20px</text>
+    <image href="../pilot/ingredient-library-r02.svg" x="192" y="2" width="20" height="20"/><image href="../pilot/ingredient-r01.svg" x="362" y="2" width="20" height="20"/><image href="../pilot/supplier-r01.svg" x="532" y="2" width="20" height="20"/><image href="../pilot/ingredient-version-r01.svg" x="702" y="2" width="20" height="20"/><image href="../pilot/recipe-library-r05.svg" x="872" y="2" width="20" height="20"/><image href="../pilot/recipe-workbench-r02.svg" x="1062" y="2" width="20" height="20"/><use href="#search" x="1258" y="2" width="20" height="20"/><use href="#settings" x="1304" y="2" width="20" height="20"/><use href="#trash" x="1350" y="2" width="20" height="20"/>
+  </g>
+  <path d="M92 770H1478" stroke="#E4E8E4"/>
+  <g transform="translate(0 786)">
+    <text class="label" x="92" y="28">24px</text>
+    <image href="../pilot/ingredient-library-r02.svg" x="190" y="2" width="24" height="24"/><image href="../pilot/ingredient-r01.svg" x="360" y="2" width="24" height="24"/><image href="../pilot/supplier-r01.svg" x="530" y="2" width="24" height="24"/><image href="../pilot/ingredient-version-r01.svg" x="700" y="2" width="24" height="24"/><image href="../pilot/recipe-library-r05.svg" x="870" y="2" width="24" height="24"/><image href="../pilot/recipe-workbench-r02.svg" x="1060" y="2" width="24" height="24"/><use href="#search" x="1256" y="2" width="24" height="24"/><use href="#settings" x="1304" y="2" width="24" height="24"/><use href="#trash" x="1352" y="2" width="24" height="24"/>
+  </g>
+  <path d="M92 842H1478" stroke="#E4E8E4"/>
+  <g transform="translate(0 858)">
+    <text class="label" x="92" y="34">32px</text>
+    <image href="../pilot/ingredient-library-r02.svg" x="186" y="1" width="32" height="32"/><image href="../pilot/ingredient-r01.svg" x="356" y="1" width="32" height="32"/><image href="../pilot/supplier-r01.svg" x="526" y="1" width="32" height="32"/><image href="../pilot/ingredient-version-r01.svg" x="696" y="1" width="32" height="32"/><image href="../pilot/recipe-library-r05.svg" x="866" y="1" width="32" height="32"/><image href="../pilot/recipe-workbench-r02.svg" x="1056" y="1" width="32" height="32"/><use href="#search" x="1252" y="1" width="32" height="32"/><use href="#settings" x="1304" y="1" width="32" height="32"/><use href="#trash" x="1356" y="1" width="32" height="32"/>
+  </g>
+
+  <rect x="64" y="966" width="1472" height="82" rx="18" fill="#153D36"/>
+  <text x="92" y="998" font-family="Manrope,Arial,sans-serif" font-size="14" font-weight="700" fill="#EFBD50">PASS CRITERIA</text>
+  <text x="92" y="1025" font-family="Manrope,Arial,sans-serif" font-size="14" font-weight="500" fill="#FFF7E7">同线宽不等于同重量：优先检查占框、实心面积、负空间和黄色面积；新图标继续使用相同 24px 网格与 1.75px 描边。</text>
+</svg>

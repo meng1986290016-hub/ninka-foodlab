@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="1520" viewBox="0 0 1520 1520">
+  <rect width="1520" height="1520" rx="28" fill="#FFF7E7"/>
+  <text x="48" y="60" fill="#153D36" font-family="Inter, PingFang SC, sans-serif" font-size="30" font-weight="700">Ninka FoodLab · Batch 02 Icon Review</text>
+  <text x="48" y="91" fill="#60736D" font-family="Inter, PingFang SC, sans-serif" font-size="15">Reference measured · 24px master · 1.75px rounded stroke · not integrated</text>
+
+  <g font-family="Inter, PingFang SC, sans-serif">
+    <g transform="translate(40 125)">
+      <rect width="700" height="410" rx="22" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12"/>
+      <text x="24" y="40" fill="#153D36" font-size="22" font-weight="700">原料 · Ingredient r01</text>
+      <text x="24" y="68" fill="#60736D" font-size="12" font-weight="600">LOCKED REFERENCE</text>
+      <text x="244" y="68" fill="#60736D" font-size="12" font-weight="600">VECTOR MASTER</text>
+      <text x="464" y="68" fill="#60736D" font-size="12" font-weight="600">OVERLAY</text>
+      <image href="ingredient-reference.png" x="24" y="82" width="200" height="200"/>
+      <image href="ingredient-r01.svg" x="244" y="82" width="200" height="200"/>
+      <image href="ingredient-reference.png" x="464" y="82" width="200" height="200" opacity=".42"/>
+      <image href="ingredient-r01.svg" x="464" y="82" width="200" height="200" opacity=".72"/>
+      <text x="24" y="326" fill="#60736D" font-size="12" font-weight="600">ACTUAL SIZE</text>
+      <image href="ingredient-r01.svg" x="130" y="305" width="16" height="16"/>
+      <image href="ingredient-r01.svg" x="190" y="303" width="20" height="20"/>
+      <image href="ingredient-r01.svg" x="254" y="301" width="24" height="24"/>
+      <text x="126" y="352" fill="#60736D" font-size="11">16px</text><text x="186" y="352" fill="#60736D" font-size="11">20px</text><text x="250" y="352" fill="#60736D" font-size="11">24px</text>
+      <rect x="464" y="304" width="200" height="58" rx="14" fill="#153D36"/>
+      <text x="480" y="329" fill="#EFBD50" font-size="12" font-weight="700">APPROVED</text>
+      <text x="480" y="348" fill="#FFF7E7" font-size="12">pouch · Grain mark · two rules</text>
+    </g>
+
+    <g transform="translate(780 125)">
+      <rect width="700" height="410" rx="22" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12"/>
+      <text x="24" y="40" fill="#153D36" font-size="22" font-weight="700">供应商 · Supplier r01</text>
+      <text x="24" y="68" fill="#60736D" font-size="12" font-weight="600">LOCKED REFERENCE</text>
+      <text x="244" y="68" fill="#60736D" font-size="12" font-weight="600">VECTOR MASTER</text>
+      <text x="464" y="68" fill="#60736D" font-size="12" font-weight="600">OVERLAY</text>
+      <image href="supplier-reference.png" x="24" y="82" width="200" height="200"/>
+      <image href="supplier-r01.svg" x="244" y="82" width="200" height="200"/>
+      <image href="supplier-reference.png" x="464" y="82" width="200" height="200" opacity=".42"/>
+      <image href="supplier-r01.svg" x="464" y="82" width="200" height="200" opacity=".72"/>
+      <text x="24" y="326" fill="#60736D" font-size="12" font-weight="600">ACTUAL SIZE</text>
+      <image href="supplier-r01.svg" x="130" y="305" width="16" height="16"/>
+      <image href="supplier-r01.svg" x="190" y="303" width="20" height="20"/>
+      <image href="supplier-r01.svg" x="254" y="301" width="24" height="24"/>
+      <text x="126" y="352" fill="#60736D" font-size="11">16px</text><text x="186" y="352" fill="#60736D" font-size="11">20px</text><text x="250" y="352" fill="#60736D" font-size="11">24px</text>
+      <rect x="464" y="304" width="200" height="58" rx="14" fill="#153D36"/>
+      <text x="480" y="329" fill="#EFBD50" font-size="12" font-weight="700">APPROVED</text>
+      <text x="480" y="348" fill="#FFF7E7" font-size="12">three people · Forest only</text>
+    </g>
+
+    <g transform="translate(40 565)">
+      <rect width="700" height="410" rx="22" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12"/>
+      <text x="24" y="40" fill="#153D36" font-size="22" font-weight="700">原料版本 · Ingredient Version r01</text>
+      <text x="24" y="68" fill="#60736D" font-size="12" font-weight="600">LOCKED REFERENCE</text>
+      <text x="244" y="68" fill="#60736D" font-size="12" font-weight="600">VECTOR MASTER</text>
+      <text x="464" y="68" fill="#60736D" font-size="12" font-weight="600">OVERLAY</text>
+      <image href="ingredient-version-reference.png" x="24" y="82" width="200" height="200"/>
+      <image href="ingredient-version-r01.svg" x="244" y="82" width="200" height="200"/>
+      <image href="ingredient-version-reference.png" x="464" y="82" width="200" height="200" opacity=".42"/>
+      <image href="ingredient-version-r01.svg" x="464" y="82" width="200" height="200" opacity=".72"/>
+      <text x="24" y="326" fill="#60736D" font-size="12" font-weight="600">ACTUAL SIZE</text>
+      <image href="ingredient-version-r01.svg" x="130" y="305" width="16" height="16"/>
+      <image href="ingredient-version-r01.svg" x="190" y="303" width="20" height="20"/>
+      <image href="ingredient-version-r01.svg" x="254" y="301" width="24" height="24"/>
+      <text x="126" y="352" fill="#60736D" font-size="11">16px</text><text x="186" y="352" fill="#60736D" font-size="11">20px</text><text x="250" y="352" fill="#60736D" font-size="11">24px</text>
+      <rect x="464" y="304" width="200" height="58" rx="14" fill="#153D36"/>
+      <text x="480" y="329" fill="#EFBD50" font-size="12" font-weight="700">APPROVED</text>
+      <text x="480" y="348" fill="#FFF7E7" font-size="12">stacked cards · four seeds</text>
+    </g>
+
+    <g transform="translate(780 565)">
+      <rect width="700" height="410" rx="22" fill="#FFFCF5" stroke="#153D36" stroke-opacity=".12"/>
+      <text x="24" y="40" fill="#153D36" font-size="22" font-weight="700">配方库 · Recipe Library r05</text>
+      <text x="24" y="68" fill="#60736D" font-size="12" font-weight="600">LOCKED REFERENCE</text>
+      <text x="244" y="68" fill="#60736D" font-size="12" font-weight="600">VECTOR MASTER</text>
+      <text x="464" y="68" fill="#60736D" font-size="12" font-weight="600">OVERLAY</text>
+      <image href="recipe-library-reference.png" x="24" y="82" width="200" height="200"/>
+      <image href="recipe-library-r05.svg" x="244" y="82" width="200" height="200"/>
+      <image href="recipe-library-reference.png" x="464" y="82" width="200" height="200" opacity=".42"/>
+      <image href="recipe-library-r05.svg" x="464" y="82" width="200" height="200" opacity=".72"/>
+      <text x="24" y="326" fill="#60736D" font-size="12" font-weight="600">ACTUAL SIZE</text>
+      <image href="recipe-library-r05.svg" x="130" y="305" width="16" height="16"/>
+      <image href="recipe-library-r05.svg" x="190" y="303" width="20" height="20"/>
+      <image href="recipe-library-r05.svg" x="254" y="301" width="24" height="24"/>
+      <text x="126" y="352" fill="#60736D" font-size="11">16px</text><text x="186" y="352" fill="#60736D" font-size="11">20px</text><text x="250" y="352" fill="#60736D" font-size="11">24px</text>
+      <rect x="464" y="304" width="200" height="58" rx="14" fill="#153D36"/>
+      <text x="480" y="329" fill="#EFBD50" font-size="12" font-weight="700">APPROVED</text>
+      <text x="480" y="348" fill="#FFF7E7" font-size="12">upper arc · flat junction · seeds</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none">
+  <rect width="1200" height="1200" rx="30" fill="#FFF7E7"/>
+  <text x="60" y="70" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="32" font-weight="700">配方工作台 · Recipe Workbench r02</text>
+  <text x="60" y="103" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="15">Selected direction locked · 24px master · 1.75px rounded stroke · not integrated</text>
+
+  <text x="60" y="145" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13" font-weight="700">LOCKED REFERENCE</text>
+  <rect x="60" y="160" width="280" height="280" rx="18" fill="#FFFCF5" stroke="#D8DDD8"/>
+  <image href="recipe-workbench-reference-r02.png" x="70" y="170" width="260" height="260"/>
+
+  <text x="430" y="145" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13" font-weight="700">EDITABLE VECTOR MASTER</text>
+  <rect x="430" y="160" width="280" height="280" rx="18" fill="#FFFCF5" stroke="#D8DDD8"/>
+  <image href="recipe-workbench-r02.svg" x="440" y="170" width="260" height="260"/>
+
+  <rect x="760" y="160" width="380" height="180" rx="18" fill="#153D36"/>
+  <text x="790" y="202" fill="#EFBD50" font-family="Manrope, Arial, sans-serif" font-size="14" font-weight="700">APPROVED · DOUBLE-ARC WORKBENCH</text>
+  <text x="790" y="240" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="15">• two measured open circular arcs</text>
+  <text x="790" y="270" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="15">• horizontal baseline with round caps</text>
+  <text x="790" y="300" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="15">• approved four-seed geometry</text>
+
+  <text x="790" y="382" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13" font-weight="700">OVERLAY CHECK · FOREST = VECTOR</text>
+  <rect x="790" y="397" width="280" height="280" rx="18" fill="#FFFCF5" stroke="#D8DDD8"/>
+  <image href="recipe-workbench-reference-r02.png" x="800" y="407" width="260" height="260" opacity=".48"/>
+  <image href="recipe-workbench-r02.svg" x="800" y="407" width="260" height="260" opacity=".72"/>
+
+  <text x="60" y="500" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13" font-weight="700">ACTUAL SIZE CHECK</text>
+  <rect x="60" y="520" width="104" height="104" rx="16" fill="#FFFCF5"/>
+  <image href="recipe-workbench-r02.svg" x="104" y="564" width="16" height="16"/>
+  <text x="96" y="650" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13">16px</text>
+  <rect x="190" y="520" width="104" height="104" rx="16" fill="#FFFCF5"/>
+  <image href="recipe-workbench-r02.svg" x="232" y="562" width="20" height="20"/>
+  <text x="226" y="650" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13">20px</text>
+  <rect x="320" y="520" width="104" height="104" rx="16" fill="#FFFCF5"/>
+  <image href="recipe-workbench-r02.svg" x="360" y="560" width="24" height="24"/>
+  <text x="356" y="650" fill="#60746F" font-family="Manrope, Arial, sans-serif" font-size="13">24px</text>
+</svg>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ninka FoodLab · 第一批图标 SVG 评审</title>
+    <style>
+      :root {
+        color: #153d36;
+        background: #fff7e7;
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-synthesis: none;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 16% 8%, rgba(239, 189, 80, 0.11), transparent 26rem),
+          #fffaf0;
+      }
+
+      main {
+        width: min(1180px, 100%);
+        margin: 0;
+        padding: 54px 34px 64px;
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        padding-bottom: 26px;
+        border-bottom: 1px solid rgba(21, 61, 54, 0.18);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+      }
+
+      header p, .meta {
+        margin: 0;
+        color: rgba(21, 61, 54, 0.68);
+        font-size: 13px;
+      }
+
+      .meta { text-align: right; line-height: 1.8; }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 14px;
+        padding-top: 24px;
+      }
+
+      article {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid rgba(21, 61, 54, 0.15);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.58);
+        box-shadow: 0 10px 30px rgba(21, 61, 54, 0.04);
+      }
+
+      .hero {
+        display: grid;
+        place-items: center;
+        height: 214px;
+        background-image:
+          linear-gradient(rgba(21, 61, 54, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(21, 61, 54, 0.06) 1px, transparent 1px);
+        background-size: 18px 18px;
+        background-position: center;
+      }
+
+      .hero img { width: 118px; height: 118px; }
+
+      .name {
+        padding: 18px 18px 15px;
+        border-top: 1px solid rgba(21, 61, 54, 0.1);
+      }
+
+      h2 { margin: 0 0 4px; font-size: 18px; }
+      code { font-size: 11px; color: rgba(21, 61, 54, 0.52); }
+
+      .sizes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        padding: 4px 14px 18px;
+      }
+
+      .size {
+        display: grid;
+        place-items: center;
+        align-content: center;
+        height: 78px;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .size span {
+        margin-top: 8px;
+        color: rgba(21, 61, 54, 0.56);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .s16 img { width: 16px; height: 16px; }
+      .s20 img { width: 20px; height: 20px; }
+      .s24 img { width: 24px; height: 24px; }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 22px;
+        padding: 15px 18px;
+        border-radius: 14px;
+        background: #153d36;
+        color: #fff7e7;
+        font-size: 12px;
+      }
+
+      footer b { color: #efbd50; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Ninka FoodLab · 第一批图标</h1>
+          <p>第二方向 SVG 母版评审 · 仅审图标，尚未接入应用</p>
+        </div>
+        <div class="meta">24px Grid · 1.75px Rounded Stroke<br />Forest #153D36 · Grain #EFBD50</div>
+      </header>
+
+      <section class="grid" id="grid"></section>
+
+      <footer>
+        <span><b>评审重点</b>：语义是否直观、四粒标记是否过重、小尺寸是否粘连</span>
+        <span>状态：REVIEW</span>
+      </footer>
+    </main>
+
+    <script>
+      const icons = [
+        ["原料库", "ingredient-library"],
+        ["原料", "ingredient"],
+        ["供应商", "supplier"],
+        ["原料版本", "ingredient-version"],
+        ["配方库", "recipe-library"],
+      ];
+
+      document.querySelector("#grid").innerHTML = icons.map(([label, id]) => `
+        <article>
+          <div class="hero"><img src="./${id}.svg" alt="${label}" /></div>
+          <div class="name"><h2>${label}</h2><code>${id}.svg</code></div>
+          <div class="sizes">
+            ${[16, 20, 24].map(size => `<div class="size s${size}"><img src="./${id}.svg" alt="" /><span>${size}px</span></div>`).join("")}
+          </div>
+        </article>`).join("");
+    </script>
+  </body>
+</html>

@@ -1,8 +1,16 @@
 :root {
+  --brand-forest: #153d36;
+  --brand-grain: #efbd50;
+  --brand-tomato: #df6b45;
+  --brand-cream: #fff7e7;
+
   --color-canvas: #ffffff;
+  --color-surface: #ffffff;
   --color-sidebar: #f6f8f7;
   --color-table-header: #f5f7f6;
   --color-surface-muted: #f8faf9;
+  --color-surface-raised: #fcfdfc;
+  --color-border-subtle: #e7ece9;
   --color-ink: #17211c;
   --color-ink-soft: #4f5d55;
   --color-ink-muted: #78837d;
@@ -21,6 +29,8 @@
   --font-size-body: 14px;
   --font-size-control: 14px;
   --font-size-title: 24px;
+  --font-size-section-title: 16px;
+  --font-size-small: 12px;
   --line-height-body: 1.5;
 
   --space-1: 4px;
@@ -35,11 +45,15 @@
   --radius-md: 9px;
   --radius-lg: 12px;
   --control-height: 42px;
+  --control-height-compact: 36px;
   --table-row-height: 52px;
+  --page-gutter: 28px;
   --sidebar-width: 168px;
   --drawer-width: 400px;
   --statusbar-height: 36px;
   --shadow-drawer: -12px 0 24px rgb(20 35 27 / 8%);
+  --shadow-card: 0 1px 2px rgb(20 35 27 / 4%);
+  --shadow-float: 0 12px 32px rgb(20 35 27 / 12%);
   --motion-fast: 140ms;
   --motion-standard: 220ms;
 }

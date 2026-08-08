@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">原料库</title>
+  <metadata>Ninka FoodLab pilot r01; measured from approved direction-02 reference; 24px grid; 1.75px rounded stroke; status: review.</metadata>
+  <defs>
+    <path id="ninka-seed" d="M10.708 2.372a2.382 2.382 0 0 0-.71.686l-4.892 7.26c-1.981 3.314-1.22 7.466 1.767 9.882 2.969 2.402 7.286 2.402 10.254 0 2.987-2.416 3.748-6.569 1.795-9.836l-4.919-7.306c-.722-1.075-2.192-1.376-3.295-.686Z"/>
+  </defs>
+  <path
+    d="M3 7.35V5.55A2.55 2.55 0 0 1 5.55 3h3.9c.78 0 1.52.36 2 1l1.08 1.43c.4.53 1.03.84 1.7.84h4.22A2.55 2.55 0 0 1 21 8.82v8.73a2.55 2.55 0 0 1-2.55 2.55H5.55A2.55 2.55 0 0 1 3 17.55V7.35Z"
+    stroke="#153D36"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path d="M3 7.35h7.75" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <use href="#ninka-seed" fill="#153D36" transform="translate(12 11.2) rotate(0) scale(.165 .135) translate(-12 -12)"/>
+  <use href="#ninka-seed" fill="#153D36" transform="translate(9.9 13.5) rotate(-90) scale(.165 .135) translate(-12 -12)"/>
+  <use href="#ninka-seed" fill="#153D36" transform="translate(14.1 13.5) rotate(90) scale(.165 .135) translate(-12 -12)"/>
+  <use href="#ninka-seed" fill="#EFBD50" transform="translate(12 15.85) rotate(180) scale(.165 .135) translate(-12 -12)"/>
+</svg>

@@ -3481,7 +3481,7 @@ th:nth-child(6) {
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--color-border);
+  box-shadow: inset -1px 0 var(--color-border);
   background: #f8faf9;
 }
 
@@ -4855,6 +4855,7 @@ tbody tr:hover {
   .material-master-pane {
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
+    box-shadow: none;
   }
 
   .material-master-list {

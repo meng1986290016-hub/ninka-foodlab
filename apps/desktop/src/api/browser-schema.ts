@@ -32,6 +32,10 @@ import type {
   NutritionLabelVersion,
 } from "./nutrition-label-types";
 import type { ResearchReportRecord } from "./research-report-types";
+import type {
+  AgentRecipeProposal,
+  MaterialNeed,
+} from "./agent-recipe-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
@@ -40,7 +44,9 @@ export const BROWSER_V4_KEY = "food-rd.browser-demo.v4";
 export const BROWSER_V5_KEY = "food-rd.browser-demo.v5";
 export const BROWSER_V6_KEY = "food-rd.browser-demo.v6";
 export const BROWSER_V7_KEY = "food-rd.browser-demo.v7";
-export const BROWSER_SCHEMA_VERSION = 7;
+export const BROWSER_V8_KEY = "food-rd.browser-demo.v8";
+export const BROWSER_V9_KEY = "food-rd.browser-demo.v9";
+export const BROWSER_SCHEMA_VERSION = 9;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -103,6 +109,19 @@ export interface BrowserStateV7
   extends Omit<BrowserStateV6, "schemaVersion"> {
   schemaVersion: 7;
   researchReports: Record<string, ResearchReportRecord>;
+}
+
+export interface BrowserStateV8
+  extends Omit<BrowserStateV7, "schemaVersion" | "recipes"> {
+  schemaVersion: 8;
+  recipes: Record<string, Recipe>;
+}
+
+export interface BrowserStateV9
+  extends Omit<BrowserStateV8, "schemaVersion"> {
+  schemaVersion: 9;
+  agentRecipeProposals: Record<string, AgentRecipeProposal>;
+  materialNeeds: Record<string, MaterialNeed>;
 }
 
 export interface MigrationContext {
@@ -279,8 +298,44 @@ export function migrateV5ToV6(state: BrowserStateV5): BrowserStateV6 {
 export function migrateV6ToV7(state: BrowserStateV6): BrowserStateV7 {
   return {
     ...state,
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 7,
     researchReports: {},
+  };
+}
+
+export function migrateV7ToV8(state: BrowserStateV7): BrowserStateV8 {
+  return {
+    ...state,
+    schemaVersion: 8,
+    recipes: Object.fromEntries(
+      Object.entries(state.recipes).map(([id, recipe]) => [
+        id,
+        {
+          ...recipe,
+          productId: recipe.productId ?? recipe.id,
+          schemeName: recipe.schemeName?.trim() || "主配方",
+          schemeStatus: recipe.schemeStatus ?? "current",
+        },
+      ]),
+    ),
+  };
+}
+
+export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
+  const extended = state as BrowserStateV8 &
+    Partial<Pick<BrowserStateV9, "agentRecipeProposals" | "materialNeeds">>;
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    materialGroups: state.materialGroups.map((group) => ({
+      ...group,
+      variants: group.variants.map((variant) => ({
+        ...variant,
+        allergens: variant.allergens ?? { contains: [], mayContain: [] },
+      })),
+    })),
+    agentRecipeProposals: extended.agentRecipeProposals ?? {},
+    materialNeeds: extended.materialNeeds ?? {},
   };
 }
 
@@ -288,14 +343,41 @@ export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV7 {
-  const v7 = storage.getItem(BROWSER_V7_KEY);
-  if (v7 !== null) {
-    const parsed = JSON.parse(v7) as BrowserStateV7;
+): BrowserStateV9 {
+  const v9 = storage.getItem(BROWSER_V9_KEY);
+  if (v9 !== null) {
+    const parsed = JSON.parse(v9) as BrowserStateV9;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+
+  const v8 = storage.getItem(BROWSER_V8_KEY);
+  if (v8 !== null) {
+    const parsed = JSON.parse(v8) as BrowserStateV8;
+    if (parsed.schemaVersion !== 8) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV8ToV9(parsed);
+    if (
+      !("agentRecipeProposals" in parsed) ||
+      !("materialNeeds" in parsed)
+    ) {
+      writeBrowserState(storage, migrated);
+    }
+    return migrated;
+  }
+
+  const v7 = storage.getItem(BROWSER_V7_KEY);
+  if (v7 !== null) {
+    const parsed = JSON.parse(v7) as BrowserStateV7;
+    if (parsed.schemaVersion !== 7) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV8ToV9(migrateV7ToV8(parsed));
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v6 = storage.getItem(BROWSER_V6_KEY);
@@ -304,7 +386,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 6) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV6ToV7(parsed);
+    const migrated = migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(parsed)));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -315,7 +397,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 5) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV6ToV7(migrateV5ToV6(parsed));
+    const migrated = migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(parsed))));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -326,9 +408,9 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 4) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV6ToV7(
-      migrateV5ToV6(migrateV4ToV5(parsed)),
-    );
+    const migrated = migrateV8ToV9(migrateV7ToV8(
+      migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(parsed))),
+    ));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -339,11 +421,13 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 3) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV6ToV7(
-      migrateV5ToV6(
-        migrateV4ToV5(migrateV3ToV4(parsed, context)),
+    const migrated = migrateV8ToV9(migrateV7ToV8(
+      migrateV6ToV7(
+        migrateV5ToV6(
+          migrateV4ToV5(migrateV3ToV4(parsed, context)),
+        ),
       ),
-    );
+    ));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -354,13 +438,15 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 2) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV6ToV7(
-      migrateV5ToV6(
-        migrateV4ToV5(
-          migrateV3ToV4(migrateV2ToV3(parsed), context),
+    const migrated = migrateV8ToV9(migrateV7ToV8(
+      migrateV6ToV7(
+        migrateV5ToV6(
+          migrateV4ToV5(
+            migrateV3ToV4(migrateV2ToV3(parsed), context),
+          ),
         ),
       ),
-    );
+    ));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -372,22 +458,29 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV6ToV7(
-    migrateV5ToV6(
-      migrateV4ToV5(
-        migrateV3ToV4(
-          migrateV2ToV3(migrateV1ToV2(legacy, context)),
-          context,
+  const migrated = migrateV8ToV9(migrateV7ToV8(
+    migrateV6ToV7(
+      migrateV5ToV6(
+        migrateV4ToV5(
+          migrateV3ToV4(
+            migrateV2ToV3(migrateV1ToV2(legacy, context)),
+            context,
+          ),
         ),
       ),
     ),
-  );
+  ));
   writeBrowserState(storage, migrated);
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV7) {
-  storage.setItem(BROWSER_V7_KEY, JSON.stringify(state));
+export function writeBrowserState(storage: Storage, state: BrowserStateV9) {
+  // Keep the historical browser key readable by existing open-source demos,
+  // while the in-memory schema and the payload fields are version 9.
+  storage.setItem(
+    BROWSER_V8_KEY,
+    JSON.stringify({ ...state, schemaVersion: 8 }),
+  );
 }
 
 function browserAgentProviderConfigs(

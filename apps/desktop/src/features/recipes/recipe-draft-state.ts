@@ -338,9 +338,9 @@ export function toRecipeDraftSaveInput(
     finishedMassGrams: draft.finishedMassGrams,
     servingMassGrams: draft.servingMassGrams,
     packageCount: draft.packageCount,
-    items: draft.items.map((item) =>
-      item.kind === "ingredient"
-        ? {
+    items: draft.items.map((item) => {
+      if (item.kind === "ingredient") {
+        return {
             id: item.id,
             position: item.position,
             kind: "ingredient",
@@ -349,8 +349,21 @@ export function toRecipeDraftSaveInput(
             unit: item.unit,
             locked: item.locked,
             autoFill: item.autoFill,
-          }
-        : {
+          };
+      }
+      if (item.kind === "material_need") {
+        return {
+          id: item.id,
+          position: item.position,
+          kind: "material_need" as const,
+          materialNeedId: item.materialNeedId,
+          amount: item.amount,
+          unit: item.unit,
+          locked: item.locked,
+          autoFill: item.autoFill,
+        };
+      }
+      return {
             id: item.id,
             position: item.position,
             kind: "recipe_version",
@@ -359,8 +372,8 @@ export function toRecipeDraftSaveInput(
             unit: item.unit,
             locked: item.locked,
             autoFill: item.autoFill,
-          },
-    ),
+          };
+    }),
     packagingCosts: draft.packagingCosts.map((item) => ({ ...item })),
     additionalCosts: draft.additionalCosts.map((item) => ({ ...item })),
     targets: draft.targets.map((target) => ({

@@ -3,11 +3,17 @@ import type {
   EntityId,
   IngredientVariant,
 } from "./types";
+import type { MaterialNeed } from "./agent-recipe-types";
 
 export type RecipeDecimal = string;
 export type RecipeKind = "formula" | "semi_finished";
 export type RecipeItemUnit = "mg" | "g" | "kg" | "mL" | "L";
 export type RecipeDraftSource = "manual" | "agent";
+export type RecipeSchemeStatus =
+  | "current"
+  | "approved"
+  | "researching"
+  | "inactive";
 
 export interface Recipe {
   id: EntityId;
@@ -20,6 +26,12 @@ export interface Recipe {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Optional only for compatibility with historical browser snapshots. */
+  productId?: EntityId;
+  /** Optional only for compatibility with historical browser snapshots. */
+  schemeName?: string;
+  /** Optional only for compatibility with historical browser snapshots. */
+  schemeStatus?: RecipeSchemeStatus;
 }
 
 export interface RecipeInput {
@@ -27,6 +39,29 @@ export interface RecipeInput {
   code: string | null;
   tags: string[];
   kind: RecipeKind;
+}
+
+export interface RecipeAlternativeCreateInput {
+  sourceVersionId: EntityId;
+  schemeName: string;
+  schemeStatus: "approved" | "researching";
+}
+
+export interface RecipeSchemeUpdateInput {
+  schemeName: string;
+  schemeStatus: RecipeSchemeStatus;
+}
+
+export function recipeProductId(recipe: Recipe): EntityId {
+  return recipe.productId ?? recipe.id;
+}
+
+export function recipeSchemeName(recipe: Recipe): string {
+  return recipe.schemeName?.trim() || "主配方";
+}
+
+export function recipeSchemeStatus(recipe: Recipe): RecipeSchemeStatus {
+  return recipe.schemeStatus ?? "current";
 }
 
 export interface RecipeVersionReference {
@@ -60,9 +95,16 @@ export interface RecipeDraftVersionItem extends RecipeDraftItemBase {
   recipeVersion: RecipeVersionReference;
 }
 
+export interface RecipeDraftMaterialNeedItem extends RecipeDraftItemBase {
+  kind: "material_need";
+  materialNeedId: EntityId;
+  materialNeed: MaterialNeed;
+}
+
 export type RecipeDraftItem =
   | RecipeDraftIngredientItem
-  | RecipeDraftVersionItem;
+  | RecipeDraftVersionItem
+  | RecipeDraftMaterialNeedItem;
 
 interface RecipeDraftItemInputBase {
   id: EntityId;
@@ -84,9 +126,16 @@ export interface RecipeDraftVersionItemInput extends RecipeDraftItemInputBase {
   recipeVersionId: EntityId;
 }
 
+export interface RecipeDraftMaterialNeedItemInput
+  extends RecipeDraftItemInputBase {
+  kind: "material_need";
+  materialNeedId: EntityId;
+}
+
 export type RecipeDraftItemInput =
   | RecipeDraftIngredientItemInput
-  | RecipeDraftVersionItemInput;
+  | RecipeDraftVersionItemInput
+  | RecipeDraftMaterialNeedItemInput;
 
 export interface RecipePackagingCost {
   id: EntityId;
@@ -212,7 +261,8 @@ export interface RecipeCalculationIssue {
     | "duplicate_id"
     | "missing_recipe_version"
     | "recipe_cycle"
-    | "missing_reference";
+    | "missing_reference"
+    | "material_need_unresolved";
   severity: "warning" | "error";
   message: string;
   field: string | null;
@@ -282,6 +332,9 @@ export interface RecipeVersionSnapshot {
     code: string | null;
     tags: string[];
     kind: RecipeKind;
+    productId?: EntityId;
+    schemeName?: string;
+    schemeStatus?: RecipeSchemeStatus;
   };
   targetBatchGrams: RecipeDecimal;
   finishedMassGrams: RecipeDecimal | null;

@@ -51,29 +51,6 @@ function ingredient(
 }
 
 describe("rebalanceDraftItems", () => {
-  it("keeps locked amounts and scales only unlocked items", () => {
-    const items: RecipeDraftItem[] = [
-      ingredient("fixed", "0.2", { locked: true, unit: "kg" }),
-      ingredient("a", "0.3", { unit: "kg" }),
-      ingredient("b", "0.1", { unit: "kg" }),
-    ];
-
-    const result = rebalanceDraftItems(
-      items,
-      "1000",
-      { type: "proportional" },
-    );
-
-    expect(result).toEqual({
-      ok: true,
-      items: [
-        expect.objectContaining({ id: "fixed", amount: "0.2" }),
-        expect.objectContaining({ id: "a", amount: "0.6" }),
-        expect.objectContaining({ id: "b", amount: "0.2" }),
-      ],
-    });
-  });
-
   it("fills one unlocked item to the exact target", () => {
     const items: RecipeDraftItem[] = [
       ingredient("sugar", "10", { locked: true }),
@@ -108,7 +85,7 @@ describe("rebalanceDraftItems", () => {
     const result = rebalanceDraftItems(
       items,
       "240",
-      { type: "proportional" },
+      { type: "auto-fill", itemId: "juice" },
     );
 
     expect(result).toEqual({
@@ -121,26 +98,6 @@ describe("rebalanceDraftItems", () => {
         }),
       ],
     });
-  });
-
-  it("returns a concrete error without mutating the input", () => {
-    const items: RecipeDraftItem[] = [
-      ingredient("fixed", "80", { locked: true }),
-      ingredient("other", "20"),
-    ];
-    const before = structuredClone(items);
-
-    const result = rebalanceDraftItems(
-      items,
-      "50",
-      { type: "proportional" },
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      message: "已锁定原料总量超过目标批量",
-    });
-    expect(items).toEqual(before);
   });
 
   it("rejects a locked auto-fill item", () => {
@@ -161,24 +118,6 @@ describe("rebalanceDraftItems", () => {
     });
   });
 
-  it("rejects proportional scaling when unlocked items have a zero basis", () => {
-    const items: RecipeDraftItem[] = [
-      ingredient("fixed", "20", { locked: true }),
-      ingredient("empty", "0"),
-    ];
-
-    const result = rebalanceDraftItems(
-      items,
-      "100",
-      { type: "proportional" },
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      message: "没有可按比例调整的未锁定原料",
-    });
-  });
-
   it("rejects negative amounts without normalizing them away", () => {
     const items: RecipeDraftItem[] = [
       ingredient("negative", "-1"),
@@ -187,7 +126,7 @@ describe("rebalanceDraftItems", () => {
     const result = rebalanceDraftItems(
       items,
       "100",
-      { type: "proportional" },
+      { type: "auto-fill", itemId: "negative" },
     );
 
     expect(result).toEqual({

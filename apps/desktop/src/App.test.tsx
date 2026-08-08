@@ -28,10 +28,19 @@ describe("App navigation", () => {
       screen.getByText("浏览器演示模式不执行真实本机备份"),
     ).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "配方工作台" }));
-    expect(screen.getByRole("heading", { name: "配方工作台" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "配方库" }));
+    expect(await screen.findByRole("heading", { name: "配方库" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "新建配方" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "产品名称" }),
+      "导航测试配方",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "创建并进入工作台" }),
+    );
     expect(
-      screen.getByRole("button", { name: "新建配方" }),
+      await screen.findByRole("heading", { name: "配方工作台" }),
     ).toBeTruthy();
+    expect(screen.getByDisplayValue("导航测试配方")).toBeTruthy();
   });
 });

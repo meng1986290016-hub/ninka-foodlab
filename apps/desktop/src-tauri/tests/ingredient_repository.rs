@@ -111,6 +111,27 @@ fn variant_save_is_atomic_and_updates_time_only_after_commit() {
 }
 
 #[test]
+fn same_supplier_with_different_models_creates_distinct_variants() {
+    let mut fixture = Fixture::new();
+    fixture.repo.save_variant(fixture.valid_input()).unwrap();
+    let mut second = fixture.valid_input();
+    second.model_or_specification = "MD-400".into();
+    fixture.repo.save_variant(second).unwrap();
+
+    let groups = fixture.repo.list_material_groups("供应商A").unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].variants.len(), 2);
+    assert_eq!(
+        groups[0].variants[0].supplier_id,
+        groups[0].variants[1].supplier_id
+    );
+    assert_ne!(
+        groups[0].variants[0].model_or_specification,
+        groups[0].variants[1].model_or_specification
+    );
+}
+
+#[test]
 fn unknown_and_confirmed_zero_round_trip_distinctly() {
     let mut fixture = Fixture::new();
     let mut input = fixture.valid_input();
@@ -323,7 +344,7 @@ fn settings_drafts_and_database_status_round_trip_json() {
 
     let status = fixture.repo.database_status().unwrap();
     assert_eq!(status.mode, "sqlite");
-    assert_eq!(status.schema_version, 7);
+    assert_eq!(status.schema_version, 11);
     assert!(status.healthy);
 }
 

@@ -297,6 +297,8 @@ async fn both_cli_adapters_receive_the_same_task_scoped_mcp_context() {
             allowed_attachment_ids: BTreeSet::new(),
             provider_kind: AgentProviderKind::CodexCli,
             model: "test-model".into(),
+            active_recipe_id: None,
+            active_recipe_name: None,
         },
         Duration::from_secs(60),
     );

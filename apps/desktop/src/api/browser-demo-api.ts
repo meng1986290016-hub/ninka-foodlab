@@ -18,6 +18,16 @@ import type {
   CliDetectionResult,
 } from "./agent-types";
 import type { BrowserAgentEventSource } from "./agent-event-source";
+import type {
+  AcceptedAgentRecipeProposal,
+  AgentRecipeProposal,
+  AgentRecipeProposalAcceptInput,
+  AgentRecipeProposalEvaluation,
+  AgentRecipeProposalPayload,
+  MaterialNeed,
+  MaterialNeedStatus,
+} from "./agent-recipe-types";
+import { evaluateBrowserAgentRecipe } from "./browser-agent-recipe";
 import type { DesktopApi } from "./desktop-api";
 import type {
   BackupManifest,
@@ -31,12 +41,13 @@ import type {
   IngredientImportJob,
   IngredientImportJobRequest,
   ImportIssue,
+  DraftSourceLink,
   ReviewedIngredientImportDraft,
   SourceAttachment,
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV7 as BrowserStateV5,
+  type BrowserStateV9 as BrowserStateV5,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
@@ -51,12 +62,15 @@ import type {
 } from "./nutrition-label-types";
 import type {
   Recipe,
+  RecipeAlternativeCreateInput,
   RecipeDraft,
   RecipeDraftIngredientItem,
+  RecipeDraftMaterialNeedItem,
   RecipeDraftItemInput,
   RecipeDraftSaveInput,
   RecipeDraftVersionItem,
   RecipeInput,
+  RecipeSchemeUpdateInput,
   RecipeSummary,
   RecipeVersion,
   RecipeVersionComparison,
@@ -66,11 +80,16 @@ import type {
   RecipeVersionReference,
   RecipeVersionSnapshot,
 } from "./recipe-types";
+import {
+  recipeProductId,
+  recipeSchemeStatus,
+} from "./recipe-types";
 import type {
   ResearchReportExportRequest,
   ResearchReportRecord,
   ResearchReportRecordInput,
 } from "./research-report-types";
+import type { SampleSheetExportRequest } from "./sample-sheet-types";
 import {
   DesktopApiError,
   type Category,
@@ -181,6 +200,10 @@ function createInitialLegacyState(): LegacyState {
 
 function draftId(kind: string, key: string) {
   return `${kind}:${key}`;
+}
+
+function recipeVersionSequenceKey(recipeId: string) {
+  return `recipe.version-sequence.${recipeId}`;
 }
 
 function normalize(value: string) {
@@ -535,6 +558,65 @@ function demoReview(
   };
 }
 
+function demoSourceLinks(
+  attachmentId: string,
+  review: ReviewedIngredientImportDraft,
+): DraftSourceLink[] {
+  const links: DraftSourceLink[] = [
+    {
+      fieldPath: "materialName",
+      attachmentId,
+      sourceLocator: "文件名与原料标题",
+      confidence: "high",
+    },
+    {
+      fieldPath: "supplierName",
+      attachmentId,
+      sourceLocator: "供应商信息",
+      confidence: "medium",
+    },
+    {
+      fieldPath: "nutritionBasis",
+      attachmentId,
+      sourceLocator: "营养成分表",
+      confidence: "low",
+    },
+    {
+      fieldPath: "source",
+      attachmentId,
+      sourceLocator: "原始文件",
+      confidence: "high",
+    },
+  ];
+  if (review.modelOrSpecification) {
+    links.push({
+      fieldPath: "modelOrSpecification",
+      attachmentId,
+      sourceLocator: "产品规格",
+      confidence: "high",
+    });
+  }
+  if (review.currentPrice !== null) {
+    links.push({
+      fieldPath: "currentPrice",
+      attachmentId,
+      sourceLocator: "价格信息",
+      confidence: "medium",
+    });
+  }
+  for (const nutrient of review.nutrients) {
+    if (nutrient.value !== null) {
+      links.push({
+        fieldPath: `nutrients.${nutrient.name}.value`,
+        attachmentId,
+        sourceLocator: "营养成分表",
+        confidence: "high",
+      });
+    }
+  }
+  return links;
+}
+
 function normalizeImportReview(
   review: ReviewedIngredientImportDraft,
 ): ReviewedIngredientImportDraft {
@@ -743,6 +825,39 @@ export class BrowserDemoApi implements DesktopApi {
     const copy = new Uint8Array(bytes);
     const blob = new Blob([copy.buffer], {
       type: researchReportMimeType(request.format),
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.hidden = true;
+    anchor.href = url;
+    anchor.download = request.fileName;
+    document.body.append(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async exportSampleSheet(
+    request: SampleSheetExportRequest,
+  ): Promise<void> {
+    if (!validExportFileName(request.fileName, "xlsx")) {
+      throw new DesktopApiError("invalid_input", "打样配料单文件名无效");
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = decodeBase64(request.bytesBase64);
+    } catch {
+      throw new DesktopApiError("invalid_input", "打样配料单导出数据无效");
+    }
+    if (!validExportBytes("xlsx", bytes)) {
+      throw new DesktopApiError("invalid_input", "打样配料单导出数据无效");
+    }
+    const copy = new Uint8Array(bytes);
+    const blob = new Blob([copy.buffer], {
+      type: researchReportMimeType("xlsx"),
     });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -997,16 +1112,85 @@ export class BrowserDemoApi implements DesktopApi {
     const normalized = this.normalizeRecipeInput(input);
     this.assertUniqueRecipeCode(state, normalized.code);
     const timestamp = this.now();
+    const id = this.createId();
     const recipe: Recipe = {
-      id: this.createId(),
+      id,
       ...normalized,
       currentDraftId: null,
       latestVersionNumber: null,
       createdAt: timestamp,
       updatedAt: timestamp,
       archivedAt: null,
+      productId: id,
+      schemeName: "主配方",
+      schemeStatus: "current",
     };
     state.recipes[recipe.id] = recipe;
+    this.write(state);
+    return cloneValue(recipe);
+  }
+
+  async createRecipeAlternative(
+    input: RecipeAlternativeCreateInput,
+  ): Promise<Recipe> {
+    const state = this.read();
+    const sourceVersion = this.findRecipeVersion(state, input.sourceVersionId);
+    const sourceRecipe = this.findRecipe(state, sourceVersion.recipeId);
+    if (sourceRecipe.archivedAt !== null) {
+      throw new DesktopApiError("archived", "已归档配方不能创建替代配方");
+    }
+    if (recipeSchemeStatus(sourceRecipe) === "inactive") {
+      throw new DesktopApiError("invalid_state", "已停用配方不能创建替代配方");
+    }
+    const schemeName = this.requiredName(input.schemeName, "请填写替代配方名称");
+    if (schemeName.length > 80) {
+      throw new DesktopApiError("invalid_input", "替代配方名称不能超过 80 个字符");
+    }
+    this.assertUniqueRecipeSchemeName(
+      state,
+      recipeProductId(sourceRecipe),
+      schemeName,
+    );
+    const timestamp = this.now();
+    const id = this.createId();
+    const draftId = this.createId();
+    const snapshot = sourceVersion.snapshot;
+    const draft = this.materializeRecipeDraft(state, {
+      id: draftId,
+      recipeId: id,
+      basedOnVersionId: null,
+      source: "manual",
+      targetBatchGrams: snapshot.targetBatchGrams,
+      finishedMassGrams: snapshot.finishedMassGrams,
+      servingMassGrams: snapshot.servingMassGrams,
+      packageCount: snapshot.packageCount,
+      items: draftItemsFromSnapshot(snapshot),
+      packagingCosts: cloneValue(snapshot.packagingCosts),
+      additionalCosts: cloneValue(snapshot.additionalCosts),
+      targets: cloneValue(snapshot.targets),
+      markdownNotes: snapshot.markdownNotes,
+      calculation: cloneValue(snapshot.calculation),
+      calculationIssues: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const recipe: Recipe = {
+      id,
+      name: sourceRecipe.name,
+      code: null,
+      tags: [...sourceRecipe.tags],
+      kind: sourceRecipe.kind,
+      currentDraftId: draftId,
+      latestVersionNumber: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+      productId: recipeProductId(sourceRecipe),
+      schemeName,
+      schemeStatus: input.schemeStatus,
+    };
+    state.recipes[id] = recipe;
+    state.recipeDrafts[id] = draft;
     this.write(state);
     return cloneValue(recipe);
   }
@@ -1019,14 +1203,63 @@ export class BrowserDemoApi implements DesktopApi {
     }
     const normalized = this.normalizeRecipeInput(input);
     this.assertUniqueRecipeCode(state, normalized.code, id);
-    const updated: Recipe = {
-      ...existing,
-      ...normalized,
-      updatedAt: this.now(),
-    };
-    state.recipes[id] = updated;
+    const timestamp = this.now();
+    const productId = recipeProductId(existing);
+    for (const recipe of Object.values(state.recipes)) {
+      if (recipeProductId(recipe) !== productId) continue;
+      state.recipes[recipe.id] = {
+        ...recipe,
+        name: normalized.name,
+        tags: [...normalized.tags],
+        kind: normalized.kind,
+        code: recipe.id === id ? normalized.code : recipe.code,
+        updatedAt: timestamp,
+      };
+    }
     this.write(state);
-    return cloneValue(updated);
+    return cloneValue(this.findRecipe(state, id));
+  }
+
+  async updateRecipeScheme(
+    id: string,
+    input: RecipeSchemeUpdateInput,
+  ): Promise<Recipe> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, id);
+    if (recipe.archivedAt !== null) {
+      throw new DesktopApiError("archived", "已归档配方不能修改方案设置");
+    }
+    const schemeName = this.requiredName(input.schemeName, "请填写替代配方名称");
+    if (schemeName.length > 80) {
+      throw new DesktopApiError("invalid_input", "替代配方名称不能超过 80 个字符");
+    }
+    const productId = recipeProductId(recipe);
+    this.assertUniqueRecipeSchemeName(state, productId, schemeName, id);
+    const timestamp = this.now();
+    if (input.schemeStatus === "current") {
+      for (const candidate of Object.values(state.recipes)) {
+        if (
+          candidate.id !== id &&
+          candidate.archivedAt === null &&
+          recipeProductId(candidate) === productId &&
+          recipeSchemeStatus(candidate) === "current"
+        ) {
+          state.recipes[candidate.id] = {
+            ...candidate,
+            schemeStatus: "approved",
+            updatedAt: timestamp,
+          };
+        }
+      }
+    }
+    state.recipes[id] = {
+      ...recipe,
+      schemeName,
+      schemeStatus: input.schemeStatus,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return cloneValue(state.recipes[id]);
   }
 
   async archiveRecipe(id: string): Promise<void> {
@@ -1057,6 +1290,171 @@ export class BrowserDemoApi implements DesktopApi {
     this.write(state);
   }
 
+  async restoreRecipe(id: string): Promise<void> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, id);
+    if (recipe.archivedAt === null) return;
+    const productId = recipeProductId(recipe);
+    const hasCurrent = Object.values(state.recipes).some(
+      (candidate) =>
+        candidate.id !== id &&
+        candidate.archivedAt === null &&
+        recipeProductId(candidate) === productId &&
+        recipeSchemeStatus(candidate) === "current",
+    );
+    state.recipes[id] = {
+      ...recipe,
+      archivedAt: null,
+      schemeStatus:
+        recipeSchemeStatus(recipe) === "current" && hasCurrent
+          ? "approved"
+          : recipeSchemeStatus(recipe),
+      updatedAt: this.now(),
+    };
+    this.write(state);
+  }
+
+  async permanentlyDeleteRecipe(
+    id: string,
+    confirmationName: string,
+  ): Promise<void> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, id);
+    if (recipe.archivedAt === null) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "配方必须先归档，才能永久删除",
+      );
+    }
+    if (confirmationName.trim() !== recipe.name) {
+      throw new DesktopApiError(
+        "confirmation_mismatch",
+        "输入的配方名称不一致",
+      );
+    }
+    const ownVersionIds = new Set(
+      Object.values(state.recipeVersions)
+        .filter((version) => version.recipeId === id)
+        .map((version) => version.id),
+    );
+    if (
+      Object.values(state.nutritionLabels).some(
+        (label) => label.recipeId === id,
+      ) || Object.values(state.researchReports).some(
+        (report) => ownVersionIds.has(report.recipeVersionId),
+      )
+    ) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该配方已生成营养标签或研发报告，不能永久删除",
+      );
+    }
+    const externallyReferenced = Object.entries(
+      state.recipeVersionDependencies,
+    ).some(([ownerId, dependencyIds]) => {
+      const owner = state.recipeVersions[ownerId];
+      return (
+        owner?.recipeId !== id &&
+        dependencyIds.some((dependencyId) => ownVersionIds.has(dependencyId))
+      );
+    }) || Object.values(state.recipeVersions).some(
+      (version) =>
+        version.recipeId !== id &&
+        version.basedOnVersionId !== null &&
+        ownVersionIds.has(version.basedOnVersionId),
+    ) || Object.values(state.recipeDrafts).some(
+      (draft) =>
+        draft.recipeId !== id &&
+        draft.basedOnVersionId !== null &&
+        ownVersionIds.has(draft.basedOnVersionId),
+    );
+    if (externallyReferenced) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该配方版本仍被其他配方、替代草稿或正式版本引用，不能永久删除",
+      );
+    }
+
+    for (const versionId of ownVersionIds) {
+      delete state.recipeVersionDependencies[versionId];
+      delete state.recipeVersions[versionId];
+    }
+    delete state.recipeDrafts[id];
+    delete state.recipes[id];
+    delete state.settings[recipeVersionSequenceKey(id)];
+    for (const proposal of Object.values(state.agentRecipeProposals)) {
+      if (proposal.acceptedRecipeId === id) proposal.acceptedRecipeId = null;
+    }
+    for (const need of Object.values(state.materialNeeds)) {
+      if (need.recipeId === id) need.recipeId = null;
+    }
+    this.write(state);
+  }
+
+  async deleteRecipeVersion(id: string): Promise<void> {
+    const state = this.read();
+    const version = this.findRecipeVersion(state, id);
+    const usedByLabel = Object.values(state.nutritionLabelDrafts).some(
+      (draft) => draft.recipeVersionId === id,
+    ) || Object.values(state.nutritionLabelVersions).some(
+      (labelVersion) => labelVersion.recipeVersionId === id,
+    ) || Object.values(state.researchReports).some(
+      (report) => report.recipeVersionId === id,
+    );
+    if (usedByLabel) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该版本已用于营养标签或研发报告，不能永久删除",
+      );
+    }
+    const usedAsIngredient = Object.values(
+      state.recipeVersionDependencies,
+    ).some((dependencyIds) => dependencyIds.includes(id));
+    if (usedAsIngredient) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该版本仍被其他正式版本作为半成品引用，不能删除",
+      );
+    }
+    const usedAsLineage = Object.values(state.recipeVersions).some(
+      (candidate) => candidate.basedOnVersionId === id,
+    ) || Object.values(state.recipeDrafts).some(
+      (draft) =>
+        draft.recipeId !== version.recipeId &&
+        draft.basedOnVersionId === id,
+    );
+    if (usedAsLineage) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该版本仍是其他版本或工作草稿的来源，不能删除",
+      );
+    }
+
+    const ownDraft = state.recipeDrafts[version.recipeId];
+    if (ownDraft?.basedOnVersionId === id) {
+      state.recipeDrafts[version.recipeId] = {
+        ...ownDraft,
+        basedOnVersionId: null,
+        updatedAt: this.now(),
+      };
+    }
+    delete state.recipeVersionDependencies[id];
+    delete state.recipeVersions[id];
+    const recipe = this.findRecipe(state, version.recipeId);
+    const latestVersionNumber = Math.max(
+      0,
+      ...Object.values(state.recipeVersions)
+        .filter((candidate) => candidate.recipeId === version.recipeId)
+        .map((candidate) => candidate.versionNumber),
+    );
+    state.recipes[recipe.id] = {
+      ...recipe,
+      latestVersionNumber: latestVersionNumber || null,
+      updatedAt: this.now(),
+    };
+    this.write(state);
+  }
+
   async getRecipeDraft(recipeId: string): Promise<RecipeDraft | null> {
     const state = this.read();
     this.findRecipe(state, recipeId);
@@ -1069,6 +1467,9 @@ export class BrowserDemoApi implements DesktopApi {
     const recipe = this.findRecipe(state, input.recipeId);
     if (recipe.archivedAt !== null) {
       throw new DesktopApiError("archived", "已归档配方不能保存草稿");
+    }
+    if (recipeSchemeStatus(recipe) === "inactive") {
+      throw new DesktopApiError("invalid_state", "已停用配方不能保存草稿");
     }
     if (input.basedOnVersionId !== null) {
       const source = this.findRecipeVersion(state, input.basedOnVersionId);
@@ -1118,11 +1519,23 @@ export class BrowserDemoApi implements DesktopApi {
         "已归档配方不能保存正式版本",
       );
     }
+    if (recipeSchemeStatus(recipe) === "inactive") {
+      throw new DesktopApiError(
+        "invalid_state",
+        "已停用配方不能保存正式版本",
+      );
+    }
     const draft = state.recipeDrafts[recipe.id];
     if (!draft || draft.id !== input.sourceDraftId) {
       throw new DesktopApiError(
         "missing_reference",
         "找不到正式版本对应的草稿",
+      );
+    }
+    if (draft.items.some((item) => item.kind === "material_need")) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "待补充原料需要先关联并替换为真实供应商版本",
       );
     }
     if (
@@ -1164,9 +1577,10 @@ export class BrowserDemoApi implements DesktopApi {
         );
       }
     }
+    const sequenceKey = recipeVersionSequenceKey(recipe.id);
     const versionNumber =
       Math.max(
-        0,
+        Number(state.settings[sequenceKey]) || 0,
         ...Object.values(state.recipeVersions)
           .filter((version) => version.recipeId === recipe.id)
           .map((version) => version.versionNumber),
@@ -1185,6 +1599,7 @@ export class BrowserDemoApi implements DesktopApi {
     state.recipeVersionDependencies[version.id] = [
       ...input.dependencyVersionIds,
     ];
+    state.settings[sequenceKey] = versionNumber;
     state.recipes[recipe.id] = {
       ...recipe,
       latestVersionNumber: versionNumber,
@@ -1414,6 +1829,12 @@ export class BrowserDemoApi implements DesktopApi {
     for (const [runId, run] of Object.entries(state.agentRuns)) {
       if (run.conversationId === id) delete state.agentRuns[runId];
     }
+    for (const proposal of Object.values(state.agentRecipeProposals)) {
+      if (proposal.conversationId === id) {
+        proposal.conversationId = null;
+        proposal.runId = null;
+      }
+    }
     this.write(state);
   }
 
@@ -1454,6 +1875,23 @@ export class BrowserDemoApi implements DesktopApi {
       throw new DesktopApiError("invalid_input", "请输入问题或选择原料资料");
     }
 
+    const normalizedRequest = request.content.trim().toLocaleLowerCase("zh-CN");
+    const retrospectiveTask =
+      request.recipeContext != null &&
+      ["复盘", "研发记录", "下一轮打样"].some((keyword) =>
+        normalizedRequest.includes(keyword),
+      );
+    const recipeTask = !retrospectiveTask && [
+      "配方",
+      "产品",
+      "营养要求",
+      "逆向",
+      "配料表",
+      "营养标签",
+    ].some((keyword) => normalizedRequest.includes(keyword));
+    const reverseTask = ["逆向", "配料表", "营养标签", "标签"].some(
+      (keyword) => normalizedRequest.includes(keyword),
+    );
     let job: IngredientImportJob;
     let reusedAttachmentIds: string[] | null = null;
     let content = request.content.trim();
@@ -1495,6 +1933,11 @@ export class BrowserDemoApi implements DesktopApi {
         files: request.files,
       });
       state = this.read();
+      if (recipeTask) {
+        for (const [draftId, draft] of Object.entries(state.importDrafts)) {
+          if (draft.jobId === job.id) delete state.importDrafts[draftId];
+        }
+      }
     } else {
       const timestamp = this.now();
       job = {
@@ -1530,8 +1973,40 @@ export class BrowserDemoApi implements DesktopApi {
     const draftCount = Object.values(state.importDrafts).filter(
       (draft) => draft.jobId === job.id,
     ).length;
-    const finalText =
-      draftCount > 0
+    let proposal: AgentRecipeProposal | null = null;
+    if (recipeTask) {
+      const payload = this.browserDemoRecipeProposalPayload(state, reverseTask);
+      const evaluated = evaluateBrowserAgentRecipe(
+        payload,
+        state.materialGroups,
+        state.nutrientDefinitions,
+        timestamp,
+      );
+      proposal = {
+        id: this.createId(),
+        conversationId: request.conversationId,
+        runId,
+        status: "pending_review",
+        payloadVersion: 1,
+        payload: evaluated.payload,
+        evaluation: evaluated.evaluation,
+        sourceAttachmentIds: attachmentIds,
+        acceptedRecipeId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      state.agentRecipeProposals[proposal.id] = proposal;
+    }
+    const finalText = retrospectiveTask && request.recipeContext
+      ? browserDemoRecipeRetrospective(
+          state,
+          request.recipeContext.recipeId,
+        )
+      : proposal
+      ? reverseTask
+        ? "我已根据同款产品资料生成一份可编辑的逆向估算配方。它不是原厂精确配方，请在提案卡中复核用量范围、可信度、加工失水和待补充原料。"
+        : "我已结合原料库中的具体供应商版本生成配方提案，并用系统计算引擎完成营养、成本、投料和数据完整度试算。请在提案卡中复核后再创建工作草稿。"
+      : draftCount > 0
         ? `已分别识别 ${request.files.length} 份原料资料，并生成 ${draftCount} 张待人工复核草稿。`
         : "这是浏览器离线演示模型。你可以上传演示原料资料，我会生成待人工复核草稿。";
     const assistantMessage: AgentMessage = {
@@ -1572,6 +2047,9 @@ export class BrowserDemoApi implements DesktopApi {
         importJobId: job.id,
       });
     }
+    if (proposal) {
+      this.emitAgentEvent({ type: "recipe_proposals_changed", runId });
+    }
     this.emitAgentEvent({ type: "run_completed", runId });
     return run;
   }
@@ -1606,6 +2084,313 @@ export class BrowserDemoApi implements DesktopApi {
     const run = await this.getAgentRun(runId);
     if (!run.importJobId) return [];
     return this.listIngredientImportDrafts(run.importJobId);
+  }
+
+  async listAgentRecipeProposals(conversationId: string) {
+    const state = this.read();
+    if (!state.agentConversations[conversationId]) {
+      throw new DesktopApiError("not_found", "找不到该对话");
+    }
+    return Object.values(state.agentRecipeProposals)
+      .filter((proposal) => proposal.conversationId === conversationId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .map(cloneValue);
+  }
+
+  async getAgentRecipeProposal(id: string) {
+    const proposal = this.read().agentRecipeProposals[id];
+    if (!proposal) {
+      throw new DesktopApiError("not_found", "找不到配方提案");
+    }
+    return cloneValue(proposal);
+  }
+
+  async evaluateAgentRecipeProposal(input: AgentRecipeProposalPayload) {
+    const state = this.read();
+    return evaluateBrowserAgentRecipe(
+      input,
+      state.materialGroups,
+      state.nutrientDefinitions,
+      this.now(),
+    ).evaluation;
+  }
+
+  async updateAgentRecipeProposal(
+    id: string,
+    input: AgentRecipeProposalPayload,
+  ) {
+    const state = this.read();
+    const proposal = state.agentRecipeProposals[id];
+    if (!proposal) {
+      throw new DesktopApiError("not_found", "找不到配方提案");
+    }
+    if (proposal.status !== "pending_review") {
+      throw new DesktopApiError("invalid_state", "只有待复核提案可以修改");
+    }
+    const evaluated = evaluateBrowserAgentRecipe(
+      input,
+      state.materialGroups,
+      state.nutrientDefinitions,
+      this.now(),
+    );
+    const updated: AgentRecipeProposal = {
+      ...proposal,
+      payload: evaluated.payload,
+      evaluation: evaluated.evaluation,
+      updatedAt: this.now(),
+    };
+    state.agentRecipeProposals[id] = updated;
+    this.write(state);
+    return cloneValue(updated);
+  }
+
+  async acceptAgentRecipeProposal(
+    input: AgentRecipeProposalAcceptInput,
+  ): Promise<AcceptedAgentRecipeProposal> {
+    const state = this.read();
+    const proposal = state.agentRecipeProposals[input.proposalId];
+    if (!proposal) {
+      throw new DesktopApiError("not_found", "找不到配方提案");
+    }
+    if (proposal.status !== "pending_review") {
+      throw new DesktopApiError("invalid_state", "该提案当前不能创建工作草稿");
+    }
+    const staleIngredient = proposal.payload.items.find((item) => {
+      if (item.kind !== "ingredient") return false;
+      const current = state.materialGroups
+        .flatMap((group) => group.variants)
+        .find((variant) => variant.id === item.ingredientVariantId);
+      return (
+        !current ||
+        current.archivedAt !== null ||
+        current.updatedAt !== item.ingredientUpdatedAt
+      );
+    });
+    if (staleIngredient) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "原料数据已更新或归档，请先重新试算提案",
+      );
+    }
+    const evaluated = evaluateBrowserAgentRecipe(
+      proposal.payload,
+      state.materialGroups,
+      state.nutrientDefinitions,
+      this.now(),
+    );
+    if (evaluated.evaluation.staleItemIds.length > 0) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "原料数据已更新或归档，请先重新试算提案",
+      );
+    }
+
+    const timestamp = this.now();
+    const recipeId = this.createId();
+    const draftId = this.createId();
+    let name = evaluated.payload.productName.trim();
+    let kind = evaluated.payload.recipeKind;
+    let productId = recipeId;
+    let schemeName = "主配方";
+    let schemeStatus: Recipe["schemeStatus"] = "current";
+    let basedOnVersionId: string | null = null;
+    if (input.destination.kind === "alternative") {
+      const sourceVersion = this.findRecipeVersion(
+        state,
+        input.destination.sourceVersionId,
+      );
+      const sourceRecipe = this.findRecipe(state, sourceVersion.recipeId);
+      if (
+        sourceRecipe.archivedAt !== null ||
+        recipeSchemeStatus(sourceRecipe) === "inactive"
+      ) {
+        throw new DesktopApiError(
+          "invalid_state",
+          "已归档或停用的配方不能作为替代来源",
+        );
+      }
+      schemeName = this.requiredName(
+        input.destination.schemeName,
+        "请填写替代配方名称",
+      );
+      this.assertUniqueRecipeSchemeName(
+        state,
+        recipeProductId(sourceRecipe),
+        schemeName,
+      );
+      name = sourceRecipe.name;
+      kind = sourceRecipe.kind;
+      productId = recipeProductId(sourceRecipe);
+      schemeStatus = "researching";
+      basedOnVersionId = sourceVersion.id;
+    }
+    if (!name) {
+      throw new DesktopApiError("invalid_input", "请填写产品名称");
+    }
+
+    const materialNeeds: MaterialNeed[] = [];
+    const items: RecipeDraftItemInput[] = [...evaluated.payload.items]
+      .sort((left, right) => left.position - right.position)
+      .map((item) => {
+        if (item.kind === "ingredient") {
+          this.findVariant(state, item.ingredientVariantId);
+          return {
+            id: item.id,
+            position: item.position,
+            kind: "ingredient" as const,
+            ingredientVariantId: item.ingredientVariantId,
+            amount: item.amount,
+            unit: item.unit,
+            locked: false,
+            autoFill: false,
+          };
+        }
+        const need: MaterialNeed = {
+          id: this.createId(),
+          proposalId: proposal.id,
+          recipeId,
+          materialName: item.materialName,
+          purpose: item.purpose,
+          desiredSpecification: item.desiredSpecification,
+          missingReason: item.missingReason,
+          suggestedAmount: item.amount,
+          suggestedUnit: item.unit,
+          status: "open",
+          resolvedIngredientVariantId: null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        materialNeeds.push(need);
+        return {
+          id: item.id,
+          position: item.position,
+          kind: "material_need" as const,
+          materialNeedId: need.id,
+          amount: item.amount,
+          unit: item.unit,
+          locked: false,
+          autoFill: false,
+        };
+      });
+    for (const need of materialNeeds) state.materialNeeds[need.id] = need;
+
+    const recipe: Recipe = {
+      id: recipeId,
+      name,
+      code: null,
+      tags: [],
+      kind,
+      currentDraftId: draftId,
+      latestVersionNumber: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+      productId,
+      schemeName,
+      schemeStatus,
+    };
+    const notes = [
+      evaluated.payload.markdownNotes.trim(),
+      "## Agent 配方提案",
+      evaluated.payload.assumptions.length > 0
+        ? `关键假设：\n- ${evaluated.payload.assumptions.join("\n- ")}`
+        : "",
+      evaluated.payload.warnings.length > 0
+        ? `风险提示：\n- ${evaluated.payload.warnings.join("\n- ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const draft = this.materializeRecipeDraft(state, {
+      id: draftId,
+      recipeId,
+      basedOnVersionId,
+      source: "agent",
+      targetBatchGrams: evaluated.payload.plannedInputGrams,
+      finishedMassGrams: evaluated.payload.finishedMassGrams,
+      servingMassGrams: null,
+      packageCount: null,
+      items,
+      packagingCosts: [],
+      additionalCosts: [],
+      targets: [],
+      markdownNotes: notes,
+      calculation: null,
+      calculationIssues: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    state.recipes[recipe.id] = recipe;
+    state.recipeDrafts[recipe.id] = draft;
+    state.agentRecipeProposals[proposal.id] = {
+      ...proposal,
+      payload: evaluated.payload,
+      evaluation: evaluated.evaluation,
+      status: "accepted",
+      acceptedRecipeId: recipe.id,
+      updatedAt: timestamp,
+    };
+    this.write(state);
+    return { recipe: cloneValue(recipe), materialNeeds: cloneValue(materialNeeds) };
+  }
+
+  async discardAgentRecipeProposal(id: string) {
+    const state = this.read();
+    const proposal = state.agentRecipeProposals[id];
+    if (!proposal) {
+      throw new DesktopApiError("not_found", "找不到配方提案");
+    }
+    if (proposal.status === "accepted") {
+      throw new DesktopApiError("invalid_state", "已创建草稿的提案不能放弃");
+    }
+    proposal.status = "discarded";
+    proposal.updatedAt = this.now();
+    this.write(state);
+    return cloneValue(proposal);
+  }
+
+  async listMaterialNeeds(status?: MaterialNeedStatus) {
+    return Object.values(this.read().materialNeeds)
+      .filter((need) => status === undefined || need.status === status)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .map(cloneValue);
+  }
+
+  async resolveMaterialNeed(id: string, ingredientVariantId: string) {
+    const state = this.read();
+    const need = state.materialNeeds[id];
+    if (!need) {
+      throw new DesktopApiError("not_found", "找不到待补充原料需求");
+    }
+    this.findVariant(state, ingredientVariantId);
+    const updated: MaterialNeed = {
+      ...need,
+      status: "resolved",
+      resolvedIngredientVariantId: ingredientVariantId,
+      updatedAt: this.now(),
+    };
+    state.materialNeeds[id] = updated;
+    this.write(state);
+    return cloneValue(updated);
+  }
+
+  async dismissMaterialNeed(id: string) {
+    const state = this.read();
+    const need = state.materialNeeds[id];
+    if (!need) {
+      throw new DesktopApiError("not_found", "找不到待补充原料需求");
+    }
+    if (need.status === "resolved") {
+      throw new DesktopApiError("invalid_state", "已关联原料的需求不能直接关闭");
+    }
+    const updated: MaterialNeed = {
+      ...need,
+      status: "dismissed",
+      updatedAt: this.now(),
+    };
+    state.materialNeeds[id] = updated;
+    this.write(state);
+    return cloneValue(updated);
   }
 
   async createIngredientImportJob(request: IngredientImportJobRequest) {
@@ -1662,7 +2447,7 @@ export class BrowserDemoApi implements DesktopApi {
         review,
         issues,
         attachments: [attachment],
-        sourceLinks: [],
+        sourceLinks: demoSourceLinks(attachmentId, review),
         importedVariantId: null,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -2429,6 +3214,85 @@ export class BrowserDemoApi implements DesktopApi {
     this.agentEvents?.emit(event);
   }
 
+  private browserDemoRecipeProposalPayload(
+    state: BrowserStateV5,
+    reverse: boolean,
+  ): AgentRecipeProposalPayload {
+    const variants = state.materialGroups
+      .flatMap((group) =>
+        group.variants
+          .filter((variant) => variant.archivedAt === null)
+          .map((variant) => ({ group, variant })),
+      )
+      .slice(0, 3);
+    const amounts = reverse ? ["560", "180", "110"] : ["650", "120", "80"];
+    const items: AgentRecipeProposalPayload["items"] = variants.map(
+      ({ group, variant }, position) => ({
+        id: this.createId(),
+        position,
+        kind: "ingredient",
+        ingredientVariantId: variant.id,
+        ingredientUpdatedAt: variant.updatedAt,
+        materialName: group.name,
+        supplierName: variant.supplierName,
+        modelOrSpecification: variant.modelOrSpecification,
+        amount: amounts[position] ?? "50",
+        unit: "g",
+        estimatedMinimum: reverse ? String(Number(amounts[position] ?? "50") * 0.8) : null,
+        estimatedMaximum: reverse ? String(Number(amounts[position] ?? "50") * 1.2) : null,
+        confidence: position === 0 ? "high" : "medium",
+        selectionReason: reverse
+          ? "根据配料顺序与营养标签约束估算，并匹配原料库中的具体供应商版本"
+          : "原料库中数据较完整，营养与成本适合本次产品定位试算",
+      }),
+    );
+    items.push({
+      id: this.createId(),
+      position: items.length,
+      kind: "material_need",
+      materialName: reverse ? "可可粉" : "乳化稳定剂",
+      purpose: reverse ? "形成巧克力风味与色泽" : "改善体系稳定性与口感",
+      desiredSpecification: reverse ? "食品级，需确认脂肪含量及碱化程度" : "适用于冷冻饮品的复配型号",
+      missingReason: "当前原料库没有可用的具体供应商版本",
+      amount: reverse ? "70" : "5",
+      unit: "g",
+      estimatedMinimum: reverse ? "45" : "3",
+      estimatedMaximum: reverse ? "90" : "8",
+      confidence: "low",
+    });
+    return {
+      productName: reverse ? "巧克力冰淇淋（逆向估算）" : "低糖乳味冷冻甜品",
+      recipeKind: "formula",
+      mode: reverse ? "label_reverse" : "goal_design",
+      plannedInputGrams: "1000",
+      finishedMassGrams: null,
+      yieldAssumption: "assumed_100_percent",
+      items,
+      requirements: reverse
+        ? []
+        : [
+            {
+              nutrientDefinitionId: "sugars",
+              name: "糖",
+              unit: "g",
+              minimum: null,
+              maximum: "12",
+              origin: "user",
+              rationale: "按每100g产品试算的研发约束，不构成法规声称",
+            },
+          ],
+      assumptions: reverse
+        ? ["配料表顺序大体反映投料量递减", "营养标签存在修约和检测误差"]
+        : ["第一轮按约1000g基准组织配方", "尚未提供实际工艺得率"],
+      warnings: reverse
+        ? ["复合配料及加工失水无法仅凭标签准确拆分", "逆向结果不是原厂精确配方"]
+        : ["营养建议仅用于研发试算，不自动生成营养声称"],
+      markdownNotes: reverse
+        ? "根据演示配料表与营养标签生成的逆向估算。"
+        : "根据产品定位、营养约束与现有原料库生成的第一轮提案。",
+    };
+  }
+
   private requiredName(value: string, message: string) {
     const trimmed = value.trim();
     if (trimmed === "") {
@@ -2485,6 +3349,27 @@ export class BrowserDemoApi implements DesktopApi {
       )
     ) {
       throw new DesktopApiError("duplicate_code", "配方编号已存在");
+    }
+  }
+
+  private assertUniqueRecipeSchemeName(
+    state: BrowserStateV5,
+    productId: string,
+    schemeName: string,
+    exceptId?: string,
+  ) {
+    if (
+      Object.values(state.recipes).some(
+        (recipe) =>
+          recipe.id !== exceptId &&
+          recipeProductId(recipe) === productId &&
+          normalize(recipe.schemeName ?? "主配方") === normalize(schemeName),
+      )
+    ) {
+      throw new DesktopApiError(
+        "duplicate_name",
+        "同一产品下已存在同名替代配方",
+      );
     }
   }
 
@@ -2564,6 +3449,19 @@ export class BrowserDemoApi implements DesktopApi {
           "missing_reference",
           "找不到配方中的供应商原料版本",
         );
+      }
+      if (item.kind === "material_need") {
+        const materialNeed = state.materialNeeds[item.materialNeedId];
+        if (!materialNeed) {
+          throw new DesktopApiError(
+            "missing_reference",
+            "找不到配方中的待补充原料需求",
+          );
+        }
+        return {
+          ...item,
+          materialNeed: cloneValue(materialNeed),
+        } satisfies RecipeDraftMaterialNeedItem;
       }
       const version = this.findRecipeVersion(state, item.recipeVersionId);
       return {
@@ -3015,6 +3913,86 @@ function dependencyReachesRecipe(
         visited,
       ),
   );
+}
+
+function browserDemoRecipeRetrospective(
+  state: BrowserStateV5,
+  recipeId: string,
+) {
+  const recipe = state.recipes[recipeId];
+  const draft = state.recipeDrafts[recipeId];
+  if (!recipe || !draft) {
+    return "当前工作台没有可复盘的配方草稿。请先进入研发中的配方并保存草稿。";
+  }
+  const calculation = draft.calculation;
+  const facts = [
+    `配方：${recipe.name}`,
+    `计划投料：${draft.targetBatchGrams || "未记录"} g`,
+    `当前投料：${calculation?.inputMassGrams ?? "未完成计算"} g`,
+    `出成重量：${draft.finishedMassGrams ?? "未记录"}${draft.finishedMassGrams ? " g" : ""}`,
+    `得率：${calculation?.yieldPercent ? `${conciseRetrospectiveDecimal(calculation.yieldPercent)}%` : "未记录"}`,
+    `批次成本：${calculation ? `¥${calculation.cost.batchTotal}` : "未完成计算"}`,
+    `数据完整度：${calculation ? `${calculation.completeness.percent}%` : "未完成计算"}`,
+    `研发备注：${draft.markdownNotes.trim() || "未记录"}`,
+  ];
+  const confirmations: string[] = [];
+  const planned = Number(draft.targetBatchGrams);
+  const current = Number(calculation?.inputMassGrams);
+  if (
+    Number.isFinite(planned) &&
+    planned > 0 &&
+    Number.isFinite(current) &&
+    Math.abs(current - planned) / planned >= 0.005
+  ) {
+    confirmations.push("当前投料合计与计划投料总量不一致，需要确认本轮实际投料基准。");
+  }
+  if (draft.finishedMassGrams === null) {
+    confirmations.push("实际出成重量未记录，暂时不能复核加工损耗和真实得率。");
+  }
+  if (!draft.markdownNotes.trim()) {
+    confirmations.push("本轮工艺、感官结果和调整原因均未记录，Agent 不会代为猜测。");
+  }
+  if ((calculation?.completeness.percent ?? 0) < 80) {
+    confirmations.push("营养或价格数据完整度偏低，结论只能作为当前已知数据的研发参考。");
+  }
+  if (draft.calculationIssues.length > 0) {
+    confirmations.push(
+      ...draft.calculationIssues.slice(0, 3).map((issue) => issue.message),
+    );
+  }
+  const suggestions = [
+    draft.finishedMassGrams === null
+      ? "打样结束后称量并记录实际出成重量。"
+      : "保持本轮出成记录方式，复核得率是否可重复。",
+    !draft.markdownNotes.trim()
+      ? "在现有研发备注框补记本轮工艺参数、感官表现、异常和调整原因。"
+      : "下一轮只改变少量关键变量，并在同一备注框记录调整原因和结果。",
+    (calculation?.completeness.percent ?? 0) < 80
+      ? "优先补齐高占比或高成本原料的营养与价格数据后再比较结果。"
+      : "使用同一批量口径复算营养和成本，再决定是否保存正式版本。",
+  ];
+  return [
+    "研发复盘（仅基于当前草稿）",
+    "",
+    "已记录事实",
+    ...facts.map((item) => `- ${item}`),
+    "",
+    "需要确认",
+    ...(confirmations.length > 0
+      ? confirmations.map((item) => `- ${item}`)
+      : ["- 当前确定性数据未发现明显缺口，仍需结合实际打样复核。"]),
+    "",
+    "下一轮打样建议",
+    ...suggestions.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "以上是研发建议，不会自动修改配方或保存正式版本。",
+  ].join("\n");
+}
+
+function conciseRetrospectiveDecimal(value: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value;
+  return parsed.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
 function browserBackupUnavailable() {

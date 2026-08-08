@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_recipes;
 pub mod backup;
 pub mod ingest;
 pub mod ingredients;
@@ -20,7 +21,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 82] = [
+pub const REGISTERED_COMMANDS: [&str; 88] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -78,8 +79,13 @@ pub const REGISTERED_COMMANDS: [&str; 82] = [
     "list_recipes",
     "get_recipe",
     "create_recipe",
+    "create_recipe_alternative",
     "update_recipe",
+    "update_recipe_scheme",
     "archive_recipe",
+    "restore_recipe",
+    "permanently_delete_recipe",
+    "delete_recipe_version",
     "get_recipe_draft",
     "save_recipe_draft",
     "list_recipe_versions",
@@ -100,6 +106,7 @@ pub const REGISTERED_COMMANDS: [&str; 82] = [
     "list_research_reports",
     "get_research_report",
     "export_research_report",
+    "export_sample_sheet",
     "create_data_backup",
     "inspect_data_backup",
     "restore_data_backup",

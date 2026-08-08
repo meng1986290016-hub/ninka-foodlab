@@ -5,7 +5,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BrowserDemoApi } from "../../api/browser-demo-api";
 import type {
@@ -105,33 +105,113 @@ async function addIngredient(
 }
 
 describe("RecipeWorkbench", () => {
-  it("creates the first recipe from the empty workspace", async () => {
+  it("does not create an unnamed recipe when no recipe is selected", async () => {
     const api = createApi();
-    const user = userEvent.setup();
     render(<RecipeWorkbench api={api} />);
 
     expect(
       await screen.findByRole("heading", { name: "配方工作台" }),
     ).toBeTruthy();
+    expect(
+      screen.getByText("没有找到要打开的配方，请返回配方库重新选择。"),
+    ).toBeTruthy();
+    expect(await api.listRecipes()).toEqual([]);
+  });
+
+  it("saves the current draft before returning to the recipe library", async () => {
+    const api = createApi();
+    const first = await api.createRecipe({
+      name: "第一份配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    render(<RecipeWorkbench api={api} onBack={onBack} recipeId={first.id} />);
+
+    await screen.findByDisplayValue("第一份配方");
+    await user.type(
+      screen.getByRole("textbox", { name: "研发备注" }),
+      "当前草稿已记录",
+    );
     await user.click(
-      screen.getByRole("button", { name: "新建配方" }),
+      screen.getByRole("button", { name: "返回配方库" }),
     );
 
+    await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+    expect(await api.listRecipes()).toHaveLength(1);
+    expect(await api.getRecipeDraft(first.id)).toMatchObject({
+      markdownNotes: "当前草稿已记录",
+    });
+  });
+
+  it("marks a recipe as semi-finished so it can be referenced later", async () => {
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "基础糖浆",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} recipeId={recipe.id} />);
+
+    await screen.findByDisplayValue("基础糖浆");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "配方类型" }),
+      "semi_finished",
+    );
+
+    await waitFor(async () => {
+      expect(await api.getRecipe(recipe.id)).toMatchObject({
+        kind: "semi_finished",
+      });
+    });
     expect(
-      await screen.findByDisplayValue("未命名配方"),
+      screen.getByText("已设为半成品；保存正式版本后可加入其他配方"),
     ).toBeTruthy();
-    expect(
-      screen.queryByText("存在无效输入，已保留本地草稿"),
-    ).toBeNull();
-    expect(screen.getByText("本地草稿")).toBeTruthy();
-    expect(await api.listRecipes()).toEqual([
-      expect.objectContaining({
-        recipe: expect.objectContaining({
-          name: "未命名配方",
-          kind: "formula",
-        }),
-      }),
-    ]);
+  });
+
+  it("opens Agent with the current unsaved workbench draft as context", async () => {
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "Agent 诊断配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    const onOpenAgent = vi.fn();
+    const onAgentContextChange = vi.fn();
+    render(
+      <RecipeWorkbench
+        api={api}
+        onAgentContextChange={onAgentContextChange}
+        onOpenAgent={onOpenAgent}
+        recipeId={recipe.id}
+      />,
+    );
+
+    await screen.findByDisplayValue("Agent 诊断配方");
+    await addIngredient(user, "脱脂乳粉");
+    const amount = await screen.findByRole("textbox", {
+      name: "脱脂乳粉用量",
+    });
+    await user.clear(amount);
+    await user.type(amount, "88");
+    await user.click(screen.getByRole("button", { name: "Agent 诊断" }));
+
+    expect(onOpenAgent).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      const context = onAgentContextChange.mock.calls.at(-1)?.[0];
+      expect(context).toMatchObject({
+        recipe: { id: recipe.id },
+        draft: {
+          items: [expect.objectContaining({ amount: "88" })],
+        },
+      });
+    });
   });
 
   it("adds a concrete supplier variant, edits its amount and locks it", async () => {
@@ -366,46 +446,6 @@ describe("RecipeWorkbench", () => {
     expect(document.activeElement).toBe(addButton);
   });
 
-  it("scales unlocked items while preserving a locked amount", async () => {
-    const api = createApi();
-    await api.createRecipe({
-      name: "锁定缩放配方",
-      code: null,
-      tags: [],
-      kind: "formula",
-    });
-    const user = userEvent.setup();
-    render(<RecipeWorkbench api={api} />);
-    await screen.findByDisplayValue("锁定缩放配方");
-    await addIngredient(user, "脱脂乳粉");
-    await addIngredient(user, "白砂糖");
-
-    const milkAmount = screen.getByRole("textbox", {
-      name: "脱脂乳粉用量",
-    });
-    const sugarAmount = screen.getByRole("textbox", {
-      name: "白砂糖用量",
-    });
-    await user.clear(milkAmount);
-    await user.type(milkAmount, "20");
-    await user.clear(sugarAmount);
-    await user.type(sugarAmount, "30");
-    await user.click(
-      screen.getByRole("button", { name: "锁定脱脂乳粉" }),
-    );
-    const target = screen.getByRole("textbox", {
-      name: "目标批量",
-    });
-    await user.clear(target);
-    await user.type(target, "100");
-    await user.click(
-      screen.getByRole("button", { name: "按比例调整" }),
-    );
-
-    expect((milkAmount as HTMLInputElement).value).toBe("20");
-    expect((sugarAmount as HTMLInputElement).value).toBe("80");
-  });
-
   it("keeps a designated item automatically filled to the target", async () => {
     const api = createApi();
     await api.createRecipe({
@@ -436,41 +476,12 @@ describe("RecipeWorkbench", () => {
     await user.clear(milkAmount);
     await user.type(milkAmount, "250");
     expect((sugarAmount as HTMLInputElement).value).toBe("750");
-  });
 
-  it("shows a rebalance error and preserves amounts when locked mass exceeds the target", async () => {
-    const api = createApi();
-    await api.createRecipe({
-      name: "缩放边界配方",
-      code: null,
-      tags: [],
-      kind: "formula",
-    });
-    const user = userEvent.setup();
-    render(<RecipeWorkbench api={api} />);
-    await screen.findByDisplayValue("缩放边界配方");
-    await addIngredient(user, "脱脂乳粉");
-
-    const amount = screen.getByRole("textbox", {
-      name: "脱脂乳粉用量",
-    });
-    await user.clear(amount);
-    await user.type(amount, "80");
-    await user.click(
-      screen.getByRole("button", { name: "锁定脱脂乳粉" }),
-    );
-    const target = screen.getByRole("textbox", {
-      name: "目标批量",
-    });
-    await user.clear(target);
-    await user.type(target, "50");
-    await user.click(
-      screen.getByRole("button", { name: "按比例调整" }),
-    );
-
+    const currentInputTotal = screen.getByLabelText("当前投料合计");
+    expect(currentInputTotal.tagName).toBe("OUTPUT");
+    expect(currentInputTotal.textContent).toContain("由下方配方用量自动汇总");
     expect(
-      screen.getByText("已锁定原料总量超过目标批量"),
-    ).toBeTruthy();
-    expect((amount as HTMLInputElement).value).toBe("80");
+      screen.queryByRole("button", { name: "按比例调整" }),
+    ).toBeNull();
   });
 });

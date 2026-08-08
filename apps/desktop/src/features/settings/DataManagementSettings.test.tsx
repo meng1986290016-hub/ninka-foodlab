@@ -36,7 +36,7 @@ function fixture() {
     applicationId: "food-rd-studio",
     applicationVersion: "0.1.0",
     createdAt: "2026-07-31T10:30:00+08:00",
-    schemaVersion: 7,
+    schemaVersion: 8,
     database: {
       path: "database.sqlite3",
       byteSize: 2_000_000,

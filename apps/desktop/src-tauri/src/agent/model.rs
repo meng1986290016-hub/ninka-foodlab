@@ -215,11 +215,21 @@ pub struct AgentRunInput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentRecipeContext {
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub draft_fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentRunRequest {
     pub conversation_id: String,
     pub content: String,
     #[serde(default)]
     pub files: Vec<ImportFileReference>,
+    #[serde(default)]
+    pub recipe_context: Option<AgentRecipeContext>,
     #[serde(default)]
     pub retry_run_id: Option<String>,
     #[serde(default)]

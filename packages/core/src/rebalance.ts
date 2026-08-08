@@ -13,9 +13,7 @@ export interface FormulaAmount {
   locked: boolean;
 }
 
-export type RebalanceMode =
-  | { type: "auto-fill"; itemId: string }
-  | { type: "proportional" };
+export type RebalanceMode = { type: "auto-fill"; itemId: string };
 
 export interface RebalanceInput {
   targetTotalGrams: DecimalString;
@@ -46,75 +44,35 @@ export function rebalanceFormula(
     parsed.set(item.id, amount.value);
   }
 
-  if (input.mode.type === "auto-fill") {
-    const fillerId = input.mode.itemId;
-    const filler = input.items.find((item) => item.id === fillerId);
-    if (filler === undefined || filler.locked) {
-      return fail({
-        code: "target-conflict",
-        itemId: fillerId,
-        severity: "error",
-        message: "自动补足项必须存在且不能被锁定",
-      });
-    }
-    const otherTotal = input.items
-      .filter((item) => item.id !== filler.id)
-      .reduce(
-        (sum, item) => sum.add(parsed.get(item.id) ?? 0),
-        new Decimal(0),
-      );
-    const remaining = target.value.sub(otherTotal);
-    if (remaining.isNegative()) {
-      return fail({
-        code: "target-conflict",
-        itemId: filler.id,
-        severity: "error",
-        message: "其他原料总量已超过目标批量，无法自动补足",
-      });
-    }
-    return ok(input.items.map((item) => ({
-      ...item,
-      amountGrams: item.id === filler.id
-        ? decimalString(remaining)
-        : decimalString(parsed.get(item.id) ?? new Decimal(0)),
-    })));
+  const fillerId = input.mode.itemId;
+  const filler = input.items.find((item) => item.id === fillerId);
+  if (filler === undefined || filler.locked) {
+    return fail({
+      code: "target-conflict",
+      itemId: fillerId,
+      severity: "error",
+      message: "自动补足项必须存在且不能被锁定",
+    });
   }
-
-  const lockedTotal = input.items
-    .filter((item) => item.locked)
+  const otherTotal = input.items
+    .filter((item) => item.id !== filler.id)
     .reduce(
       (sum, item) => sum.add(parsed.get(item.id) ?? 0),
       new Decimal(0),
     );
-  const remaining = target.value.sub(lockedTotal);
+  const remaining = target.value.sub(otherTotal);
   if (remaining.isNegative()) {
     return fail({
       code: "target-conflict",
+      itemId: filler.id,
       severity: "error",
-      message: "已锁定原料总量超过目标批量",
+      message: "其他原料总量已超过计划投料总量，无法自动补足",
     });
   }
-
-  const unlocked = input.items.filter((item) => !item.locked);
-  const unlockedTotal = unlocked.reduce(
-    (sum, item) => sum.add(parsed.get(item.id) ?? 0),
-    new Decimal(0),
-  );
-  if (unlocked.length === 0 || (unlockedTotal.isZero() && !remaining.isZero())) {
-    return fail({
-      code: "target-conflict",
-      severity: "error",
-      message: "没有可按比例调整的未锁定原料",
-    });
-  }
-
-  const factor = unlockedTotal.isZero()
-    ? new Decimal(0)
-    : remaining.div(unlockedTotal);
   return ok(input.items.map((item) => ({
     ...item,
-    amountGrams: item.locked
-      ? decimalString(parsed.get(item.id) ?? new Decimal(0))
-      : decimalString((parsed.get(item.id) ?? new Decimal(0)).mul(factor)),
+    amountGrams: item.id === filler.id
+      ? decimalString(remaining)
+      : decimalString(parsed.get(item.id) ?? new Decimal(0)),
   })));
 }

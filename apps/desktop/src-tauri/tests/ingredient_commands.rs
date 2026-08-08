@@ -58,7 +58,7 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 82);
+    assert_eq!(REGISTERED_COMMANDS.len(), 88);
     for command in [
         "list_categories",
         "create_supplier",
@@ -66,6 +66,12 @@ fn every_grouped_desktop_api_method_is_registered() {
         "save_ingredient_variant",
         "compare_ingredient_variants",
         "save_draft",
+        "create_recipe_alternative",
+        "update_recipe_scheme",
+        "restore_recipe",
+        "permanently_delete_recipe",
+        "delete_recipe_version",
+        "export_sample_sheet",
         "database_status",
     ] {
         assert!(REGISTERED_COMMANDS.contains(&command));

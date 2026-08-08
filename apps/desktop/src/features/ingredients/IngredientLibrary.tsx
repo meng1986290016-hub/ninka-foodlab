@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useState } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
+import type { MaterialNeed } from "../../api/agent-recipe-types";
 import { createImportFilePicker } from "../../api/import-file-picker";
 import type {
   IngredientVariant,
@@ -16,6 +17,7 @@ import { MaterialGroupEditor } from "./MaterialGroupEditor";
 import { useIngredients } from "./useIngredients";
 import { VariantEditor } from "./VariantEditor";
 import { VariantComparisonDrawer } from "./VariantComparisonDrawer";
+import { MaterialNeedList } from "./MaterialNeedList";
 
 interface IngredientLibraryProps {
   api: DesktopApi;
@@ -23,11 +25,12 @@ interface IngredientLibraryProps {
 }
 
 type EditorState =
-  | { kind: "material-group" }
+  | { kind: "material-group"; need?: MaterialNeed }
   | {
       kind: "variant";
       group: MaterialGroup;
       variant: IngredientVariant | null;
+      need?: MaterialNeed;
     };
 
 interface VariantSelection {
@@ -47,6 +50,10 @@ export function IngredientLibrary({
   const [comparison, setComparison] = useState<VariantComparison | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [tab, setTab] = useState<"materials" | "needs">("materials");
+  const [needs, setNeeds] = useState<MaterialNeed[]>([]);
+  const [needsLoading, setNeedsLoading] = useState(false);
+  const [needsError, setNeedsError] = useState<string | null>(null);
   const [filePicker] = useState(createImportFilePicker);
   const { archiveVariant, error, loading, materialGroups, refresh } =
     useIngredients(api, deferredQuery);
@@ -54,6 +61,22 @@ export function IngredientLibrary({
   useEffect(() => {
     if (refreshToken > 0) refresh();
   }, [refreshToken]);
+
+  async function refreshNeeds() {
+    setNeedsLoading(true);
+    setNeedsError(null);
+    try {
+      setNeeds(await api.listMaterialNeeds("open"));
+    } catch (cause) {
+      setNeedsError(cause instanceof Error ? cause.message : "待补充需求无法读取");
+    } finally {
+      setNeedsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshNeeds();
+  }, [api, refreshToken]);
 
   function openEditor(nextEditor: EditorState) {
     setComparison(null);
@@ -65,10 +88,25 @@ export function IngredientLibrary({
     const group = await api.createMaterialGroup(input);
     refresh();
     setActiveGroupId(group.id);
-    openEditor({ kind: "variant", group, variant: null });
+    openEditor({
+      kind: "variant",
+      group,
+      variant: null,
+      ...(editor?.kind === "material-group" && editor.need
+        ? { need: editor.need }
+        : {}),
+    });
   }
 
-  function handleVariantSaved(group: MaterialGroup) {
+  async function handleVariantSaved(
+    group: MaterialGroup,
+    variant: IngredientVariant,
+    need?: MaterialNeed,
+  ) {
+    if (need) {
+      await api.resolveMaterialNeed(need.id, variant.id);
+      await refreshNeeds();
+    }
     refresh();
     setActiveGroupId(group.id);
     setEditor(null);
@@ -176,7 +214,12 @@ export function IngredientLibrary({
           </div>
         </div>
 
-        <div className="library-toolbar">
+        <div aria-label="原料库分类" className="ingredient-library-tabs" role="tablist">
+          <button aria-selected={tab === "materials"} className={tab === "materials" ? "is-active" : undefined} onClick={() => setTab("materials")} role="tab" type="button">原料列表</button>
+          <button aria-selected={tab === "needs"} className={tab === "needs" ? "is-active" : undefined} onClick={() => setTab("needs")} role="tab" type="button">待补充需求 <span>{needs.length}</span></button>
+        </div>
+
+        {tab === "materials" ? <div className="library-toolbar">
           <label className="search-field">
             <Icon name="search" size={18} />
             <span className="sr-only">搜索原料</span>
@@ -201,7 +244,7 @@ export function IngredientLibrary({
               比较 {selection.ids.size} 个原料版本
             </button>
           ) : null}
-        </div>
+        </div> : null}
 
         {error ? (
           <p className="page-error" role="alert">
@@ -213,8 +256,9 @@ export function IngredientLibrary({
             {comparisonError}
           </p>
         ) : null}
+        {needsError ? <p className="page-error" role="alert">{needsError}</p> : null}
 
-        <IngredientTable
+        {tab === "materials" ? <IngredientTable
           activeGroupId={activeGroupId}
           loading={loading}
           materialGroups={materialGroups}
@@ -228,12 +272,25 @@ export function IngredientLibrary({
           onSelectGroup={selectGroup}
           onVariantSelectionChange={changeVariantSelection}
           selectedVariantIds={selection?.ids ?? new Set()}
-        />
+        /> : needsLoading ? <div className="material-needs-empty"><span>正在读取待补充需求…</span></div> : <MaterialNeedList
+          busy={false}
+          materialGroups={materialGroups}
+          needs={needs}
+          onCreate={(need) => openEditor({ kind: "material-group", need })}
+          onDismiss={(need) => {
+            if (!window.confirm(`关闭“${need.materialName}”这项待补充需求？`)) return;
+            void api.dismissMaterialNeed(need.id).then(refreshNeeds);
+          }}
+          onResolve={(need, variantId) => {
+            void api.resolveMaterialNeed(need.id, variantId).then(refreshNeeds);
+          }}
+        />}
       </div>
 
       {editor?.kind === "material-group" ? (
         <MaterialGroupEditor
           api={api}
+          initialName={editor.need?.materialName ?? ""}
           onCancel={() => setEditor(null)}
           onSave={handleCreateGroup}
         />
@@ -242,8 +299,13 @@ export function IngredientLibrary({
         <VariantEditor
           api={api}
           group={editor.group}
+          initialResearchNotes={
+            editor.need
+              ? `来源：Agent 待补充原料需求\n用途：${editor.need.purpose}\n期望规格：${editor.need.desiredSpecification}\n缺失原因：${editor.need.missingReason}`
+              : ""
+          }
           onCancel={() => setEditor(null)}
-          onSaved={() => handleVariantSaved(editor.group)}
+          onSaved={(variant) => void handleVariantSaved(editor.group, variant, editor.need)}
           variant={editor.variant}
         />
       ) : null}

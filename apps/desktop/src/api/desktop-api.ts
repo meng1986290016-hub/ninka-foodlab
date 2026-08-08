@@ -13,6 +13,15 @@ import type {
   CliDetectionResult,
 } from "./agent-types";
 import type {
+  AcceptedAgentRecipeProposal,
+  AgentRecipeProposal,
+  AgentRecipeProposalAcceptInput,
+  AgentRecipeProposalEvaluation,
+  AgentRecipeProposalPayload,
+  MaterialNeed,
+  MaterialNeedStatus,
+} from "./agent-recipe-types";
+import type {
   BackupManifest,
   BackupPreflight,
   BackupRestoreResult,
@@ -35,9 +44,11 @@ import type {
 } from "./nutrition-label-types";
 import type {
   Recipe,
+  RecipeAlternativeCreateInput,
   RecipeDraft,
   RecipeDraftSaveInput,
   RecipeInput,
+  RecipeSchemeUpdateInput,
   RecipeSummary,
   RecipeVersion,
   RecipeVersionComparison,
@@ -48,6 +59,7 @@ import type {
   ResearchReportExportRequest,
   ResearchReportRecordInput,
 } from "./research-report-types";
+import type { SampleSheetExportRequest } from "./sample-sheet-types";
 import type {
   Category,
   DatabaseStatus,
@@ -81,6 +93,7 @@ export interface DesktopApi extends LegacyIngredientApi {
     confirmed: boolean,
   ): Promise<BackupRestoreResult>;
   exportResearchReport(request: ResearchReportExportRequest): Promise<void>;
+  exportSampleSheet(request: SampleSheetExportRequest): Promise<void>;
   createResearchReport(
     input: ResearchReportRecordInput,
   ): Promise<ResearchReportRecord>;
@@ -108,8 +121,13 @@ export interface DesktopApi extends LegacyIngredientApi {
   listRecipes(): Promise<RecipeSummary[]>;
   getRecipe(id: string): Promise<Recipe>;
   createRecipe(input: RecipeInput): Promise<Recipe>;
+  createRecipeAlternative(input: RecipeAlternativeCreateInput): Promise<Recipe>;
   updateRecipe(id: string, input: RecipeInput): Promise<Recipe>;
+  updateRecipeScheme(id: string, input: RecipeSchemeUpdateInput): Promise<Recipe>;
   archiveRecipe(id: string): Promise<void>;
+  restoreRecipe(id: string): Promise<void>;
+  permanentlyDeleteRecipe(id: string, confirmationName: string): Promise<void>;
+  deleteRecipeVersion(id: string): Promise<void>;
   getRecipeDraft(recipeId: string): Promise<RecipeDraft | null>;
   saveRecipeDraft(input: RecipeDraftSaveInput): Promise<RecipeDraft>;
   listRecipeVersions(recipeId: string): Promise<RecipeVersion[]>;
@@ -145,6 +163,25 @@ export interface DesktopApi extends LegacyIngredientApi {
   cancelAgentRun(id: string): Promise<AgentRun>;
   getAgentRun(id: string): Promise<AgentRun>;
   listAgentImportDrafts(runId: string): Promise<IngredientImportDraft[]>;
+  listAgentRecipeProposals(conversationId: string): Promise<AgentRecipeProposal[]>;
+  getAgentRecipeProposal(id: string): Promise<AgentRecipeProposal>;
+  evaluateAgentRecipeProposal(
+    input: AgentRecipeProposalPayload,
+  ): Promise<AgentRecipeProposalEvaluation>;
+  updateAgentRecipeProposal(
+    id: string,
+    input: AgentRecipeProposalPayload,
+  ): Promise<AgentRecipeProposal>;
+  acceptAgentRecipeProposal(
+    input: AgentRecipeProposalAcceptInput,
+  ): Promise<AcceptedAgentRecipeProposal>;
+  discardAgentRecipeProposal(id: string): Promise<AgentRecipeProposal>;
+  listMaterialNeeds(status?: MaterialNeedStatus): Promise<MaterialNeed[]>;
+  resolveMaterialNeed(
+    id: string,
+    ingredientVariantId: string,
+  ): Promise<MaterialNeed>;
+  dismissMaterialNeed(id: string): Promise<MaterialNeed>;
   createIngredientImportJob(
     request: IngredientImportJobRequest,
   ): Promise<IngredientImportJob>;

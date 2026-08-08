@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_recipe;
 pub mod backup;
 pub mod commands;
 pub mod database;
@@ -15,6 +16,11 @@ use commands::agent::{
     list_agent_messages, list_agent_provider_configs, list_agent_provider_models,
     save_agent_preferences, save_agent_provider_config, set_agent_provider_secret, start_agent_run,
     test_agent_provider,
+};
+use commands::agent_recipes::{
+    accept_agent_recipe_proposal, discard_agent_recipe_proposal, dismiss_material_need,
+    evaluate_agent_recipe_proposal, get_agent_recipe_proposal, list_agent_recipe_proposals,
+    list_material_needs, resolve_material_need, update_agent_recipe_proposal,
 };
 use commands::backup::{create_data_backup, inspect_data_backup, restore_data_backup};
 use commands::ingest::{
@@ -39,11 +45,14 @@ use commands::labels::{
 };
 use commands::recipes::{
     archive_recipe, compare_recipe_versions, copy_recipe_version_to_draft, create_recipe,
-    create_recipe_version, get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions,
-    list_recipes, save_recipe_draft, update_recipe,
+    create_recipe_alternative, create_recipe_version, delete_recipe_version, get_recipe,
+    get_recipe_draft, get_recipe_version, list_recipe_versions, list_recipes,
+    permanently_delete_recipe, restore_recipe, save_recipe_draft, update_recipe,
+    update_recipe_scheme,
 };
 use commands::reports::{
-    create_research_report, export_research_report, get_research_report, list_research_reports,
+    create_research_report, export_research_report, export_sample_sheet, get_research_report,
+    list_research_reports,
 };
 use tauri::Manager;
 
@@ -121,11 +130,25 @@ pub fn run() {
             cancel_agent_run,
             get_agent_run,
             list_agent_import_drafts,
+            list_agent_recipe_proposals,
+            get_agent_recipe_proposal,
+            evaluate_agent_recipe_proposal,
+            update_agent_recipe_proposal,
+            accept_agent_recipe_proposal,
+            discard_agent_recipe_proposal,
+            list_material_needs,
+            resolve_material_need,
+            dismiss_material_need,
             list_recipes,
             get_recipe,
             create_recipe,
+            create_recipe_alternative,
             update_recipe,
+            update_recipe_scheme,
             archive_recipe,
+            restore_recipe,
+            permanently_delete_recipe,
+            delete_recipe_version,
             get_recipe_draft,
             save_recipe_draft,
             list_recipe_versions,
@@ -146,6 +169,7 @@ pub fn run() {
             list_research_reports,
             get_research_report,
             export_research_report,
+            export_sample_sheet,
             create_data_backup,
             inspect_data_backup,
             restore_data_backup,

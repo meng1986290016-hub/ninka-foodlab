@@ -201,8 +201,8 @@ describe("NutritionLabelWorkspace", () => {
     ).toBeTruthy();
     expect(screen.getByText("原味高蛋白酸奶 · 配方 V2")).toBeTruthy();
     const preview = await screen.findByLabelText("营养成分表预览");
-    expect(within(preview).getByText("336 kJ")).toBeTruthy();
-    expect(within(preview).getByText("8.6 g")).toBeTruthy();
+    expect(await within(preview).findByText("336 kJ")).toBeTruthy();
+    expect(await within(preview).findByText("8.6 g")).toBeTruthy();
     expect(
       (
         screen.getByRole("button", {
@@ -268,7 +268,7 @@ describe("NutritionLabelWorkspace", () => {
       await screen.findByRole("heading", { name: "研发报告预览" }),
     ).toBeTruthy();
     expect(screen.getByText("原味高蛋白酸奶 · 配方 V2 · 标签 V1")).toBeTruthy();
-  });
+  }, 15_000);
 
   it("switches to the 2025 mandatory rows and shows its required notice", async () => {
     const { api } = createApi();

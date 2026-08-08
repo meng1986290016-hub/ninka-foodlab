@@ -88,6 +88,14 @@ export function AgentComposer({
       onDragOver={(event) => event.preventDefault()}
       onDrop={drop}
     >
+      <div className="agent-composer__heading">
+        <strong>描述研发任务</strong>
+        <span>
+          {files.length > 0
+            ? `已选择 ${files.length} 份资料`
+            : "支持图片、PDF 与表格"}
+        </span>
+      </div>
       {files.length > 0 ? (
         <div aria-label="待发送附件" className="agent-file-list">
           {files.map((file, index) => (
@@ -111,7 +119,7 @@ export function AgentComposer({
         disabled={running || disabled}
         onChange={(event) => onTextChange(event.target.value)}
         onKeyDown={keyDown}
-        placeholder="描述任务，或上传多份原料资料…"
+        placeholder="例：设计一款低糖巧克力冰淇淋，成本控制在……"
         rows={3}
         value={text}
       />
@@ -142,7 +150,7 @@ export function AgentComposer({
           </button>
         )}
       </div>
-      <small>可拖入多个文件；Enter 发送，Shift + Enter 换行。</small>
+      <small>可拖入多个文件 · Enter 发送 · Shift + Enter 换行</small>
     </div>
   );
 }

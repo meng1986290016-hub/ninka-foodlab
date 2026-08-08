@@ -10,6 +10,7 @@ interface MaterialGroupEditorProps {
   group?: MaterialGroup | null | undefined;
   onCancel: () => void;
   onSave: (input: MaterialGroupInput) => Promise<void>;
+  initialName?: string;
 }
 
 export function MaterialGroupEditor({
@@ -17,8 +18,9 @@ export function MaterialGroupEditor({
   group = null,
   onCancel,
   onSave,
+  initialName = "",
 }: MaterialGroupEditorProps) {
-  const [name, setName] = useState(group?.name ?? "");
+  const [name, setName] = useState(group?.name ?? initialName);
   const [categoryId, setCategoryId] = useState<string | null>(
     group?.categoryId ?? null,
   );
@@ -26,10 +28,10 @@ export function MaterialGroupEditor({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setName(group?.name ?? "");
+    setName(group?.name ?? initialName);
     setCategoryId(group?.categoryId ?? null);
     setError(null);
-  }, [group]);
+  }, [group, initialName]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,7 +63,7 @@ export function MaterialGroupEditor({
       <div className="drawer-header">
         <div>
           <h2>{editing ? "编辑通用原料" : "新建通用原料"}</h2>
-          <p>先建立通用名称，再添加一个或多个供应商版本。</p>
+          <p>先建立通用名称，再添加一个或多个供应商及型号/规格版本。</p>
         </div>
         <button
           aria-label="关闭通用原料编辑器"

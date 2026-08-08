@@ -106,7 +106,7 @@ export function RecipeVersionDialog({
           <div>
             <span className="recipe-version-dialog__icon">
               <Icon
-                name={preparation === null ? "warning" : "formula"}
+                name={preparation === null ? "warning" : "recipe-version"}
                 size={22}
               />
             </span>
@@ -155,11 +155,11 @@ export function RecipeVersionDialog({
                 <dd>{snapshot.items.length} 项</dd>
               </div>
               <div>
-                <dt>目标批量</dt>
+                <dt>计划投料总量</dt>
                 <dd>{snapshot.targetBatchGrams} g</dd>
               </div>
               <div>
-                <dt>成品重量</dt>
+                <dt>出成重量</dt>
                 <dd>
                   {snapshot.finishedMassGrams === null
                     ? "未填写"

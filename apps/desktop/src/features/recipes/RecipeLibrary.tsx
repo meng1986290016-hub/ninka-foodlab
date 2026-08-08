@@ -7,9 +7,18 @@ import {
 
 import type { DesktopApi } from "../../api/desktop-api";
 import type {
+  Recipe,
+  RecipeAlternativeCreateInput,
   RecipeKind,
+  RecipeSchemeStatus,
+  RecipeSchemeUpdateInput,
   RecipeSummary,
   RecipeVersion,
+} from "../../api/recipe-types";
+import {
+  recipeProductId,
+  recipeSchemeName,
+  recipeSchemeStatus,
 } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
 import {
@@ -26,6 +35,7 @@ interface RecipeLibraryProps {
     recipeId: string,
     recipeVersionId: string,
   ): void;
+  onOpenSampleSheet?(recipeId: string, versionId: string | null): void;
 }
 
 interface RecipeLibraryEntry {
@@ -36,8 +46,9 @@ interface RecipeLibraryEntry {
 type RecipeStatusFilter =
   | "all"
   | "versioned"
-  | "draft_only"
-  | "archived";
+  | "draft_only";
+type RecipeLibraryTab = "active" | "archived";
+type RecipeSchemeFilter = "all" | RecipeSchemeStatus;
 type UpdatedFilter = "all" | "30" | "90" | "365";
 
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -52,19 +63,26 @@ const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const moneyFormatter = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 export function RecipeLibrary({
   api,
   onOpenDraft,
   onOpenNutritionLabel,
+  onOpenSampleSheet,
 }: RecipeLibraryProps) {
   const [entries, setEntries] = useState<RecipeLibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<RecipeLibraryTab>("active");
   const [kind, setKind] = useState<"all" | RecipeKind>("all");
   const [status, setStatus] = useState<RecipeStatusFilter>("all");
+  const [schemeFilter, setSchemeFilter] = useState<RecipeSchemeFilter>("all");
   const [updated, setUpdated] = useState<UpdatedFilter>("all");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(
     null,
@@ -72,6 +90,7 @@ export function RecipeLibrary({
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
     null,
   );
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [currentPrice, setCurrentPrice] =
     useState<RecipeCurrentPriceResult | null>(null);
   const [recalculating, setRecalculating] = useState(false);
@@ -79,7 +98,22 @@ export function RecipeLibrary({
   const [archiveCandidate, setArchiveCandidate] =
     useState<RecipeSummary | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [deleteRecipeCandidate, setDeleteRecipeCandidate] =
+    useState<RecipeSummary | null>(null);
+  const [deleteRecipeConfirmation, setDeleteRecipeConfirmation] = useState("");
+  const [deletingRecipe, setDeletingRecipe] = useState(false);
+  const [deleteVersionCandidate, setDeleteVersionCandidate] =
+    useState<RecipeVersion | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [alternativeOpen, setAlternativeOpen] = useState(false);
+  const [schemeSettingsOpen, setSchemeSettingsOpen] = useState(false);
+  const [schemeSaving, setSchemeSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createKind, setCreateKind] = useState<RecipeKind>("formula");
+  const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -115,19 +149,23 @@ export function RecipeLibrary({
       const recipe = summary.recipe;
       const matchesQuery =
         normalized === "" ||
-        [recipe.name, recipe.code ?? "", ...recipe.tags].some((value) =>
+        [recipe.name, recipeSchemeName(recipe), recipe.code ?? "", ...recipe.tags].some((value) =>
           value.toLocaleLowerCase("zh-CN").includes(normalized),
         );
       const matchesKind = kind === "all" || recipe.kind === kind;
+      const matchesScheme =
+        schemeFilter === "all" || recipeSchemeStatus(recipe) === schemeFilter;
+      const matchesTab =
+        tab === "active"
+          ? recipe.archivedAt === null
+          : recipe.archivedAt !== null;
       const matchesStatus =
+        tab === "archived" ||
         status === "all" ||
         (status === "versioned" &&
-          summary.latestVersion !== null &&
-          recipe.archivedAt === null) ||
+          summary.latestVersion !== null) ||
         (status === "draft_only" &&
-          summary.latestVersion === null &&
-          recipe.archivedAt === null) ||
-        (status === "archived" && recipe.archivedAt !== null);
+          summary.latestVersion === null);
       const ageDays =
         (now - new Date(recipe.updatedAt).getTime()) /
         (24 * 60 * 60 * 1000);
@@ -136,25 +174,37 @@ export function RecipeLibrary({
       return (
         matchesQuery &&
         matchesKind &&
+        matchesScheme &&
+        matchesTab &&
         matchesStatus &&
         matchesUpdated
       );
     });
-  }, [entries, kind, query, status, updated]);
+  }, [entries, kind, query, schemeFilter, status, tab, updated]);
+
+  const sortedEntries = useMemo(
+    () => [...filteredEntries].sort(compareRecipeSchemes),
+    [filteredEntries],
+  );
+
+  const activeCount = entries.filter(
+    ({ summary }) => summary.recipe.archivedAt === null,
+  ).length;
+  const archivedCount = entries.length - activeCount;
 
   useEffect(() => {
     if (
       selectedRecipeId !== null &&
-      filteredEntries.some(
+      sortedEntries.some(
         ({ summary }) => summary.recipe.id === selectedRecipeId,
       )
     ) {
       return;
     }
     setSelectedRecipeId(
-      filteredEntries[0]?.summary.recipe.id ?? null,
+      sortedEntries[0]?.summary.recipe.id ?? null,
     );
-  }, [filteredEntries, selectedRecipeId]);
+  }, [selectedRecipeId, sortedEntries]);
 
   const selectedEntry =
     entries.find(
@@ -176,6 +226,15 @@ export function RecipeLibrary({
     selectedEntry?.versions.find(
       (version) => version.id === selectedVersionId,
     ) ?? null;
+  const sameProductEntries = selectedEntry === null
+    ? []
+    : entries
+        .filter(
+          ({ summary }) =>
+            recipeProductId(summary.recipe) ===
+            recipeProductId(selectedEntry.summary.recipe),
+        )
+        .sort(compareRecipeSchemes);
 
   useEffect(() => {
     setCurrentPrice(null);
@@ -229,11 +288,144 @@ export function RecipeLibrary({
       await api.archiveRecipe(archiveCandidate.recipe.id);
       setNotice(`“${archiveCandidate.recipe.name}”已归档`);
       setArchiveCandidate(null);
+      setInspectorOpen(false);
       await refresh();
     } catch (cause) {
       setError(messageFrom(cause, "配方无法归档"));
     } finally {
       setArchiving(false);
+    }
+  }
+
+  async function restoreSelected() {
+    if (selectedEntry === null || selectedEntry.summary.recipe.archivedAt === null) return;
+    setRestoring(true);
+    setError(null);
+    try {
+      const restoredId = selectedEntry.summary.recipe.id;
+      const restoredName = selectedEntry.summary.recipe.name;
+      await api.restoreRecipe(restoredId);
+      await refresh();
+      setTab("active");
+      setSelectedRecipeId(restoredId);
+      setInspectorOpen(false);
+      setNotice(`“${restoredName}”已取消归档`);
+    } catch (cause) {
+      setError(messageFrom(cause, "配方无法取消归档"));
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  async function permanentlyDeleteSelectedRecipe() {
+    if (deleteRecipeCandidate === null) return;
+    setDeletingRecipe(true);
+    setError(null);
+    try {
+      const deletedName = deleteRecipeCandidate.recipe.name;
+      await api.permanentlyDeleteRecipe(
+        deleteRecipeCandidate.recipe.id,
+        deleteRecipeConfirmation,
+      );
+      setDeleteRecipeCandidate(null);
+      setDeleteRecipeConfirmation("");
+      setSelectedRecipeId(null);
+      setSelectedVersionId(null);
+      setInspectorOpen(false);
+      await refresh();
+      setNotice(`“${deletedName}”已永久删除`);
+    } catch (cause) {
+      setError(messageFrom(cause, "配方无法永久删除"));
+    } finally {
+      setDeletingRecipe(false);
+    }
+  }
+
+  async function deleteSelectedVersion() {
+    if (deleteVersionCandidate === null) return;
+    setDeletingVersion(true);
+    setError(null);
+    try {
+      const deletedNumber = deleteVersionCandidate.versionNumber;
+      await api.deleteRecipeVersion(deleteVersionCandidate.id);
+      setDeleteVersionCandidate(null);
+      setSelectedVersionId(null);
+      await refresh();
+      setNotice(`正式版本 V${deletedNumber} 已永久删除`);
+    } catch (cause) {
+      setError(messageFrom(cause, "正式版本无法删除"));
+    } finally {
+      setDeletingVersion(false);
+    }
+  }
+
+  async function createAlternative(
+    input: Omit<RecipeAlternativeCreateInput, "sourceVersionId">,
+  ) {
+    if (selectedVersion === null) return;
+    setSchemeSaving(true);
+    setError(null);
+    try {
+      const created = await api.createRecipeAlternative({
+        ...input,
+        sourceVersionId: selectedVersion.id,
+      });
+      await refresh();
+      setAlternativeOpen(false);
+      setSelectedRecipeId(created.id);
+      setNotice(`已创建替代配方“${recipeSchemeName(created)}”`);
+      onOpenDraft(created.id);
+    } catch (cause) {
+      setError(messageFrom(cause, "替代配方无法创建"));
+    } finally {
+      setSchemeSaving(false);
+    }
+  }
+
+  async function updateScheme(input: RecipeSchemeUpdateInput) {
+    if (selectedEntry === null) return;
+    setSchemeSaving(true);
+    setError(null);
+    try {
+      const updatedRecipe = await api.updateRecipeScheme(
+        selectedEntry.summary.recipe.id,
+        input,
+      );
+      await refresh();
+      setSchemeSettingsOpen(false);
+      setSelectedRecipeId(updatedRecipe.id);
+      setNotice(`配方方案“${recipeSchemeName(updatedRecipe)}”已更新`);
+    } catch (cause) {
+      setError(messageFrom(cause, "配方方案无法更新"));
+    } finally {
+      setSchemeSaving(false);
+    }
+  }
+
+  async function createRecipe() {
+    const name = createName.trim();
+    if (!name) {
+      setError("请填写产品名称");
+      return;
+    }
+    setCreating(true);
+    setError(null);
+    try {
+      const created = await api.createRecipe({
+        name,
+        code: null,
+        tags: [],
+        kind: createKind,
+      });
+      setCreateOpen(false);
+      setCreateName("");
+      setCreateKind("formula");
+      await refresh();
+      onOpenDraft(created.id);
+    } catch (cause) {
+      setError(messageFrom(cause, "新配方无法创建"));
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -259,10 +451,50 @@ export function RecipeLibrary({
             <h1>配方库</h1>
             <p>查看正式版本、冻结快照与当前价格对比</p>
           </div>
-          <span className="recipe-library__count">
-            {filteredEntries.length} 个配方
-          </span>
+          <div className="recipe-library__header-actions">
+            <span className="recipe-library__count">
+              {new Set(sortedEntries.map(({ summary }) => recipeProductId(summary.recipe))).size}
+              {" "}个产品 · {sortedEntries.length} 套配方
+            </span>
+            <button
+              className="button button--primary"
+              onClick={() => setCreateOpen(true)}
+              type="button"
+            >
+              <Icon name="plus" size={17} />
+              新建配方
+            </button>
+          </div>
         </header>
+
+        <div aria-label="配方库分类" className="recipe-library__tabs" role="tablist">
+          <button
+            aria-selected={tab === "active"}
+            className={tab === "active" ? "is-active" : undefined}
+            onClick={() => {
+              setTab("active");
+              setInspectorOpen(false);
+              setComparisonOpen(false);
+            }}
+            role="tab"
+            type="button"
+          >
+            研发中 <span>{activeCount}</span>
+          </button>
+          <button
+            aria-selected={tab === "archived"}
+            className={tab === "archived" ? "is-active" : undefined}
+            onClick={() => {
+              setTab("archived");
+              setInspectorOpen(false);
+              setComparisonOpen(false);
+            }}
+            role="tab"
+            type="button"
+          >
+            归档库 <span>{archivedCount}</span>
+          </button>
+        </div>
 
         <div className="recipe-library__toolbar">
           <label className="recipe-library__search">
@@ -289,19 +521,36 @@ export function RecipeLibrary({
               <option value="semi_finished">半成品</option>
             </select>
           </label>
+          {tab === "active" ? (
+            <label>
+              <span>版本状态</span>
+              <select
+                aria-label="配方状态"
+                onChange={(event) =>
+                  setStatus(event.target.value as RecipeStatusFilter)
+                }
+                value={status}
+              >
+                <option value="all">全部状态</option>
+                <option value="versioned">已有正式版本</option>
+                <option value="draft_only">仅有工作草稿</option>
+              </select>
+            </label>
+          ) : null}
           <label>
-            <span>状态</span>
+            <span>方案状态</span>
             <select
-              aria-label="配方状态"
+              aria-label="方案状态"
               onChange={(event) =>
-                setStatus(event.target.value as RecipeStatusFilter)
+                setSchemeFilter(event.target.value as RecipeSchemeFilter)
               }
-              value={status}
+              value={schemeFilter}
             >
-              <option value="all">全部状态</option>
-              <option value="versioned">已有正式版本</option>
-              <option value="draft_only">仅有工作草稿</option>
-              <option value="archived">已归档</option>
+              <option value="all">全部方案</option>
+              <option value="current">当前使用</option>
+              <option value="approved">已批准替代</option>
+              <option value="researching">研发中</option>
+              <option value="inactive">已停用</option>
             </select>
           </label>
           <label>
@@ -338,17 +587,18 @@ export function RecipeLibrary({
             <table className="recipe-library__table">
               <thead>
                 <tr>
-                  <th>配方名称</th>
+                  <th>产品 / 配方方案</th>
+                  <th>方案状态</th>
                   <th>类型</th>
                   <th>最新版本</th>
-                  <th>目标批量</th>
+                  <th>计划投料总量</th>
                   <th>整批成本</th>
-                  <th>最近更新</th>
+                  <th>{tab === "archived" ? "归档时间" : "最近更新"}</th>
                   <th>引用</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.map((entry) => {
+                {sortedEntries.map((entry) => {
                   const recipe = entry.summary.recipe;
                   const latest = entry.versions[0] ?? null;
                   const selected = selectedRecipeId === recipe.id;
@@ -359,26 +609,38 @@ export function RecipeLibrary({
                       onClick={() => {
                         setSelectedRecipeId(recipe.id);
                         setSelectedVersionId(latest?.id ?? null);
+                        setInspectorOpen(true);
                       }}
                     >
                       <td>
                         <button
                           aria-pressed={selected}
                           className="recipe-library__identity"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setSelectedRecipeId(recipe.id);
                             setSelectedVersionId(latest?.id ?? null);
+                            if (recipe.archivedAt === null) {
+                              onOpenDraft(recipe.id);
+                            } else {
+                              setInspectorOpen(true);
+                            }
                           }}
+                          title={
+                            recipe.archivedAt === null
+                              ? "进入配方工作台"
+                              : "已归档配方只能在右侧查看"
+                          }
                           type="button"
                         >
                           <strong>{recipe.name}</strong>
                           <small>
-                            {recipe.code ??
-                              (recipe.tags.length > 0
-                                ? recipe.tags.join(" · ")
-                                : "未设置编号或标签")}
+                            {recipeSchemeName(recipe)}
                           </small>
                         </button>
+                      </td>
+                      <td>
+                        <RecipeSchemeBadge status={recipeSchemeStatus(recipe)} />
                       </td>
                       <td>
                         <RecipeKindBadge kind={recipe.kind} />
@@ -400,7 +662,13 @@ export function RecipeLibrary({
                             )
                           : "—"}
                       </td>
-                      <td>{formatDate(recipe.updatedAt)}</td>
+                      <td>
+                        {formatDate(
+                          tab === "archived"
+                            ? recipe.archivedAt ?? recipe.updatedAt
+                            : recipe.updatedAt,
+                        )}
+                      </td>
                       <td>
                         {entry.summary.referencedByCount > 0 ? (
                           <span className="recipe-library__reference">
@@ -415,9 +683,9 @@ export function RecipeLibrary({
                 })}
               </tbody>
             </table>
-            {filteredEntries.length === 0 ? (
+            {sortedEntries.length === 0 ? (
               <div className="recipe-library__empty">
-                <Icon name="formula" size={28} />
+                <Icon name="recipe-library" size={28} />
                 <strong>没有符合条件的配方</strong>
                 <span>可以调整搜索词或筛选条件。</span>
               </div>
@@ -437,11 +705,39 @@ export function RecipeLibrary({
       ) : (
         <RecipeVersionInspector
           currentPrice={currentPrice}
+          deletingRecipe={deletingRecipe}
+          deletingVersion={deletingVersion}
           entry={selectedEntry}
+          productEntries={sameProductEntries}
           onArchive={() => {
             if (selectedEntry) setArchiveCandidate(selectedEntry.summary);
           }}
+          onRestore={() => void restoreSelected()}
+          onPermanentlyDelete={() => {
+            if (selectedEntry) {
+              setError(null);
+              setDeleteRecipeConfirmation("");
+              setDeleteRecipeCandidate(selectedEntry.summary);
+            }
+          }}
+          onDeleteVersion={() => {
+            if (selectedVersion) {
+              setError(null);
+              setDeleteVersionCandidate(selectedVersion);
+            }
+          }}
+          onOpenSampleSheet={() => {
+            if (selectedEntry) {
+              onOpenSampleSheet?.(
+                selectedEntry.summary.recipe.id,
+                selectedVersion?.id ?? null,
+              );
+            }
+          }}
           onCompare={() => setComparisonOpen(true)}
+          onClose={() => setInspectorOpen(false)}
+          onCreateAlternative={() => setAlternativeOpen(true)}
+          onOpenSchemeSettings={() => setSchemeSettingsOpen(true)}
           onCopy={() => void copyToDraft()}
           onOpenNutritionLabel={() => {
             if (selectedVersion) {
@@ -453,9 +749,19 @@ export function RecipeLibrary({
           }}
           onRecalculate={() => void recalculateCurrentPrice()}
           onSelectVersion={setSelectedVersionId}
+          onSelectRecipe={(recipeId) => {
+            const target = entries.find(
+              ({ summary }) => summary.recipe.id === recipeId,
+            );
+            setSelectedRecipeId(recipeId);
+            setSelectedVersionId(target?.versions[0]?.id ?? null);
+            setInspectorOpen(true);
+          }}
+          narrowOpen={inspectorOpen}
           recalculating={recalculating}
           selectedVersion={selectedVersion}
           copying={copying}
+          restoring={restoring}
         />
       )}
 
@@ -464,7 +770,7 @@ export function RecipeLibrary({
           <section
             aria-labelledby="archive-recipe-title"
             aria-modal="true"
-            className="recipe-library-dialog"
+            className="recipe-library-dialog recipe-library-dialog--form"
             role="dialog"
           >
             <div className="recipe-library-dialog__icon">
@@ -496,41 +802,243 @@ export function RecipeLibrary({
           </section>
         </div>
       ) : null}
+
+      {deleteVersionCandidate && selectedEntry ? (
+        <div className="recipe-library-dialog-backdrop">
+          <section
+            aria-labelledby="delete-recipe-version-title"
+            aria-modal="true"
+            className="recipe-library-dialog recipe-library-dialog--danger"
+            role="dialog"
+          >
+            <div className="recipe-library-dialog__icon">
+              <Icon name="trash" size={22} />
+            </div>
+            <h2 id="delete-recipe-version-title">
+              删除正式版本 V{deleteVersionCandidate.versionNumber}？
+            </h2>
+            <p>
+              将永久删除“{selectedEntry.summary.recipe.name}”的这一份冻结快照，操作无法撤销。若它已被草稿、半成品、营养标签或研发报告引用，系统会拒绝删除。
+            </p>
+            {error ? <p className="recipe-library-dialog__error" role="alert">{error}</p> : null}
+            <footer>
+              <button
+                className="button button--secondary"
+                disabled={deletingVersion}
+                onClick={() => {
+                  setDeleteVersionCandidate(null);
+                  setError(null);
+                }}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button recipe-library__confirm-delete-button"
+                disabled={deletingVersion}
+                onClick={() => void deleteSelectedVersion()}
+                type="button"
+              >
+                {deletingVersion ? "正在删除…" : "永久删除版本"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {deleteRecipeCandidate ? (
+        <div className="recipe-library-dialog-backdrop">
+          <section
+            aria-labelledby="delete-recipe-title"
+            aria-modal="true"
+            className="recipe-library-dialog recipe-library-dialog--form recipe-library-dialog--danger"
+            role="dialog"
+          >
+            <div className="recipe-library-dialog__icon">
+              <Icon name="trash" size={22} />
+            </div>
+            <h2 id="delete-recipe-title">永久删除配方</h2>
+            <p>
+              将删除“{deleteRecipeCandidate.recipe.name}”的工作草稿和全部配方版本。已经生成营养标签、研发报告或仍被其他配方引用时不会执行。
+            </p>
+            <label>
+              <span>输入配方名称确认</span>
+              <input
+                autoFocus
+                onChange={(event) => setDeleteRecipeConfirmation(event.target.value)}
+                placeholder={deleteRecipeCandidate.recipe.name}
+                value={deleteRecipeConfirmation}
+              />
+            </label>
+            <small>这是永久操作，删除后不能从归档库恢复。</small>
+            {error ? <p className="recipe-library-dialog__error" role="alert">{error}</p> : null}
+            <footer>
+              <button
+                className="button button--secondary"
+                disabled={deletingRecipe}
+                onClick={() => {
+                  setDeleteRecipeCandidate(null);
+                  setDeleteRecipeConfirmation("");
+                  setError(null);
+                }}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button recipe-library__confirm-delete-button"
+                disabled={
+                  deletingRecipe ||
+                  deleteRecipeConfirmation.trim() !== deleteRecipeCandidate.recipe.name
+                }
+                onClick={() => void permanentlyDeleteSelectedRecipe()}
+                type="button"
+              >
+                {deletingRecipe ? "正在删除…" : "确认永久删除"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <div className="recipe-library-dialog-backdrop">
+          <section
+            aria-labelledby="create-recipe-title"
+            aria-modal="true"
+            className="recipe-library-dialog recipe-library-dialog--form"
+            role="dialog"
+          >
+            <div className="recipe-library-dialog__icon">
+              <Icon name="formula" size={22} />
+            </div>
+            <h2 id="create-recipe-title">新建配方</h2>
+            <label className="recipe-library-dialog__field">
+              <span>产品名称</span>
+              <input
+                autoFocus
+                onChange={(event) => setCreateName(event.target.value)}
+                placeholder="例如：巧克力冰淇淋"
+                value={createName}
+              />
+            </label>
+            <label className="recipe-library-dialog__field">
+              <span>配方类型</span>
+              <select
+                onChange={(event) => setCreateKind(event.target.value as RecipeKind)}
+                value={createKind}
+              >
+                <option value="formula">成品配方</option>
+                <option value="semi_finished">半成品</option>
+              </select>
+            </label>
+            <footer>
+              <button
+                className="button button--secondary"
+                disabled={creating}
+                onClick={() => setCreateOpen(false)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button button--primary"
+                disabled={creating || !createName.trim()}
+                onClick={() => void createRecipe()}
+                type="button"
+              >
+                {creating ? "正在创建…" : "创建并进入工作台"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {alternativeOpen && selectedEntry && selectedVersion ? (
+        <AlternativeRecipeDialog
+          productName={selectedEntry.summary.recipe.name}
+          saving={schemeSaving}
+          sourceVersionNumber={selectedVersion.versionNumber}
+          onCancel={() => setAlternativeOpen(false)}
+          onSubmit={(input) => void createAlternative(input)}
+        />
+      ) : null}
+
+      {schemeSettingsOpen && selectedEntry ? (
+        <RecipeSchemeDialog
+          recipe={selectedEntry.summary.recipe}
+          saving={schemeSaving}
+          onCancel={() => setSchemeSettingsOpen(false)}
+          onSubmit={(input) => void updateScheme(input)}
+        />
+      ) : null}
     </section>
   );
 }
 
 interface RecipeVersionInspectorProps {
   entry: RecipeLibraryEntry | null;
+  productEntries: RecipeLibraryEntry[];
   selectedVersion: RecipeVersion | null;
   currentPrice: RecipeCurrentPriceResult | null;
   recalculating: boolean;
   copying: boolean;
+  restoring: boolean;
+  deletingRecipe: boolean;
+  deletingVersion: boolean;
+  narrowOpen: boolean;
   onSelectVersion(id: string): void;
+  onSelectRecipe(id: string): void;
   onCopy(): void;
   onOpenNutritionLabel(): void;
   onRecalculate(): void;
   onArchive(): void;
+  onRestore(): void;
+  onPermanentlyDelete(): void;
+  onDeleteVersion(): void;
+  onOpenSampleSheet(): void;
   onCompare(): void;
+  onClose(): void;
+  onCreateAlternative(): void;
+  onOpenSchemeSettings(): void;
 }
 
 function RecipeVersionInspector({
   entry,
+  productEntries,
   selectedVersion,
   currentPrice,
   recalculating,
   copying,
+  restoring,
+  deletingRecipe,
+  deletingVersion,
+  narrowOpen,
   onSelectVersion,
+  onSelectRecipe,
   onCopy,
   onOpenNutritionLabel,
   onRecalculate,
   onArchive,
+  onRestore,
+  onPermanentlyDelete,
+  onDeleteVersion,
+  onOpenSampleSheet,
   onCompare,
+  onClose,
+  onCreateAlternative,
+  onOpenSchemeSettings,
 }: RecipeVersionInspectorProps) {
   if (entry === null) {
     return (
-      <aside className="recipe-library-inspector is-empty">
-        <Icon name="formula" size={30} />
+      <aside
+        className={
+          narrowOpen
+            ? "recipe-library-inspector is-empty is-narrow-open"
+            : "recipe-library-inspector is-empty"
+        }
+      >
+        <Icon name="recipe-library" size={30} />
         <strong>选择一个配方</strong>
         <span>这里会显示冻结版本和成本信息。</span>
       </aside>
@@ -540,20 +1048,26 @@ function RecipeVersionInspector({
   const { recipe } = entry.summary;
   const referenced = entry.summary.referencedByCount > 0;
   const archived = recipe.archivedAt !== null;
+  const inactive = recipeSchemeStatus(recipe) === "inactive";
 
   return (
     <aside
       aria-label={`${recipe.name}版本详情`}
-      className="recipe-library-inspector"
+      className={
+        narrowOpen
+          ? "recipe-library-inspector is-narrow-open"
+          : "recipe-library-inspector"
+      }
     >
       <header className="recipe-library-inspector__header">
         <div>
           <span className="recipe-library-inspector__eyebrow">
-            冻结版本详情
+            {recipeSchemeName(recipe)}
           </span>
           <h2>{recipe.name}</h2>
           <p>
             <RecipeKindBadge kind={recipe.kind} />
+            <RecipeSchemeBadge status={recipeSchemeStatus(recipe)} />
             {recipe.code ? <span>{recipe.code}</span> : null}
             {archived ? (
               <span className="recipe-library__archived">已归档</span>
@@ -565,12 +1079,33 @@ function RecipeVersionInspector({
             V{selectedVersion.versionNumber}
           </strong>
         ) : null}
+        <button
+          aria-label="关闭配方详情"
+          className="recipe-library-inspector__close"
+          onClick={onClose}
+          type="button"
+        >
+          <Icon name="close" size={18} />
+        </button>
       </header>
 
       <div className="recipe-library-inspector__actions">
         <button
           className="button button--primary"
-          disabled={selectedVersion === null || copying || archived}
+          disabled={
+            inactive || (archived
+              ? selectedVersion === null
+              : selectedVersion === null && entry.summary.draftUpdatedAt === null)
+          }
+          onClick={onOpenSampleSheet}
+          type="button"
+        >
+          <Icon name="scale" size={16} />
+          我要打样
+        </button>
+        <button
+          className="button button--secondary"
+          disabled={selectedVersion === null || copying || archived || inactive}
           onClick={onCopy}
           type="button"
         >
@@ -602,7 +1137,7 @@ function RecipeVersionInspector({
         </button>
         <button
           className="button button--secondary"
-          disabled={selectedVersion === null || archived}
+          disabled={selectedVersion === null || archived || inactive}
           onClick={onOpenNutritionLabel}
           type="button"
         >
@@ -610,19 +1145,77 @@ function RecipeVersionInspector({
           生成营养标签
         </button>
         <button
-          className="recipe-library__archive-button"
-          disabled={referenced || archived}
-          onClick={onArchive}
-          title={
-            referenced
-              ? "该配方仍被其他正式版本引用，不能归档"
-              : undefined
-          }
+          className="button button--secondary recipe-library__danger-button"
+          disabled={selectedVersion === null || deletingVersion}
+          onClick={onDeleteVersion}
           type="button"
         >
-          <Icon name="archive" size={16} />
-          归档
+          <Icon name="trash" size={16} />
+          {deletingVersion ? "正在删除…" : "删除此版本"}
         </button>
+        {!archived ? (
+          <button
+            className="button button--secondary"
+            disabled={selectedVersion === null || inactive}
+            onClick={onCreateAlternative}
+            type="button"
+          >
+            <Icon name="plus" size={16} />
+            创建替代配方
+          </button>
+        ) : null}
+        {!archived ? (
+          <button
+            className="button button--secondary"
+            onClick={onOpenSchemeSettings}
+            type="button"
+          >
+            <Icon name="edit" size={16} />
+            方案设置
+          </button>
+        ) : null}
+        {archived ? (
+          <>
+            <button
+              className="button button--secondary recipe-library__restore-button"
+              disabled={restoring || deletingRecipe}
+              onClick={onRestore}
+              type="button"
+            >
+              <Icon name="unlock" size={16} />
+              {restoring ? "正在恢复…" : "取消归档"}
+            </button>
+            <button
+              className="button button--secondary recipe-library__danger-button"
+              disabled={referenced || deletingRecipe}
+              onClick={onPermanentlyDelete}
+              title={
+                referenced
+                  ? "该配方仍被其他正式版本引用，不能永久删除"
+                  : undefined
+              }
+              type="button"
+            >
+              <Icon name="trash" size={16} />
+              {deletingRecipe ? "正在删除…" : "永久删除配方"}
+            </button>
+          </>
+        ) : (
+          <button
+            className="recipe-library__archive-button"
+            disabled={referenced}
+            onClick={onArchive}
+            title={
+              referenced
+                ? "该配方仍被其他正式版本引用，不能归档"
+                : undefined
+            }
+            type="button"
+          >
+            <Icon name="archive" size={16} />
+            归档
+          </button>
+        )}
       </div>
 
       {referenced ? (
@@ -634,6 +1227,36 @@ function RecipeVersionInspector({
       ) : null}
 
       <div className="recipe-library-inspector__scroll">
+        <section className="recipe-library-inspector__section">
+          <div className="recipe-library-inspector__section-title">
+            <h3>同产品配方</h3>
+            <span>{productEntries.length} 套</span>
+          </div>
+          <div className="recipe-library__scheme-list" role="list">
+            {productEntries.map(({ summary }) => {
+              const candidate = summary.recipe;
+              return (
+                <button
+                  aria-current={candidate.id === recipe.id ? "true" : undefined}
+                  className={candidate.id === recipe.id ? "is-active" : undefined}
+                  key={candidate.id}
+                  onClick={() => onSelectRecipe(candidate.id)}
+                  type="button"
+                >
+                  <span>
+                    <strong>{recipeSchemeName(candidate)}</strong>
+                    <small>
+                      {candidate.latestVersionNumber
+                        ? `V${candidate.latestVersionNumber}`
+                        : "仅草稿"}
+                    </small>
+                  </span>
+                  <RecipeSchemeBadge status={recipeSchemeStatus(candidate)} />
+                </button>
+              );
+            })}
+          </div>
+        </section>
         {entry.versions.length > 0 ? (
           <section className="recipe-library-inspector__section">
             <div className="recipe-library-inspector__section-title">
@@ -706,11 +1329,11 @@ function VersionSnapshot({
         </div>
         <dl className="recipe-library__overview">
           <div>
-            <dt>目标批量</dt>
+            <dt>计划投料总量</dt>
             <dd>{formatNumber(snapshot.targetBatchGrams)} g</dd>
           </div>
           <div>
-            <dt>成品产量</dt>
+            <dt>出成重量</dt>
             <dd>
               {snapshot.finishedMassGrams
                 ? `${formatNumber(snapshot.finishedMassGrams)} g`
@@ -891,6 +1514,164 @@ function CurrentPriceComparison({
   );
 }
 
+function AlternativeRecipeDialog({
+  productName,
+  saving,
+  sourceVersionNumber,
+  onCancel,
+  onSubmit,
+}: {
+  productName: string;
+  saving: boolean;
+  sourceVersionNumber: number;
+  onCancel(): void;
+  onSubmit(input: Omit<RecipeAlternativeCreateInput, "sourceVersionId">): void;
+}) {
+  const [schemeName, setSchemeName] = useState("");
+  const [schemeStatus, setSchemeStatus] =
+    useState<"approved" | "researching">("researching");
+  return (
+    <div className="recipe-library-dialog-backdrop">
+      <form
+        aria-labelledby="create-alternative-title"
+        aria-modal="true"
+        className="recipe-library-dialog recipe-library-dialog--form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (schemeName.trim()) onSubmit({ schemeName, schemeStatus });
+        }}
+        role="dialog"
+      >
+        <div className="recipe-library-dialog__icon">
+          <Icon name="copy" size={22} />
+        </div>
+        <h2 id="create-alternative-title">创建替代配方</h2>
+        <p>
+          从“{productName}”V{sourceVersionNumber} 复制为独立草稿，之后拥有自己的版本历史。
+        </p>
+        <label>
+          <span>替代配方名称</span>
+          <input
+            autoFocus
+            maxLength={80}
+            onChange={(event) => setSchemeName(event.target.value)}
+            placeholder="例如：供应商 B 可可粉版本"
+            value={schemeName}
+          />
+        </label>
+        <label>
+          <span>初始状态</span>
+          <select
+            onChange={(event) =>
+              setSchemeStatus(event.target.value as "approved" | "researching")
+            }
+            value={schemeStatus}
+          >
+            <option value="researching">研发中</option>
+            <option value="approved">已批准替代</option>
+          </select>
+        </label>
+        <small>研发中方案可继续编辑和打样；确认可用后再改为“已批准替代”。</small>
+        <footer>
+          <button
+            className="button button--secondary"
+            disabled={saving}
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className="button button--primary"
+            disabled={saving || schemeName.trim() === ""}
+            type="submit"
+          >
+            {saving ? "正在创建…" : "创建并进入工作台"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function RecipeSchemeDialog({
+  recipe,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  recipe: Recipe;
+  saving: boolean;
+  onCancel(): void;
+  onSubmit(input: RecipeSchemeUpdateInput): void;
+}) {
+  const [schemeName, setSchemeName] = useState(recipeSchemeName(recipe));
+  const [schemeStatus, setSchemeStatus] =
+    useState<RecipeSchemeStatus>(recipeSchemeStatus(recipe));
+  return (
+    <div className="recipe-library-dialog-backdrop">
+      <form
+        aria-labelledby="recipe-scheme-title"
+        aria-modal="true"
+        className="recipe-library-dialog recipe-library-dialog--form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (schemeName.trim()) onSubmit({ schemeName, schemeStatus });
+        }}
+        role="dialog"
+      >
+        <div className="recipe-library-dialog__icon">
+          <Icon name="edit" size={22} />
+        </div>
+        <h2 id="recipe-scheme-title">方案设置</h2>
+        <p>管理“{recipe.name}”下这套配方的名称和可用状态。</p>
+        <label>
+          <span>配方方案名称</span>
+          <input
+            maxLength={80}
+            onChange={(event) => setSchemeName(event.target.value)}
+            value={schemeName}
+          />
+        </label>
+        <label>
+          <span>方案状态</span>
+          <select
+            onChange={(event) =>
+              setSchemeStatus(event.target.value as RecipeSchemeStatus)
+            }
+            value={schemeStatus}
+          >
+            <option value="current">当前使用</option>
+            <option value="approved">已批准替代</option>
+            <option value="researching">研发中</option>
+            <option value="inactive">已停用</option>
+          </select>
+        </label>
+        <small>
+          设为“当前使用”时，原当前配方会自动变为“已批准替代”；已停用方案不可编辑、打样或保存新版本。
+        </small>
+        <footer>
+          <button
+            className="button button--secondary"
+            disabled={saving}
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className="button button--primary"
+            disabled={saving || schemeName.trim() === ""}
+            type="submit"
+          >
+            {saving ? "正在保存…" : "保存方案设置"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function RecipeKindBadge({ kind }: { kind: RecipeKind }) {
   return (
     <span
@@ -898,6 +1679,45 @@ function RecipeKindBadge({ kind }: { kind: RecipeKind }) {
     >
       {kind === "formula" ? "成品配方" : "半成品"}
     </span>
+  );
+}
+
+function RecipeSchemeBadge({ status }: { status: RecipeSchemeStatus }) {
+  return (
+    <span className={`recipe-library__scheme-status is-${status}`}>
+      {schemeStatusLabel(status)}
+    </span>
+  );
+}
+
+function schemeStatusLabel(status: RecipeSchemeStatus) {
+  switch (status) {
+    case "current":
+      return "当前使用";
+    case "approved":
+      return "已批准替代";
+    case "researching":
+      return "研发中";
+    case "inactive":
+      return "已停用";
+  }
+}
+
+const schemeOrder: Record<RecipeSchemeStatus, number> = {
+  current: 0,
+  approved: 1,
+  researching: 2,
+  inactive: 3,
+};
+
+function compareRecipeSchemes(left: RecipeLibraryEntry, right: RecipeLibraryEntry) {
+  const leftRecipe = left.summary.recipe;
+  const rightRecipe = right.summary.recipe;
+  return (
+    leftRecipe.name.localeCompare(rightRecipe.name, "zh-CN") ||
+    schemeOrder[recipeSchemeStatus(leftRecipe)] -
+      schemeOrder[recipeSchemeStatus(rightRecipe)] ||
+    recipeSchemeName(leftRecipe).localeCompare(recipeSchemeName(rightRecipe), "zh-CN")
   );
 }
 
@@ -919,14 +1739,15 @@ function formatNumber(value: string) {
 }
 
 function formatMoney(value: string) {
-  return `¥${formatNumber(value)}`;
+  const number = Number(value);
+  return `¥${Number.isFinite(number) ? moneyFormatter.format(number) : value}`;
 }
 
 function formatMoneyDifference(value: string) {
   const number = Number(value);
   if (!Number.isFinite(number)) return formatMoney(value);
   const sign = number > 0 ? "+" : number < 0 ? "-" : "";
-  return `${sign}¥${formatNumber(String(Math.abs(number)))}`;
+  return `${sign}¥${moneyFormatter.format(Math.abs(number))}`;
 }
 
 function messageFrom(cause: unknown, fallback: string) {

@@ -73,6 +73,8 @@ impl Fixture {
                 allowed_attachment_ids: attachment_ids,
                 provider_kind: AgentProviderKind::OpenAi,
                 model: "fixture".into(),
+                active_recipe_id: None,
+                active_recipe_name: None,
             },
         )
     }

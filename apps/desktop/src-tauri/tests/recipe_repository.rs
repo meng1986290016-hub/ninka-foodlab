@@ -10,7 +10,10 @@ use std::{
 use food_rd_desktop::{
     database::{self, migrations},
     recipes::{
-        model::{RecipeDraftInput, RecipeInput, RecipeKind, RecipeVersionInput},
+        model::{
+            RecipeDraftInput, RecipeInput, RecipeKind, RecipeSchemeInput, RecipeSchemeStatus,
+            RecipeVersionInput,
+        },
         repository::RecipeRepository,
     },
 };
@@ -110,7 +113,7 @@ fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 11);
     for object in [
         "recipes",
         "recipe_drafts",
@@ -118,6 +121,8 @@ fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
         "recipe_version_dependencies",
         "recipe_versions_no_update",
         "recipe_versions_no_delete",
+        "recipe_deletion_authorizations",
+        "recipe_version_sequences",
     ] {
         let exists = connection
             .query_row(
@@ -214,6 +219,37 @@ fn version_save_is_atomic_and_does_not_consume_a_number_on_failure() {
 }
 
 #[test]
+fn unreferenced_version_can_be_deleted_without_reusing_its_number() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("版本删除测试", RecipeKind::Formula))
+        .unwrap();
+    let draft = repository.save_draft(draft_input(&recipe.id)).unwrap();
+    let first = repository
+        .create_version(version_input(&recipe.id, &draft.id, Vec::new()))
+        .unwrap();
+    let mut copied_draft = draft_input(&recipe.id);
+    copied_draft.based_on_version_id = Some(first.id.clone());
+    repository.save_draft(copied_draft).unwrap();
+
+    repository.delete_version(&first.id).unwrap();
+    assert!(repository.list_versions(&recipe.id).unwrap().is_empty());
+    assert_eq!(
+        repository
+            .get_draft(&recipe.id)
+            .unwrap()
+            .unwrap()
+            .based_on_version_id,
+        None
+    );
+
+    let next = repository
+        .create_version(version_input(&recipe.id, &draft.id, Vec::new()))
+        .unwrap();
+    assert_eq!(next.version_number, 2);
+}
+
+#[test]
 fn formal_version_rows_are_immutable_even_through_direct_sql() {
     let path = temporary_database("immutable-recipe-version");
     let version_id;
@@ -272,11 +308,13 @@ fn explicit_version_dependencies_protect_referenced_recipes_from_archiving() {
         .unwrap();
     assert_eq!(
         finished_version.dependency_version_ids,
-        vec![base_version.id]
+        vec![base_version.id.clone()]
     );
 
     let error = repository.archive_recipe(&base_recipe.id).unwrap_err();
     assert_eq!(error.code(), "reference_conflict");
+    let delete_error = repository.delete_version(&base_version.id).unwrap_err();
+    assert_eq!(delete_error.code(), "reference_conflict");
     repository.archive_recipe(&finished_recipe.id).unwrap();
     assert!(
         repository
@@ -285,6 +323,120 @@ fn explicit_version_dependencies_protect_referenced_recipes_from_archiving() {
             .archived_at
             .is_some()
     );
+}
+
+#[test]
+fn archived_recipe_requires_exact_name_before_permanent_deletion() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("永久删除测试", RecipeKind::Formula))
+        .unwrap();
+    let draft = repository.save_draft(draft_input(&recipe.id)).unwrap();
+    repository
+        .create_version(version_input(&recipe.id, &draft.id, Vec::new()))
+        .unwrap();
+
+    let active_error = repository
+        .permanently_delete_recipe(&recipe.id, &recipe.name)
+        .unwrap_err();
+    assert_eq!(active_error.code(), "invalid_state");
+
+    repository.archive_recipe(&recipe.id).unwrap();
+    let confirmation_error = repository
+        .permanently_delete_recipe(&recipe.id, "输入错误")
+        .unwrap_err();
+    assert_eq!(confirmation_error.code(), "confirmation_mismatch");
+
+    repository
+        .permanently_delete_recipe(&recipe.id, &recipe.name)
+        .unwrap();
+    assert_eq!(
+        repository.get_recipe(&recipe.id).unwrap_err().code(),
+        "not_found"
+    );
+}
+
+#[test]
+fn archived_recipe_can_be_restored_without_changing_versions() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("恢复测试配方", RecipeKind::Formula))
+        .unwrap();
+    let draft = repository.save_draft(draft_input(&recipe.id)).unwrap();
+    let version = repository
+        .create_version(version_input(&recipe.id, &draft.id, Vec::new()))
+        .unwrap();
+
+    repository.archive_recipe(&recipe.id).unwrap();
+    assert!(
+        repository
+            .get_recipe(&recipe.id)
+            .unwrap()
+            .archived_at
+            .is_some()
+    );
+    repository.restore_recipe(&recipe.id).unwrap();
+
+    let restored = repository.get_recipe(&recipe.id).unwrap();
+    assert!(restored.archived_at.is_none());
+    assert!(restored.updated_at > recipe.updated_at);
+    assert_eq!(
+        repository.list_versions(&recipe.id).unwrap()[0].id,
+        version.id
+    );
+}
+
+#[test]
+fn alternative_recipes_are_named_independent_schemes_of_the_same_product() {
+    let mut repository = controlled_repository();
+    let primary = repository
+        .create_recipe(recipe_input("巧克力冰淇淋", RecipeKind::Formula))
+        .unwrap();
+
+    let alternative = repository
+        .create_alternative_recipe(
+            &primary.id,
+            "供应商 B 可可粉版本",
+            RecipeSchemeStatus::Researching,
+        )
+        .unwrap();
+
+    assert_eq!(alternative.product_id, primary.id);
+    assert_eq!(alternative.name, primary.name);
+    assert_eq!(alternative.scheme_name, "供应商 B 可可粉版本");
+    assert_eq!(alternative.scheme_status, RecipeSchemeStatus::Researching);
+    assert_ne!(alternative.id, primary.id);
+
+    repository
+        .update_recipe_scheme(
+            &alternative.id,
+            RecipeSchemeInput {
+                scheme_name: alternative.scheme_name.clone(),
+                scheme_status: RecipeSchemeStatus::Current,
+            },
+        )
+        .unwrap();
+
+    assert_eq!(
+        repository
+            .get_recipe(&alternative.id)
+            .unwrap()
+            .scheme_status,
+        RecipeSchemeStatus::Current
+    );
+    assert_eq!(
+        repository.get_recipe(&primary.id).unwrap().scheme_status,
+        RecipeSchemeStatus::Approved
+    );
+
+    let duplicate = repository
+        .create_alternative_recipe(
+            &primary.id,
+            " 供应商 B 可可粉版本 ",
+            RecipeSchemeStatus::Researching,
+        )
+        .unwrap_err();
+    assert_eq!(duplicate.code(), "duplicate_name");
 }
 
 #[test]

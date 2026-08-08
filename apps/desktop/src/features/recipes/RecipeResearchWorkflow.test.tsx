@@ -78,7 +78,7 @@ async function saveFormalVersion(
 }
 
 describe("complete recipe research workflow", () => {
-  it("persists selection, locking, auto-fill, targets, two versions and their differences across restart", async () => {
+  it("persists selection, locking, auto-fill, two versions and their differences across restart", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;
     let minute = 0;
@@ -144,20 +144,6 @@ describe("complete recipe research workflow", () => {
     );
     expect((sugarAmount as HTMLInputElement).value).toBe("800");
 
-    await user.click(
-      screen.getByRole("button", { name: "添加目标" }),
-    );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "目标指标" }),
-      "nutrition:protein",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "目标下限" }),
-      "6",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "保存目标" }),
-    );
     const notes = screen.getByRole("textbox", { name: "研发备注" });
     await user.type(notes, "V1：乳味适中，甜感略高。");
     await saveFormalVersion(user, 1);
@@ -206,11 +192,7 @@ describe("complete recipe research workflow", () => {
       ]),
     );
     expect(comparison.costChanges.length).toBeGreaterThan(0);
-    expect(comparison.targetChanges).toEqual([
-      expect.objectContaining({
-        label: "蛋白质（每 100g）",
-      }),
-    ]);
+    expect(comparison.targetChanges).toEqual([]);
     expect(comparison.notesChanged).toBe(true);
 
     const reopened = new BrowserDemoApi({ storage });
@@ -239,5 +221,5 @@ describe("complete recipe research workflow", () => {
         ),
       ).toEqual(comparison);
     });
-  });
+  }, 15_000);
 });

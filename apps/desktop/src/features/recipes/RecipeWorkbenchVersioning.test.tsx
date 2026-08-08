@@ -139,7 +139,7 @@ describe("RecipeWorkbench formal versions", () => {
       kind: "formula",
     });
     const user = userEvent.setup();
-    render(<RecipeWorkbench api={api} />);
+    render(<RecipeWorkbench api={api} recipeId={formula.id} />);
     await screen.findByDisplayValue("高蛋白酸奶");
     await addMilkPowder(user);
     const amount = screen.getByRole("textbox", {
@@ -314,7 +314,7 @@ describe("RecipeWorkbench formal versions", () => {
     };
     await api.saveRecipeDraft(formulaDraft);
     const user = userEvent.setup();
-    render(<RecipeWorkbench api={api} />);
+    render(<RecipeWorkbench api={api} recipeId={formula.id} />);
     await screen.findByDisplayValue("糖浆饮料");
 
     const upgrade = await screen.findByRole("button", {

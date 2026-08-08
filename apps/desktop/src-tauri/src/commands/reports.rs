@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::reports::{
-    export::{self, ResearchReportExportRequest},
+    export::{self, ResearchReportExportRequest, SampleSheetExportRequest},
     model::{ResearchReport, ResearchReportInput},
     repository::ResearchReportRepository,
 };
@@ -46,4 +46,9 @@ pub fn export_research_report(
     let repository = repository(&state)?;
     let report = repository.get_report(&request.report_id)?;
     export::export_research_report(&report, request).map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn export_sample_sheet(request: SampleSheetExportRequest) -> Result<(), CommandError> {
+    export::export_sample_sheet(request).map_err(Into::into)
 }

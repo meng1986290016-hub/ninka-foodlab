@@ -226,7 +226,7 @@ describe("nutrition label desktop API", () => {
     });
     const { recipe, version: recipeVersion } = await createFormalRecipe(api);
     const v6 = JSON.parse(
-      storage.getItem("food-rd.browser-demo.v7") ?? "{}",
+      storage.getItem("food-rd.browser-demo.v8") ?? "{}",
     ) as Record<string, unknown>;
     storage.clear();
     storage.setItem(
@@ -282,9 +282,9 @@ describe("nutrition label desktop API", () => {
       published,
     );
     expect(
-      JSON.parse(storage.getItem("food-rd.browser-demo.v7") ?? "{}"),
+      JSON.parse(storage.getItem("food-rd.browser-demo.v8") ?? "{}"),
     ).toMatchObject({
-      schemaVersion: 7,
+      schemaVersion: 8,
       nutritionLabels: {
         [label.id]: { latestVersionNumber: 1 },
       },

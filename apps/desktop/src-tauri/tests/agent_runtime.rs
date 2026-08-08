@@ -152,6 +152,7 @@ impl Fixture {
                 value: self.source_path.to_string_lossy().into_owned(),
                 media_type: Some("text/plain".into()),
             }],
+            recipe_context: None,
             retry_run_id: None,
             continue_run_id: None,
         }
@@ -289,6 +290,7 @@ async fn empty_model_output_retries_once_before_failing() {
             conversation_id,
             content: "帮我分析原料库".into(),
             files: vec![],
+            recipe_context: None,
             retry_run_id: None,
             continue_run_id: None,
         })
@@ -332,6 +334,7 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
             conversation_id: conversation_id.clone(),
             content: String::new(),
             files: vec![],
+            recipe_context: None,
             retry_run_id: Some(failed_run_id),
             continue_run_id: None,
         })
@@ -383,6 +386,7 @@ async fn completed_run_can_continue_with_the_same_job_and_attachments() {
             conversation_id: conversation_id.clone(),
             content: "重新检查并拆分不同供应商".into(),
             files: vec![],
+            recipe_context: None,
             retry_run_id: None,
             continue_run_id: Some(first.id),
         })

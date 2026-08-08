@@ -102,7 +102,7 @@ export function RecipeVersionComparisonPanel({
           </button>
         </header>
         <div className="recipe-comparison-panel__empty">
-          <Icon name="formula" size={30} />
+          <Icon name="version-compare" size={30} />
           <strong>至少需要两个正式版本</strong>
           <span>复制当前版本为草稿并保存新版本后，即可进行比较。</span>
         </div>

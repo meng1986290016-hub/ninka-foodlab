@@ -67,7 +67,7 @@ impl RepositoryError {
         Self::Io(error)
     }
 
-    fn domain(code: &'static str, message: impl Into<String>) -> Self {
+    pub(crate) fn domain(code: &'static str, message: impl Into<String>) -> Self {
         Self::Domain {
             code,
             message: message.into(),

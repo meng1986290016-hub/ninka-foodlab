@@ -26,6 +26,7 @@ use crate::{
         secrets::KeyringSecretStore,
         tools::AgentToolRegistry,
     },
+    agent_recipe::repository::AgentRecipeRepository,
     ingest::{coordinator::IngredientIngestCoordinator, model::IngredientImportDraft},
 };
 
@@ -247,12 +248,13 @@ pub async fn start_agent_run(
         IngredientIngestCoordinator::open(&state.database_path, &state.attachment_root)?;
     let repository = AgentRepository::open_for_runtime(&state.database_path)?;
     let audit = AgentRepository::open_for_runtime(&state.database_path)?;
+    let recipe_proposals = AgentRecipeRepository::open(&state.database_path)?;
     let event_sink = Arc::new(move |event: AgentRuntimeEvent| {
         let _ = app.emit(AGENT_EVENT_NAME, event);
     });
     let mut runtime = AgentRuntime::new_with_factory(
         repository,
-        AgentToolRegistry::with_audit(coordinator, audit),
+        AgentToolRegistry::with_audit_and_recipes(coordinator, audit, recipe_proposals),
         factory,
         config,
         event_sink,

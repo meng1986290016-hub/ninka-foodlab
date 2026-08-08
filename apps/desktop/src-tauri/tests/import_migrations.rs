@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_seven() {
+fn fresh_database_applies_latest_schema_version_eleven() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 7);
+    assert_eq!(schema_version(&connection), 11);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -97,7 +97,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 7);
+    assert_eq!(schema_version(&connection), 11);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -113,4 +113,12 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
     assert!(table_exists(&connection, "agent_provider_configs"));
     assert!(table_exists(&connection, "recipe_versions"));
     assert!(table_exists(&connection, "nutrition_label_versions"));
+    let confidence_column_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('import_draft_source_links') WHERE name = 'confidence'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(confidence_column_count, 1);
 }

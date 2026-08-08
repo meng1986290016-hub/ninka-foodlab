@@ -6,12 +6,24 @@ use food_rd_desktop::{
         repository::AgentRepository,
         tools::{AgentToolContext, AgentToolRegistry},
     },
+    agent_recipe::repository::AgentRecipeRepository,
     ingest::{
         coordinator::IngredientIngestCoordinator,
         model::{
             ImportFileReference, ImportFileReferenceKind, IngredientImportDraftStatus,
             IngredientImportJobRequest, IngredientImportSourceKind,
         },
+    },
+    ingredients::{
+        model::{
+            IngredientVariantAllergens, IngredientVariantInput, MaterialGroupInput,
+            VariantNutrition, VariantNutritionValue,
+        },
+        repository::IngredientRepository,
+    },
+    recipes::{
+        model::{RecipeDraftInput, RecipeInput, RecipeKind},
+        repository::RecipeRepository,
     },
 };
 use rusqlite::Connection;
@@ -79,6 +91,8 @@ fn context(job_id: &str, attachment_ids: impl IntoIterator<Item = String>) -> Ag
         allowed_attachment_ids: attachment_ids.into_iter().collect::<BTreeSet<_>>(),
         provider_kind: AgentProviderKind::CodexCli,
         model: "test-model".into(),
+        active_recipe_id: None,
+        active_recipe_name: None,
     }
 }
 
@@ -110,7 +124,7 @@ fn review() -> serde_json::Value {
 }
 
 #[test]
-fn registry_exposes_only_approved_phase_three_tools() {
+fn registry_exposes_only_approved_review_scoped_tools() {
     let fixture = Fixture::new();
     let registry = AgentToolRegistry::new(fixture.coordinator());
     let names = registry
@@ -135,9 +149,18 @@ fn registry_exposes_only_approved_phase_three_tools() {
             "discard_ingredient_import_draft",
             "validate_ingredient_import_draft",
             "request_open_ingredient_review",
+            "evaluate_recipe_proposal",
+            "create_recipe_proposal",
+            "update_recipe_proposal",
+            "request_open_recipe_proposal_review",
+            "diagnose_recipe",
+            "review_recipe_development",
+            "compare_supplier_variant",
         ]
     );
     assert!(!names.contains(&"save_ingredient_variant".to_string()));
+    assert!(!names.contains(&"accept_recipe_proposal".to_string()));
+    assert!(!names.contains(&"create_recipe_version".to_string()));
 }
 
 #[test]
@@ -156,6 +179,193 @@ fn formal_writes_and_unrelated_reads_are_denied() {
             .unwrap_err();
         assert_eq!(error.code(), "tool_denied");
     }
+}
+
+#[test]
+fn recipe_diagnosis_and_supplier_comparison_are_deterministic_read_only_tools() {
+    let fixture = Fixture::new();
+    let mut ingredients = IngredientRepository::open(&fixture.database_path).unwrap();
+    let supplier_a = ingredients.create_supplier("供应商 A", "").unwrap();
+    let supplier_b = ingredients.create_supplier("供应商 B", "").unwrap();
+    let group = ingredients
+        .create_material_group(MaterialGroupInput {
+            name: "脱脂乳粉".into(),
+            category_id: None,
+        })
+        .unwrap();
+    let save_variant = |ingredients: &mut IngredientRepository,
+                        supplier_id: String,
+                        model: &str,
+                        price: &str,
+                        protein: &str| {
+        ingredients
+            .save_variant(IngredientVariantInput {
+                id: None,
+                material_group_id: group.id.clone(),
+                supplier_id,
+                model_or_specification: model.into(),
+                internal_code: None,
+                current_price: Some(price.into()),
+                price_unit: "kg".into(),
+                density_g_per_ml: None,
+                source: "供应商规格书".into(),
+                research_notes: "".into(),
+                nutrition: VariantNutrition {
+                    basis: "per_100g".into(),
+                    values: vec![VariantNutritionValue {
+                        nutrient_definition_id: "protein".into(),
+                        value: Some(protein.into()),
+                    }],
+                },
+                allergens: IngredientVariantAllergens {
+                    contains: vec!["乳".into()],
+                    may_contain: Vec::new(),
+                },
+                duplicate_confirmed: false,
+            })
+            .unwrap()
+    };
+    let source_variant = save_variant(&mut ingredients, supplier_a.id, "SMP-A", "31.5", "34");
+    let candidate_variant = save_variant(&mut ingredients, supplier_b.id, "SMP-B", "25", "30");
+    drop(ingredients);
+
+    let mut recipes = RecipeRepository::open(&fixture.database_path).unwrap();
+    let recipe = recipes
+        .create_recipe(RecipeInput {
+            name: "高蛋白冰淇淋".into(),
+            code: None,
+            tags: Vec::new(),
+            kind: RecipeKind::Formula,
+        })
+        .unwrap();
+    recipes
+        .save_draft(RecipeDraftInput {
+            recipe_id: recipe.id.clone(),
+            based_on_version_id: None,
+            source: "manual".into(),
+            payload_version: 1,
+            payload: json!({
+                "targetBatchGrams": "100",
+                "finishedMassGrams": null,
+                "markdownNotes": "本轮降低甜度，口感偏硬。",
+                "items": [{
+                    "id": "line-milk",
+                    "position": 0,
+                    "kind": "ingredient",
+                    "ingredientVariantId": source_variant.id.clone(),
+                    "amount": "100",
+                    "unit": "g",
+                    "locked": false,
+                    "autoFill": false
+                }]
+            }),
+            calculation: Some(json!({
+                "inputMassGrams": "100",
+                "basisMassGrams": "100",
+                "yieldPercent": null,
+                "nutrients": [{
+                    "nutrientDefinitionId": "protein",
+                    "name": "蛋白质",
+                    "unit": "g",
+                    "per100gKnownAmount": "34",
+                    "status": "complete"
+                }],
+                "cost": {
+                    "batchTotal": "3.15",
+                    "status": "complete",
+                    "breakdown": [{
+                        "id": "line-milk", "name": "脱脂乳粉 · 供应商 A",
+                        "category": "ingredient", "amount": "3.15"
+                    }]
+                },
+                "completeness": { "percent": 100, "missingFields": [] }
+            })),
+            calculation_issues: Vec::new(),
+        })
+        .unwrap();
+    drop(recipes);
+
+    let mut audit = AgentRepository::open(&fixture.database_path).unwrap();
+    let conversation = audit.create_conversation("配方诊断").unwrap();
+    let run = audit
+        .create_run(AgentRunInput {
+            conversation_id: conversation.id,
+            provider_config_id: "codex_cli".into(),
+            import_job_id: None,
+            status: AgentRunStatus::Running,
+        })
+        .unwrap();
+    let coordinator = fixture.coordinator();
+    let proposals = AgentRecipeRepository::open(&fixture.database_path).unwrap();
+    let mut registry = AgentToolRegistry::with_audit_and_recipes(coordinator, audit, proposals);
+    let scoped_context = AgentToolContext {
+        run_id: run.id,
+        import_job_id: String::new(),
+        allowed_attachment_ids: BTreeSet::new(),
+        provider_kind: AgentProviderKind::CodexCli,
+        model: "test-model".into(),
+        active_recipe_id: Some(recipe.id.clone()),
+        active_recipe_name: Some(recipe.name.clone()),
+    };
+
+    let diagnosis = registry
+        .execute(
+            &scoped_context,
+            "diagnose_recipe",
+            json!({ "recipeId": recipe.id.clone() }),
+        )
+        .unwrap();
+    assert_eq!(diagnosis["status"], "attention");
+    assert_eq!(diagnosis["readOnly"], true);
+
+    let retrospective = registry
+        .execute(
+            &scoped_context,
+            "review_recipe_development",
+            json!({ "recipeId": recipe.id.clone() }),
+        )
+        .unwrap();
+    assert_eq!(
+        retrospective["researchNotes"]["current"],
+        "本轮降低甜度，口感偏硬。"
+    );
+    assert_eq!(retrospective["readOnly"], true);
+    assert_eq!(retrospective["deterministicFacts"], true);
+    assert!(
+        retrospective["nextStepHints"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value.as_str().unwrap().contains("出成重量"))
+    );
+
+    let comparison = registry
+        .execute(
+            &scoped_context,
+            "compare_supplier_variant",
+            json!({
+                "recipeId": recipe.id.clone(),
+                "itemId": "line-milk",
+                "candidateVariantId": candidate_variant.id.clone()
+            }),
+        )
+        .unwrap();
+    assert_eq!(comparison["impact"]["estimatedBatchCostAfter"], "2.5");
+    assert_eq!(
+        comparison["impact"]["nutrientChangesPer100g"][0]["difference"],
+        "-4"
+    );
+    assert_eq!(comparison["readOnly"], true);
+    assert_eq!(comparison["requiresHumanConfirmationToApply"], true);
+    assert_eq!(
+        RecipeRepository::open(&fixture.database_path)
+            .unwrap()
+            .get_draft(&recipe.id)
+            .unwrap()
+            .unwrap()
+            .payload["items"][0]["ingredientVariantId"],
+        source_variant.id
+    );
 }
 
 #[test]

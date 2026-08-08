@@ -125,7 +125,7 @@ export function DataManagementSettings({
 
       {!nativeAvailable ? (
         <div className="data-management__browser-note" role="note">
-          <Icon name="database" size={19} />
+          <Icon name="offline" size={19} />
           <div>
             <strong>浏览器演示模式不执行真实本机备份</strong>
             <p>请在桌面版中创建、检查或恢复 .foodrd-backup 文件。</p>
@@ -149,6 +149,7 @@ export function DataManagementSettings({
           onClick={() => void createBackup()}
           type="button"
         >
+          <Icon name="backup" size={17} />
           {operation === "create" ? "正在创建…" : "创建备份"}
         </button>
         {createdBackup !== null ? (
@@ -172,6 +173,7 @@ export function DataManagementSettings({
           onClick={() => void selectAndInspect()}
           type="button"
         >
+          <Icon name="restore" size={17} />
           {operation === "inspect" ? "正在检查…" : "选择并检查备份"}
         </button>
 
@@ -216,6 +218,7 @@ export function DataManagementSettings({
                 onClick={() => void restoreBackup()}
                 type="button"
               >
+                <Icon name="restore" size={17} />
                 {operation === "restore" ? "正在恢复…" : "恢复所选备份"}
               </button>
             </div>

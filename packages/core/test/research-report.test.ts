@@ -160,7 +160,7 @@ describe("research report document", () => {
     expect(first).toContain("规则包 2011.1");
     expect(first).not.toMatch(/<(?:image|use)[^>]+href=|@import|url\(/);
     expect(createHash("sha256").update(first).digest("hex")).toBe(
-      "5cba050fa822cf9410f1982b8ad90eaa9bb6386d1d98f252ab8946dcb79cbc76",
+      "af88413aa60413839a91624fedd17ddf260982f6fa70e3352a2ef4f4eea93101",
     );
   });
 

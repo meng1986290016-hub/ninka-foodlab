@@ -57,6 +57,9 @@ export function prepareRecipeVersion(
       code: request.recipe.code,
       tags: [...request.recipe.tags],
       kind: request.recipe.kind,
+      productId: request.recipe.productId ?? request.recipe.id,
+      schemeName: request.recipe.schemeName ?? "主配方",
+      schemeStatus: request.recipe.schemeStatus ?? "current",
     },
     targetBatchGrams: request.draft.targetBatchGrams,
     finishedMassGrams: request.draft.finishedMassGrams,
@@ -116,8 +119,8 @@ export function validateFormalVersionInput(
   }
   if (!isPositive(draft.targetBatchGrams)) {
     issues.push({
-      field: "目标批量",
-      message: "目标批量必须是大于 0 的有效数字",
+      field: "计划投料总量",
+      message: "计划投料总量必须是大于 0 的有效数字",
     });
   }
   if (
@@ -125,8 +128,8 @@ export function validateFormalVersionInput(
     !isPositive(draft.finishedMassGrams)
   ) {
     issues.push({
-      field: "成品重量",
-      message: "成品重量必须是大于 0 的有效数字",
+      field: "出成重量",
+      message: "出成重量必须是大于 0 的有效数字",
     });
   }
   if (draft.items.length === 0) {
@@ -136,6 +139,13 @@ export function validateFormalVersionInput(
     });
   }
   for (const item of draft.items) {
+    if (item.kind === "material_need") {
+      issues.push({
+        field: item.materialNeed.materialName,
+        message: "待补充原料需要先关联并替换为真实供应商版本",
+      });
+      continue;
+    }
     const name =
       item.kind === "ingredient"
         ? item.materialName
@@ -204,9 +214,9 @@ function issueFieldLabel(issue: RecipeCalculationIssue) {
   if (issue.itemId !== null) return "配方项目";
   switch (issue.field) {
     case "targetBatchGrams":
-      return "目标批量";
+      return "计划投料总量";
     case "finishedMassGrams":
-      return "成品重量";
+      return "出成重量";
     case "servingMassGrams":
       return "每份重量";
     case "packageCount":

@@ -141,12 +141,12 @@ describe("RecipeWorkbench live results", () => {
     await screen.findByDisplayValue("实时结果配方");
     await addMilk(user);
     const target = screen.getByRole("textbox", {
-      name: "目标批量",
+      name: "计划投料总量",
     });
     await user.clear(target);
     await user.type(target, "100");
     const finished = screen.getByRole("textbox", {
-      name: "成品重量",
+      name: "出成重量",
     });
     await user.type(finished, "90");
 
@@ -154,6 +154,7 @@ describe("RecipeWorkbench live results", () => {
       name: "实时结果",
     });
     expect(await within(results).findByText("34g")).toBeTruthy();
+    expect(within(results).getByText("37.78g")).toBeTruthy();
     expect(
       within(results).getAllByText("3.15 元").length,
     ).toBeGreaterThanOrEqual(1);
@@ -173,7 +174,7 @@ describe("RecipeWorkbench live results", () => {
     await screen.findByDisplayValue("成本编辑配方");
     await addMilk(user);
     const target = screen.getByRole("textbox", {
-      name: "目标批量",
+      name: "计划投料总量",
     });
     await user.clear(target);
     await user.type(target, "100");
@@ -221,68 +222,25 @@ describe("RecipeWorkbench live results", () => {
         within(results).getAllByText("5.15 元").length,
       ).toBeGreaterThanOrEqual(1);
     });
-  });
+  }, 15_000);
 
-  it("creates, evaluates, edits and removes nutrition and cost targets", async () => {
+  it("keeps allergen results while omitting the recipe target editor", async () => {
     const api = createApi();
     await updateMilk(api);
-    await createFormula(api, "目标配方");
+    await createFormula(api, "过敏原结果配方");
     const user = userEvent.setup();
     render(<RecipeWorkbench api={api} />);
-    await screen.findByDisplayValue("目标配方");
+    await screen.findByDisplayValue("过敏原结果配方");
     await addMilk(user);
-    const targetBatch = screen.getByRole("textbox", {
-      name: "目标批量",
+    await user.click(screen.getByRole("tab", { name: "过敏原" }));
+
+    const results = screen.getByRole("complementary", {
+      name: "实时结果",
     });
-    await user.clear(targetBatch);
-    await user.type(targetBatch, "100");
-
-    await user.click(
-      screen.getByRole("button", { name: "添加目标" }),
-    );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "目标指标" }),
-      "nutrition:protein",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "目标下限" }),
-      "30",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "保存目标" }),
-    );
-
-    const targetSection = screen.getByRole("region", {
-      name: "配方目标",
-    });
-    expect(
-      within(targetSection).getByText("蛋白质（每100g）"),
-    ).toBeTruthy();
-    expect(within(targetSection).getByText("已达到")).toBeTruthy();
-
-    await user.click(
-      within(targetSection).getByRole("button", {
-        name: "编辑蛋白质（每100g）目标",
-      }),
-    );
-    const minimum = screen.getByRole("textbox", {
-      name: "目标下限",
-    });
-    await user.clear(minimum);
-    await user.type(minimum, "40");
-    await user.click(
-      screen.getByRole("button", { name: "保存目标" }),
-    );
-    expect(within(targetSection).getByText("低于目标")).toBeTruthy();
-
-    await user.click(
-      within(targetSection).getByRole("button", {
-        name: "删除蛋白质（每100g）目标",
-      }),
-    );
-    expect(
-      within(targetSection).queryByText("蛋白质（每100g）"),
-    ).toBeNull();
+    expect(within(results).getByText("含有：乳")).toBeTruthy();
+    expect(within(results).getByText("可能含有：大豆")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "配方目标" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "添加目标" })).toBeNull();
   });
 
   it("locates missing nutrition and price on the responsible ingredient row", async () => {

@@ -1,5 +1,9 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -10,6 +14,10 @@ use super::{
     repository::AgentRepository,
 };
 use crate::{
+    agent_recipe::{
+        calculator::normalize_and_evaluate, model::AgentRecipeProposalPayload,
+        repository::AgentRecipeRepository,
+    },
     ingest::{
         IngestError,
         coordinator::IngredientIngestCoordinator,
@@ -33,6 +41,13 @@ const TOOL_NAMES: &[&str] = &[
     "discard_ingredient_import_draft",
     "validate_ingredient_import_draft",
     "request_open_ingredient_review",
+    "evaluate_recipe_proposal",
+    "create_recipe_proposal",
+    "update_recipe_proposal",
+    "request_open_recipe_proposal_review",
+    "diagnose_recipe",
+    "review_recipe_development",
+    "compare_supplier_variant",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,11 +58,16 @@ pub struct AgentToolContext {
     pub allowed_attachment_ids: BTreeSet<String>,
     pub provider_kind: AgentProviderKind,
     pub model: String,
+    #[serde(default)]
+    pub active_recipe_id: Option<String>,
+    #[serde(default)]
+    pub active_recipe_name: Option<String>,
 }
 
 pub struct AgentToolRegistry {
     coordinator: IngredientIngestCoordinator,
     audit: Option<AgentRepository>,
+    recipes: Option<AgentRecipeRepository>,
 }
 
 impl AgentToolRegistry {
@@ -55,6 +75,7 @@ impl AgentToolRegistry {
         Self {
             coordinator,
             audit: None,
+            recipes: None,
         }
     }
 
@@ -62,6 +83,19 @@ impl AgentToolRegistry {
         Self {
             coordinator,
             audit: Some(audit),
+            recipes: None,
+        }
+    }
+
+    pub fn with_audit_and_recipes(
+        coordinator: IngredientIngestCoordinator,
+        audit: AgentRepository,
+        recipes: AgentRecipeRepository,
+    ) -> Self {
+        Self {
+            coordinator,
+            audit: Some(audit),
+            recipes: Some(recipes),
         }
     }
 
@@ -128,6 +162,15 @@ impl AgentToolRegistry {
             "discard_ingredient_import_draft" => self.discard_draft(context, arguments),
             "validate_ingredient_import_draft" => self.validate_draft(context, arguments),
             "request_open_ingredient_review" => self.request_open_review(context, arguments),
+            "evaluate_recipe_proposal" => self.evaluate_recipe_proposal(arguments),
+            "create_recipe_proposal" => self.create_recipe_proposal(context, arguments),
+            "update_recipe_proposal" => self.update_recipe_proposal(context, arguments),
+            "request_open_recipe_proposal_review" => {
+                self.request_open_recipe_proposal_review(context, arguments)
+            }
+            "diagnose_recipe" => self.diagnose_recipe(arguments),
+            "review_recipe_development" => self.review_recipe_development(arguments),
+            "compare_supplier_variant" => self.compare_supplier_variant(arguments),
             _ => Err(AgentError::tool_denied(name)),
         }
     }
@@ -388,6 +431,445 @@ impl AgentToolRegistry {
         }
         Ok(draft)
     }
+
+    fn evaluate_recipe_proposal(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: RecipeProposalPayloadArguments = parse_arguments(arguments)?;
+        let (payload, evaluation) =
+            normalize_and_evaluate(self.coordinator.ingredients(), arguments.payload)?;
+        Ok(json!({ "payload": payload, "evaluation": evaluation }))
+    }
+
+    fn create_recipe_proposal(
+        &mut self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let arguments: CreateRecipeProposalArguments = parse_arguments(arguments)?;
+        require_allowed_attachments(context, &arguments.source_attachment_ids)?;
+        let (payload, evaluation) =
+            normalize_and_evaluate(self.coordinator.ingredients(), arguments.payload)?;
+        let conversation_id = self
+            .audit
+            .as_mut()
+            .ok_or_else(|| AgentError::provider_failure("配方提案审计上下文不可用"))?
+            .get_run(&context.run_id)?
+            .conversation_id;
+        let proposal = self
+            .recipes
+            .as_mut()
+            .ok_or_else(|| AgentError::provider_failure("配方提案工具不可用"))?
+            .create_proposal(
+                Some(&conversation_id),
+                Some(&context.run_id),
+                payload,
+                evaluation,
+                arguments.source_attachment_ids,
+            )?;
+        Ok(json!({ "proposal": proposal, "requiresHumanConfirmation": true }))
+    }
+
+    fn update_recipe_proposal(
+        &mut self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let arguments: UpdateRecipeProposalArguments = parse_arguments(arguments)?;
+        let conversation_id = self
+            .audit
+            .as_mut()
+            .ok_or_else(|| AgentError::provider_failure("配方提案审计上下文不可用"))?
+            .get_run(&context.run_id)?
+            .conversation_id;
+        let existing = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方提案工具不可用"))?
+            .get_proposal(&arguments.proposal_id)?;
+        if existing.conversation_id.as_deref() != Some(&conversation_id) {
+            return Err(AgentError::scope_violation("只能修改当前对话中的配方提案"));
+        }
+        let (payload, evaluation) =
+            normalize_and_evaluate(self.coordinator.ingredients(), arguments.payload)?;
+        let proposal = self
+            .recipes
+            .as_mut()
+            .expect("recipe proposal repository checked")
+            .update_proposal(&arguments.proposal_id, payload, evaluation)?;
+        Ok(json!({ "proposal": proposal, "requiresHumanConfirmation": true }))
+    }
+
+    fn request_open_recipe_proposal_review(
+        &self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let arguments: ProposalIdArguments = parse_arguments(arguments)?;
+        let conversation_id = self
+            .audit
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方提案审计上下文不可用"))?
+            .get_run(&context.run_id)?
+            .conversation_id;
+        let proposal = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方提案工具不可用"))?
+            .get_proposal(&arguments.proposal_id)?;
+        if proposal.conversation_id.as_deref() != Some(&conversation_id) {
+            return Err(AgentError::scope_violation("提案不属于当前对话"));
+        }
+        Ok(json!({
+            "action": "openRecipeProposalReview",
+            "proposalId": proposal.id,
+            "requiresHumanConfirmation": true
+        }))
+    }
+
+    fn diagnose_recipe(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
+        let source = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方诊断工具不可用"))?
+            .get_recipe_analysis_source(&arguments.recipe_id)?;
+        let draft = source
+            .get("draft")
+            .filter(|value| !value.is_null())
+            .ok_or_else(|| AgentError::invalid_input("该配方还没有可诊断的工作草稿"))?;
+        let payload = draft.get("payload").unwrap_or(&Value::Null);
+        let calculation = draft.get("calculation").unwrap_or(&Value::Null);
+        let calculation_issues = draft
+            .get("calculationIssues")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let items = payload
+            .get("items")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut findings = Vec::new();
+        if items.is_empty() {
+            findings.push(json!({
+                "code": "empty_formula", "severity": "blocker",
+                "title": "配方尚未添加原料",
+                "detail": "至少添加一项原料或半成品后才能诊断"
+            }));
+        }
+        let material_need_count = items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("material_need"))
+            .count();
+        if material_need_count > 0 {
+            findings.push(json!({
+                "code": "material_needs", "severity": "blocker",
+                "title": format!("{material_need_count} 项原料仍待补充"),
+                "detail": "占位原料的营养和成本按缺失处理，并会阻止保存正式版本"
+            }));
+        }
+        for issue in &calculation_issues {
+            let severity = if issue.get("severity").and_then(Value::as_str) == Some("error") {
+                "blocker"
+            } else {
+                "warning"
+            };
+            findings.push(json!({
+                "code": issue.get("code").cloned().unwrap_or_else(|| json!("calculation_issue")),
+                "severity": severity,
+                "title": if severity == "blocker" { "配方计算被阻断" } else { "配方数据需要确认" },
+                "detail": issue.get("message").cloned().unwrap_or_else(|| json!("配方计算存在问题"))
+            }));
+        }
+        if payload.get("finishedMassGrams").is_none_or(Value::is_null) {
+            findings.push(json!({
+                "code": "finished_mass_missing", "severity": "warning",
+                "title": "尚未填写出成重量",
+                "detail": "每100g营养和单位成本暂按当前投料合计计算，未计入加工失水或吸水"
+            }));
+        }
+        let completeness = calculation
+            .pointer("/completeness/percent")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        if completeness < 80 {
+            findings.push(json!({
+                "code": "low_completeness", "severity": "warning",
+                "title": format!("数据完整度仅 {completeness}%"),
+                "detail": calculation.pointer("/completeness/missingFields").cloned().unwrap_or_else(|| json!([]))
+            }));
+        }
+        if calculation.pointer("/cost/status").and_then(Value::as_str) == Some("partial") {
+            findings.push(json!({
+                "code": "partial_cost", "severity": "warning",
+                "title": "成本结果不完整",
+                "detail": "部分配方项缺少可用价格"
+            }));
+        }
+        let blocked = findings
+            .iter()
+            .any(|finding| finding.get("severity").and_then(Value::as_str) == Some("blocker"));
+        let attention = findings
+            .iter()
+            .any(|finding| finding.get("severity").and_then(Value::as_str) == Some("warning"));
+        let status = if blocked {
+            "blocked"
+        } else if attention {
+            "attention"
+        } else {
+            "healthy"
+        };
+        let top_cost_contributors = calculation
+            .pointer("/cost/breakdown")
+            .and_then(Value::as_array)
+            .map(|items| {
+                let mut values = items
+                    .iter()
+                    .filter(|item| {
+                        item.get("category").and_then(Value::as_str) == Some("ingredient")
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                values.sort_by(|left, right| {
+                    parse_decimal(right.get("amount").and_then(Value::as_str))
+                        .unwrap_or(Decimal::ZERO)
+                        .cmp(
+                            &parse_decimal(left.get("amount").and_then(Value::as_str))
+                                .unwrap_or(Decimal::ZERO),
+                        )
+                });
+                values.truncate(3);
+                values
+            })
+            .unwrap_or_default();
+        Ok(json!({
+            "recipe": source["recipe"].clone(),
+            "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
+            "status": status,
+            "findings": findings,
+            "topCostContributors": top_cost_contributors,
+            "calculation": calculation,
+            "deterministic": true,
+            "readOnly": true
+        }))
+    }
+
+    fn review_recipe_development(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
+        let source = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("研发复盘工具不可用"))?
+            .get_recipe_analysis_source(&arguments.recipe_id)?;
+        let draft = source
+            .get("draft")
+            .filter(|value| !value.is_null())
+            .ok_or_else(|| AgentError::invalid_input("该配方还没有可复盘的工作草稿"))?;
+        let payload = draft.get("payload").unwrap_or(&Value::Null);
+        let calculation = draft.get("calculation").unwrap_or(&Value::Null);
+        let current_notes = payload
+            .get("markdownNotes")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let latest_formal = source
+            .get("latestFormalVersion")
+            .filter(|value| !value.is_null())
+            .cloned()
+            .unwrap_or(Value::Null);
+        let latest_notes = latest_formal
+            .pointer("/snapshot/markdownNotes")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let diagnosis = self.diagnose_recipe(json!({
+            "recipeId": arguments.recipe_id
+        }))?;
+        let mut next_step_hints = Vec::new();
+        if current_notes.trim().is_empty() {
+            next_step_hints.push("当前研发备注为空；下一轮前先补记本轮工艺、感官结果和异常现象");
+        }
+        if payload.get("finishedMassGrams").is_none_or(Value::is_null) {
+            next_step_hints.push("记录实际出成重量，用于校正得率和每100g结果");
+        }
+        if calculation
+            .pointer("/completeness/percent")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            < 80
+        {
+            next_step_hints.push("优先补齐高占比或高成本原料的营养与价格数据");
+        }
+        if diagnosis
+            .get("status")
+            .and_then(Value::as_str)
+            .is_some_and(|status| status == "blocked")
+        {
+            next_step_hints.push("先解决诊断中的阻断项，再安排下一轮打样");
+        }
+        next_step_hints.push("下一轮只调整少量关键变量，并在同一备注框记录调整原因与结果");
+
+        Ok(json!({
+            "recipe": source["recipe"].clone(),
+            "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
+            "currentFacts": {
+                "plannedInputGrams": payload.get("targetBatchGrams").cloned().unwrap_or(Value::Null),
+                "currentInputGrams": calculation.get("inputMassGrams").cloned().unwrap_or(Value::Null),
+                "finishedMassGrams": payload.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
+                "yieldPercent": calculation.get("yieldPercent").cloned().unwrap_or(Value::Null),
+                "batchCost": calculation.pointer("/cost/batchTotal").cloned().unwrap_or(Value::Null),
+                "costStatus": calculation.pointer("/cost/status").cloned().unwrap_or(Value::Null),
+                "dataCompletenessPercent": calculation.pointer("/completeness/percent").cloned().unwrap_or(Value::Null),
+                "allergens": calculation.get("allergens").cloned().unwrap_or(Value::Null)
+            },
+            "researchNotes": {
+                "current": current_notes,
+                "latestFormalVersion": latest_notes,
+                "changedFromLatestFormalVersion": !latest_formal.is_null() && current_notes != latest_notes
+            },
+            "latestFormalVersion": latest_formal,
+            "diagnosis": {
+                "status": diagnosis.get("status").cloned().unwrap_or(Value::Null),
+                "findings": diagnosis.get("findings").cloned().unwrap_or_else(|| json!([])),
+                "topCostContributors": diagnosis.get("topCostContributors").cloned().unwrap_or_else(|| json!([]))
+            },
+            "nextStepHints": next_step_hints,
+            "deterministicFacts": true,
+            "readOnly": true,
+            "guardrails": [
+                "只把备注和确定性计算结果当作已知事实",
+                "没有记录的工艺、感官或原因必须明确写未记录，不能猜测",
+                "下一轮建议是研发建议，应用前需人工确认"
+            ]
+        }))
+    }
+
+    fn compare_supplier_variant(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: CompareSupplierVariantArguments = parse_arguments(arguments)?;
+        let source = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("替代原料分析工具不可用"))?
+            .get_recipe_analysis_source(&arguments.recipe_id)?;
+        let draft = source
+            .get("draft")
+            .filter(|value| !value.is_null())
+            .ok_or_else(|| AgentError::invalid_input("该配方还没有可分析的工作草稿"))?;
+        let payload = draft.get("payload").unwrap_or(&Value::Null);
+        let item = payload
+            .get("items")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items.iter().find(|item| {
+                    item.get("id").and_then(Value::as_str) == Some(arguments.item_id.as_str())
+                })
+            })
+            .ok_or_else(|| AgentError::invalid_input("找不到要替代的配方原料行"))?;
+        if item.get("kind").and_then(Value::as_str) != Some("ingredient") {
+            return Err(AgentError::invalid_input(
+                "第一版只支持替代直接投料的供应商原料",
+            ));
+        }
+        let source_variant_id = item
+            .get("ingredientVariantId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AgentError::invalid_input("配方原料缺少供应商版本"))?;
+        let source_variant = self
+            .coordinator
+            .ingredients()
+            .get_variant(source_variant_id)?;
+        let candidate = self
+            .coordinator
+            .ingredients()
+            .get_variant(&arguments.candidate_variant_id)?;
+        if candidate.archived_at.is_some() {
+            return Err(AgentError::invalid_input("候选供应商版本已经归档"));
+        }
+        if source_variant.material_group_id != candidate.material_group_id {
+            return Err(AgentError::invalid_input("候选版本必须属于同一种通用原料"));
+        }
+        if source_variant.id == candidate.id {
+            return Err(AgentError::invalid_input("候选供应商版本与当前原料相同"));
+        }
+        let amount = item.get("amount").and_then(Value::as_str).unwrap_or("0");
+        let unit = item.get("unit").and_then(Value::as_str).unwrap_or("g");
+        let source_metrics = line_metrics(&source_variant, amount, unit)?;
+        let candidate_metrics = line_metrics(&candidate, amount, unit)?;
+        let calculation = draft.get("calculation").unwrap_or(&Value::Null);
+        let basis_mass = parse_decimal(calculation.get("basisMassGrams").and_then(Value::as_str));
+        let current_batch_cost = parse_decimal(
+            calculation
+                .pointer("/cost/batchTotal")
+                .and_then(Value::as_str),
+        );
+        let estimated_batch_cost = match (
+            current_batch_cost,
+            source_metrics.cost,
+            candidate_metrics.cost,
+        ) {
+            (Some(current), Some(before), Some(after)) => Some(current - before + after),
+            _ => None,
+        };
+        let definitions = self
+            .coordinator
+            .ingredients()
+            .list_nutrient_definitions()?
+            .into_iter()
+            .map(|definition| (definition.id, (definition.name, definition.unit)))
+            .collect::<BTreeMap<_, _>>();
+        let nutrient_changes = nutrient_changes(
+            calculation,
+            basis_mass,
+            source_metrics.mass_grams,
+            &source_metrics.nutrients,
+            &candidate_metrics.nutrients,
+            &definitions,
+        );
+        let contains_added = list_difference(
+            &candidate.allergens.contains,
+            &source_variant.allergens.contains,
+        );
+        let contains_removed = list_difference(
+            &source_variant.allergens.contains,
+            &candidate.allergens.contains,
+        );
+        let may_contain_added = list_difference(
+            &candidate.allergens.may_contain,
+            &source_variant.allergens.may_contain,
+        );
+        let may_contain_removed = list_difference(
+            &source_variant.allergens.may_contain,
+            &candidate.allergens.may_contain,
+        );
+        let material_name = self
+            .coordinator
+            .ingredients()
+            .get_material_name_for_variant(&candidate.id)?;
+        Ok(json!({
+            "recipe": source["recipe"].clone(),
+            "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
+            "itemId": arguments.item_id,
+            "materialName": material_name,
+            "amount": amount,
+            "unit": unit,
+            "source": public_variant(&material_name, source_variant),
+            "candidate": public_variant(&material_name, candidate.clone()),
+            "impact": {
+                "lineMassGrams": decimal_string(source_metrics.mass_grams),
+                "sourceLineCost": source_metrics.cost.map(decimal_string),
+                "candidateLineCost": candidate_metrics.cost.map(decimal_string),
+                "batchCostBefore": current_batch_cost.map(decimal_string),
+                "estimatedBatchCostAfter": estimated_batch_cost.map(decimal_string),
+                "nutrientChangesPer100g": nutrient_changes,
+                "allergensAdded": contains_added,
+                "allergensRemoved": contains_removed,
+                "mayContainAdded": may_contain_added,
+                "mayContainRemoved": may_contain_removed,
+                "dataCompletenessDifference": candidate.completeness.percent - source_metrics.completeness
+            },
+            "deterministic": true,
+            "readOnly": true,
+            "requiresHumanConfirmationToApply": true,
+            "note": "该工具不会修改草稿；同用量替换后的工艺、感官和法规适用性仍需人工复核"
+        }))
+    }
 }
 
 #[derive(Deserialize)]
@@ -446,6 +928,204 @@ struct SplitDraftArguments {
 #[serde(rename_all = "camelCase")]
 struct DraftIdArguments {
     draft_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecipeProposalPayloadArguments {
+    payload: AgentRecipeProposalPayload,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateRecipeProposalArguments {
+    payload: AgentRecipeProposalPayload,
+    #[serde(default)]
+    source_attachment_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateRecipeProposalArguments {
+    proposal_id: String,
+    payload: AgentRecipeProposalPayload,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProposalIdArguments {
+    proposal_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecipeIdArguments {
+    recipe_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompareSupplierVariantArguments {
+    recipe_id: String,
+    item_id: String,
+    candidate_variant_id: String,
+}
+
+struct VariantLineMetrics {
+    mass_grams: Decimal,
+    cost: Option<Decimal>,
+    nutrients: BTreeMap<String, Option<Decimal>>,
+    completeness: i64,
+}
+
+fn line_metrics(
+    variant: &IngredientVariant,
+    amount: &str,
+    unit: &str,
+) -> Result<VariantLineMetrics, AgentError> {
+    let amount = Decimal::from_str(amount)
+        .map_err(|_| AgentError::invalid_input("配方原料用量不是有效数字"))?;
+    let density = variant
+        .density_g_per_ml
+        .as_deref()
+        .map(Decimal::from_str)
+        .transpose()
+        .map_err(|_| AgentError::invalid_input("供应商原料密度不是有效数字"))?;
+    let thousand = Decimal::from(1000);
+    let mass_grams = match unit {
+        "mg" => amount / thousand,
+        "g" => amount,
+        "kg" => amount * thousand,
+        "mL" => {
+            amount * density.ok_or_else(|| AgentError::invalid_input("体积投料需要候选原料密度"))?
+        }
+        "L" => {
+            amount
+                * thousand
+                * density.ok_or_else(|| AgentError::invalid_input("体积投料需要候选原料密度"))?
+        }
+        _ => return Err(AgentError::invalid_input("不支持的配方用量单位")),
+    };
+    let price = variant
+        .current_price
+        .as_deref()
+        .map(Decimal::from_str)
+        .transpose()
+        .map_err(|_| AgentError::invalid_input("供应商原料价格不是有效数字"))?;
+    let price_per_kg = match (price, variant.price_unit.as_str()) {
+        (None, _) => None,
+        (Some(value), "kg") => Some(value),
+        (Some(value), "g") => Some(value * thousand),
+        (Some(value), "L") => {
+            Some(value / density.ok_or_else(|| AgentError::invalid_input("体积计价需要原料密度"))?)
+        }
+        (Some(value), "mL") => Some(
+            value * thousand
+                / density.ok_or_else(|| AgentError::invalid_input("体积计价需要原料密度"))?,
+        ),
+        _ => return Err(AgentError::invalid_input("不支持的价格单位")),
+    };
+    let cost = price_per_kg.map(|value| mass_grams / thousand * value);
+    let nutrients = variant
+        .nutrition
+        .values
+        .iter()
+        .map(|value| {
+            let parsed = value
+                .value
+                .as_deref()
+                .map(Decimal::from_str)
+                .transpose()
+                .map_err(|_| AgentError::invalid_input("供应商营养数据不是有效数字"))?;
+            let per_100g = match (parsed, variant.nutrition.basis.as_str()) {
+                (None, _) => None,
+                (Some(amount), "per_100g" | "每100g") => Some(amount),
+                (Some(amount), "per_100ml" | "每100mL" | "每100ml") => Some(
+                    amount
+                        / density.ok_or_else(|| {
+                            AgentError::invalid_input("每100mL营养数据需要原料密度")
+                        })?,
+                ),
+                (Some(_), _) => return Err(AgentError::invalid_input("不支持的营养数据基准")),
+            };
+            Ok((value.nutrient_definition_id.clone(), per_100g))
+        })
+        .collect::<Result<BTreeMap<_, _>, AgentError>>()?;
+    Ok(VariantLineMetrics {
+        mass_grams,
+        cost,
+        nutrients,
+        completeness: variant.completeness.percent,
+    })
+}
+
+fn nutrient_changes(
+    calculation: &Value,
+    basis_mass: Option<Decimal>,
+    line_mass_grams: Decimal,
+    source: &BTreeMap<String, Option<Decimal>>,
+    candidate: &BTreeMap<String, Option<Decimal>>,
+    definitions: &BTreeMap<String, (String, String)>,
+) -> Vec<Value> {
+    let Some(basis_mass) = basis_mass.filter(|value| !value.is_zero()) else {
+        return Vec::new();
+    };
+    let current = calculation
+        .get("nutrients")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let ids = source
+        .keys()
+        .chain(candidate.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    ids.iter()
+        .filter_map(|id| {
+            let before_line = source.get(id).copied().flatten()?;
+            let after_line = candidate.get(id).copied().flatten()?;
+            let current_value = current
+                .iter()
+                .find(|item| {
+                    item.get("nutrientDefinitionId").and_then(Value::as_str) == Some(id.as_str())
+                })
+                .and_then(|item| item.get("per100gKnownAmount"))
+                .and_then(Value::as_str)
+                .and_then(|value| Decimal::from_str(value).ok())?;
+            let difference = (after_line - before_line) * line_mass_grams / basis_mass;
+            if difference.is_zero() {
+                return None;
+            }
+            let (name, unit) = definitions
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| (id.clone(), "".into()));
+            Some(json!({
+                "nutrientDefinitionId": id,
+                "name": name,
+                "unit": unit,
+                "before": decimal_string(current_value),
+                "after": decimal_string(current_value + difference),
+                "difference": decimal_string(difference)
+            }))
+        })
+        .collect()
+}
+
+fn list_difference(left: &[String], right: &[String]) -> Vec<String> {
+    let right = right.iter().collect::<BTreeSet<_>>();
+    left.iter()
+        .filter(|value| !right.contains(value))
+        .cloned()
+        .collect()
+}
+
+fn parse_decimal(value: Option<&str>) -> Option<Decimal> {
+    value.and_then(|value| Decimal::from_str(value).ok())
+}
+
+fn decimal_string(value: Decimal) -> String {
+    value.normalize().to_string()
 }
 
 fn parse_arguments<T: for<'de> Deserialize<'de>>(arguments: Value) -> Result<T, AgentError> {
@@ -570,6 +1250,43 @@ fn definition(name: &str) -> AgentToolDefinition {
         "request_open_ingredient_review" => {
             ("请求界面打开草稿供用户人工复核和保存", draft_id_schema())
         }
+        "evaluate_recipe_proposal" => (
+            "用系统确定性计算引擎试算配方提案的营养、成本、投料、得率与数据完整度；设计或逆向配方时必须调用，不能用模型心算替代",
+            recipe_proposal_payload_schema(false, false),
+        ),
+        "create_recipe_proposal" => (
+            "创建一张待用户人工复核的配方提案卡，不能直接创建配方或正式版本",
+            recipe_proposal_payload_schema(true, false),
+        ),
+        "update_recipe_proposal" => (
+            "根据用户反馈更新当前对话中的待复核配方提案，并重新确定性试算",
+            recipe_proposal_payload_schema(false, true),
+        ),
+        "request_open_recipe_proposal_review" => (
+            "请求界面打开完整配方提案复核层；最终创建工作草稿必须由用户在界面确认",
+            proposal_id_schema(),
+        ),
+        "diagnose_recipe" => (
+            "只读诊断指定配方的当前草稿，返回确定性计算结果、数据缺失、得率和成本风险；不会修改配方",
+            recipe_id_schema(),
+        ),
+        "review_recipe_development" => (
+            "只读读取当前配方草稿、单一研发备注框、最新正式版本和确定性诊断，供模型整理本轮事实、待确认项与下一轮打样建议；不得编造未记录的工艺或感官结果",
+            recipe_id_schema(),
+        ),
+        "compare_supplier_variant" => (
+            "只读比较配方中一条直接投料原料与同种通用原料的候选供应商版本，确定性计算成本、营养和过敏原差异；不会修改草稿",
+            json!({
+                "type": "object",
+                "properties": {
+                    "recipeId": { "type": "string" },
+                    "itemId": { "type": "string" },
+                    "candidateVariantId": { "type": "string" }
+                },
+                "required": ["recipeId", "itemId", "candidateVariantId"],
+                "additionalProperties": false
+            }),
+        ),
         _ => unreachable!(),
     };
     AgentToolDefinition {
@@ -604,6 +1321,107 @@ fn draft_id_schema() -> Value {
     })
 }
 
+fn proposal_id_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "proposalId": { "type": "string" } },
+        "required": ["proposalId"],
+        "additionalProperties": false
+    })
+}
+
+fn recipe_id_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "recipeId": { "type": "string" } },
+        "required": ["recipeId"],
+        "additionalProperties": false
+    })
+}
+
+fn recipe_proposal_payload_schema(include_attachments: bool, include_id: bool) -> Value {
+    let mut properties = serde_json::Map::new();
+    properties.insert("payload".into(), recipe_proposal_schema());
+    let mut required = vec![Value::String("payload".into())];
+    if include_attachments {
+        properties.insert(
+            "sourceAttachmentIds".into(),
+            json!({ "type": "array", "items": { "type": "string" } }),
+        );
+        required.push(Value::String("sourceAttachmentIds".into()));
+    }
+    if include_id {
+        properties.insert("proposalId".into(), json!({ "type": "string" }));
+        required.push(Value::String("proposalId".into()));
+    }
+    json!({
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": false
+    })
+}
+
+fn recipe_proposal_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "productName": { "type": "string" },
+            "recipeKind": { "type": "string", "enum": ["formula", "semi_finished"] },
+            "mode": { "type": "string", "enum": ["goal_design", "label_reverse"] },
+            "plannedInputGrams": { "type": "string" },
+            "finishedMassGrams": { "type": ["string", "null"] },
+            "yieldAssumption": { "type": "string", "enum": ["provided", "assumed_100_percent"] },
+            "items": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "string" }, "position": { "type": "integer" },
+                                "kind": { "const": "ingredient" }, "amount": { "type": "string" },
+                                "unit": { "type": "string", "enum": ["g", "kg"] },
+                                "estimatedMinimum": { "type": ["string", "null"] },
+                                "estimatedMaximum": { "type": ["string", "null"] },
+                                "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                                "ingredientVariantId": { "type": "string" },
+                                "ingredientUpdatedAt": { "type": "string" },
+                                "materialName": { "type": "string" }, "supplierName": { "type": "string" },
+                                "modelOrSpecification": { "type": "string" }, "selectionReason": { "type": "string" }
+                            },
+                            "required": ["id", "position", "kind", "amount", "unit", "estimatedMinimum", "estimatedMaximum", "confidence", "ingredientVariantId", "ingredientUpdatedAt", "materialName", "supplierName", "modelOrSpecification", "selectionReason"],
+                            "additionalProperties": false
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "string" }, "position": { "type": "integer" },
+                                "kind": { "const": "material_need" }, "amount": { "type": "string" },
+                                "unit": { "type": "string", "enum": ["g", "kg"] },
+                                "estimatedMinimum": { "type": ["string", "null"] },
+                                "estimatedMaximum": { "type": ["string", "null"] },
+                                "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                                "materialName": { "type": "string" }, "purpose": { "type": "string" },
+                                "desiredSpecification": { "type": "string" }, "missingReason": { "type": "string" }
+                            },
+                            "required": ["id", "position", "kind", "amount", "unit", "estimatedMinimum", "estimatedMaximum", "confidence", "materialName", "purpose", "desiredSpecification", "missingReason"],
+                            "additionalProperties": false
+                        }
+                    ]
+                }
+            },
+            "requirements": { "type": "array", "items": { "type": "object" } },
+            "assumptions": { "type": "array", "items": { "type": "string" } },
+            "warnings": { "type": "array", "items": { "type": "string" } },
+            "markdownNotes": { "type": "string" }
+        },
+        "required": ["productName", "recipeKind", "mode", "plannedInputGrams", "finishedMassGrams", "yieldAssumption", "items", "requirements", "assumptions", "warnings", "markdownNotes"],
+        "additionalProperties": false
+    })
+}
+
 fn review_mutation_schema(update: bool) -> Value {
     let mut properties = serde_json::Map::new();
     properties.insert("review".into(), review_schema());
@@ -625,9 +1443,13 @@ fn review_mutation_schema(update: bool) -> Value {
                     "properties": {
                         "fieldPath": { "type": "string" },
                         "attachmentId": { "type": "string" },
-                        "sourceLocator": { "type": ["string", "null"] }
+                        "sourceLocator": { "type": ["string", "null"] },
+                        "confidence": {
+                            "type": ["string", "null"],
+                            "enum": ["high", "medium", "low", null]
+                        }
                     },
-                    "required": ["fieldPath", "attachmentId", "sourceLocator"],
+                    "required": ["fieldPath", "attachmentId", "sourceLocator", "confidence"],
                     "additionalProperties": false
                 }
             }),

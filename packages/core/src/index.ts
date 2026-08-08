@@ -12,6 +12,8 @@ export * from "./recipe-graph.js";
 export * from "./research-report.js";
 export * from "./research-report-export.js";
 export * from "./research-report-svg.js";
+export * from "./sample-sheet-export.js";
+export * from "./sampling.js";
 export * from "./result.js";
 export * from "./targets.js";
 export * from "./units.js";

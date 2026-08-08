@@ -120,6 +120,11 @@ export interface AgentRunRequest {
   conversationId: string;
   content: string;
   files: ImportFileReference[];
+  recipeContext?: {
+    recipeId: string;
+    recipeName: string;
+    draftFingerprint: string;
+  } | null;
   retryRunId?: string | null;
   continueRunId?: string | null;
 }
@@ -151,5 +156,6 @@ export type AgentEvent =
       summary: string;
     }
   | { type: "drafts_changed"; runId: string; importJobId: string }
+  | { type: "recipe_proposals_changed"; runId: string }
   | { type: "run_completed"; runId: string }
   | { type: "run_failed"; runId: string; code: string; message: string };

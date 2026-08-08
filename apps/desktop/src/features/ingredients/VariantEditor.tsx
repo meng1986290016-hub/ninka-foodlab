@@ -21,6 +21,7 @@ interface VariantEditorProps {
   onCancel: () => void;
   onSaved: (variant: IngredientVariant) => void | Promise<void>;
   variant: IngredientVariant | null;
+  initialResearchNotes?: string;
 }
 
 function emptyInput(groupId: string): IngredientVariantInput {
@@ -42,8 +43,11 @@ function emptyInput(groupId: string): IngredientVariantInput {
 function toInput(
   group: MaterialGroup,
   variant: IngredientVariant | null,
+  initialResearchNotes = "",
 ): IngredientVariantInput {
-  if (variant === null) return emptyInput(group.id);
+  if (variant === null) {
+    return { ...emptyInput(group.id), researchNotes: initialResearchNotes };
+  }
   return {
     id: variant.id,
     materialGroupId: group.id,
@@ -94,10 +98,11 @@ export function VariantEditor({
   onCancel,
   onSaved,
   variant,
+  initialResearchNotes = "",
 }: VariantEditorProps) {
   const [tab, setTab] = useState<"basic" | "nutrition">("basic");
   const [input, setInput] = useState<IngredientVariantInput>(() =>
-    toInput(group, variant),
+    toInput(group, variant, initialResearchNotes),
   );
   const [definitions, setDefinitions] = useState<NutrientDefinition[]>([]);
   const [saving, setSaving] = useState(false);
@@ -108,11 +113,11 @@ export function VariantEditor({
   const draft = useIngredientDraft(api, draftKey, draftPayload, dirty);
 
   useEffect(() => {
-    setInput(toInput(group, variant));
+    setInput(toInput(group, variant, initialResearchNotes));
     setTab("basic");
     setError(null);
     setDirty(false);
-  }, [group, variant]);
+  }, [group, initialResearchNotes, variant]);
 
   useEffect(() => {
     let active = true;

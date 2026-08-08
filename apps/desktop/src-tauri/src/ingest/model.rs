@@ -91,6 +91,16 @@ pub struct DraftSourceLink {
     pub field_path: String,
     pub attachment_id: String,
     pub source_locator: Option<String>,
+    #[serde(default)]
+    pub confidence: Option<ImportFieldConfidence>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImportFieldConfidence {
+    High,
+    Medium,
+    Low,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

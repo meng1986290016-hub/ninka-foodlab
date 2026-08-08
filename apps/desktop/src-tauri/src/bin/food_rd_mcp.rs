@@ -9,6 +9,7 @@ use food_rd_desktop::{
         repository::AgentRepository,
         tools::AgentToolRegistry,
     },
+    agent_recipe::repository::AgentRecipeRepository,
     ingest::coordinator::IngredientIngestCoordinator,
 };
 
@@ -31,7 +32,9 @@ async fn run() -> Result<(), String> {
         .map_err(|error| error.message().to_string())?;
     let audit = AgentRepository::open_for_runtime(&database_path)
         .map_err(|error| error.message().to_string())?;
-    let registry = AgentToolRegistry::with_audit(coordinator, audit);
+    let recipe_proposals =
+        AgentRecipeRepository::open(&database_path).map_err(|error| error.message().to_string())?;
+    let registry = AgentToolRegistry::with_audit_and_recipes(coordinator, audit, recipe_proposals);
     let server = McpServer::new(registry, context);
     serve_mcp(server, tokio::io::stdin(), tokio::io::stdout())
         .await

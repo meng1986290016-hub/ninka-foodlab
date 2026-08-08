@@ -97,4 +97,35 @@ describe("ImportedVariantReview", () => {
     );
     expect(onSaved).toHaveBeenCalledWith(savedVariant);
   });
+
+  it("keeps a multi-material review queue open after saving the current draft", async () => {
+    window.localStorage.clear();
+    const api = new BrowserDemoApi({ storage: window.localStorage });
+    const commit = vi
+      .spyOn(api, "commitReviewedIngredientImportDraft")
+      .mockResolvedValue(savedVariant);
+    const onSaved = vi.fn();
+    const onSavedAndNext = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImportedVariantReview
+        api={api}
+        draft={draft}
+        onCancel={() => {}}
+        onSaved={onSaved}
+        onSavedAndNext={onSavedAndNext}
+        queuePosition={1}
+        queueTotal={3}
+      />,
+    );
+
+    expect(screen.getByText("第 1 / 3 张")).toBeTruthy();
+    await user.click(
+      screen.getByRole("button", { name: "保存并复核下一张" }),
+    );
+
+    await waitFor(() => expect(commit).toHaveBeenCalledTimes(1));
+    expect(onSavedAndNext).toHaveBeenCalledWith(savedVariant);
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });

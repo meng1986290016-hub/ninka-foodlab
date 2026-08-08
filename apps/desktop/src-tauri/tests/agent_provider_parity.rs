@@ -77,6 +77,8 @@ fn run_provider(provider_kind: AgentProviderKind) -> (Vec<String>, Value, usize)
             .collect::<BTreeSet<_>>(),
         provider_kind,
         model: "acceptance-model".into(),
+        active_recipe_id: None,
+        active_recipe_name: None,
     };
     let mut registry = AgentToolRegistry::new(coordinator);
     let tool_names = registry
@@ -101,7 +103,8 @@ fn run_provider(provider_kind: AgentProviderKind) -> (Vec<String>, Value, usize)
                     "sourceLinks": [{
                         "fieldPath": "nutrients.蛋白质.value",
                         "attachmentId": attachment.id,
-                        "sourceLocator": "标签或规格书"
+                        "sourceLocator": "标签或规格书",
+                        "confidence": "high"
                     }]
                 }),
             )
@@ -121,6 +124,7 @@ fn run_provider(provider_kind: AgentProviderKind) -> (Vec<String>, Value, usize)
                     "protein": draft.review.nutrients[0].value,
                     "attachmentCount": draft.attachments.len(),
                     "sourceLinkCount": draft.source_links.len(),
+                    "sourceConfidence": draft.source_links.first().and_then(|link| link.confidence),
                     "status": draft.status
                 })
             })
@@ -173,6 +177,7 @@ fn api_codex_and_claude_share_equal_drafts_and_permissions() {
                 "protein": "34",
                 "attachmentCount": 2,
                 "sourceLinkCount": 2,
+                "sourceConfidence": "high",
                 "status": "ready"
             },
             {
@@ -182,6 +187,7 @@ fn api_codex_and_claude_share_equal_drafts_and_permissions() {
                 "protein": "34",
                 "attachmentCount": 1,
                 "sourceLinkCount": 1,
+                "sourceConfidence": "high",
                 "status": "ready"
             }
         ])

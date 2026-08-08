@@ -101,7 +101,7 @@ function friendlyIssue(
     return "原料用量不能小于 0";
   }
   if (code === "non-positive-value") {
-    return "目标批量必须大于 0";
+    return "计划投料总量必须大于 0";
   }
   return message ?? "配方用量暂时无法调整";
 }

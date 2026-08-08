@@ -164,7 +164,16 @@ describe("recipe desktop API", () => {
     await api.listRecipes();
     await api.getRecipe("recipe-1");
     await api.createRecipe(recipeInput);
+    await api.createRecipeAlternative({
+      sourceVersionId: "version-1",
+      schemeName: "供应商 B 可可粉版本",
+      schemeStatus: "researching",
+    });
     await api.updateRecipe("recipe-1", recipeInput);
+    await api.updateRecipeScheme("recipe-1", {
+      schemeName: "主配方",
+      schemeStatus: "current",
+    });
     await api.getRecipeDraft("recipe-1");
     await api.saveRecipeDraft(saveDraftInput);
     await api.listRecipeVersions("recipe-1");
@@ -173,12 +182,32 @@ describe("recipe desktop API", () => {
     await api.copyRecipeVersionToDraft("version-1");
     await api.compareRecipeVersions("version-1", "version-2");
     await api.archiveRecipe("recipe-1");
+    await api.restoreRecipe("recipe-1");
+    await api.deleteRecipeVersion("version-1");
+    await api.permanentlyDeleteRecipe("recipe-1", "低糖乳饮料");
 
     expect(invoke.mock.calls).toEqual([
       ["list_recipes", undefined],
       ["get_recipe", { id: "recipe-1" }],
       ["create_recipe", { input: recipeInput }],
+      [
+        "create_recipe_alternative",
+        {
+          input: {
+            sourceVersionId: "version-1",
+            schemeName: "供应商 B 可可粉版本",
+            schemeStatus: "researching",
+          },
+        },
+      ],
       ["update_recipe", { id: "recipe-1", input: recipeInput }],
+      [
+        "update_recipe_scheme",
+        {
+          id: "recipe-1",
+          input: { schemeName: "主配方", schemeStatus: "current" },
+        },
+      ],
       ["get_recipe_draft", { recipeId: "recipe-1" }],
       ["save_recipe_draft", { input: saveDraftInput }],
       ["list_recipe_versions", { recipeId: "recipe-1" }],
@@ -190,10 +219,164 @@ describe("recipe desktop API", () => {
         { beforeVersionId: "version-1", afterVersionId: "version-2" },
       ],
       ["archive_recipe", { id: "recipe-1" }],
+      ["restore_recipe", { id: "recipe-1" }],
+      ["delete_recipe_version", { id: "version-1" }],
+      [
+        "permanently_delete_recipe",
+        { id: "recipe-1", confirmationName: "低糖乳饮料" },
+      ],
     ]);
   });
 
-  it("persists drafts and immutable versions in browser schema v6", async () => {
+  it("restores an archived browser recipe without changing its versions", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    let minute = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `restore-id-${++sequence}`,
+      now: () => `2026-08-02T10:${String(minute++).padStart(2, "0")}:00.000Z`,
+    });
+    const created = await api.createRecipe({
+      name: "待恢复配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft(
+      draftInput(created.id, "1000", "0", ""),
+    );
+    const savedVersion = await api.createRecipeVersion({
+      recipeId: created.id,
+      sourceDraftId: draft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(created, "1000", "0", ""),
+      dependencyVersionIds: [],
+    });
+
+    await api.archiveRecipe(created.id);
+    expect((await api.getRecipe(created.id)).archivedAt).not.toBeNull();
+    await api.restoreRecipe(created.id);
+
+    const restored = await api.getRecipe(created.id);
+    expect(restored.archivedAt).toBeNull();
+    expect((await api.listRecipeVersions(created.id)).map((item) => item.id)).toEqual([
+      savedVersion.id,
+    ]);
+  });
+
+  it("permanently deletes confirmed archived recipes and never reuses version numbers", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `delete-id-${++sequence}`,
+      now: () => "2026-08-03T10:00:00.000Z",
+    });
+    const created = await api.createRecipe({
+      name: "待删除配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft(
+      draftInput(created.id, "1000", "0", ""),
+    );
+    const first = await api.createRecipeVersion({
+      recipeId: created.id,
+      sourceDraftId: draft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(created, "1000", "0", ""),
+      dependencyVersionIds: [],
+    });
+    await api.copyRecipeVersionToDraft(first.id);
+
+    await api.deleteRecipeVersion(first.id);
+    expect((await api.getRecipeDraft(created.id))?.basedOnVersionId).toBeNull();
+    const second = await api.createRecipeVersion({
+      recipeId: created.id,
+      sourceDraftId: draft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(created, "1000", "0", ""),
+      dependencyVersionIds: [],
+    });
+    expect(second.versionNumber).toBe(2);
+
+    await expect(
+      api.permanentlyDeleteRecipe(created.id, created.name),
+    ).rejects.toMatchObject({ code: "invalid_state" });
+    await api.archiveRecipe(created.id);
+    await expect(
+      api.permanentlyDeleteRecipe(created.id, "名称错误"),
+    ).rejects.toMatchObject({ code: "confirmation_mismatch" });
+    await api.permanentlyDeleteRecipe(created.id, created.name);
+    expect(
+      (await api.listRecipes()).some(
+        (entry) => entry.recipe.id === created.id,
+      ),
+    ).toBe(false);
+  });
+
+  it("creates a custom-named alternative recipe with its own draft and status", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `alternative-id-${++sequence}`,
+      now: () => "2026-08-02T11:00:00.000Z",
+    });
+    const primary = await api.createRecipe({
+      name: "巧克力冰淇淋",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const primaryDraft = await api.saveRecipeDraft(
+      draftInput(primary.id, "1000", "3.2", "主配方"),
+    );
+    const primaryVersion = await api.createRecipeVersion({
+      recipeId: primary.id,
+      sourceDraftId: primaryDraft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(primary, "1000", "3.2", "主配方"),
+      dependencyVersionIds: [],
+    });
+
+    const alternative = await api.createRecipeAlternative({
+      sourceVersionId: primaryVersion.id,
+      schemeName: "供应商 B 可可粉版本",
+      schemeStatus: "researching",
+    });
+    const alternativeDraft = await api.getRecipeDraft(alternative.id);
+
+    expect(alternative).toMatchObject({
+      name: "巧克力冰淇淋",
+      productId: primary.id,
+      schemeName: "供应商 B 可可粉版本",
+      schemeStatus: "researching",
+      latestVersionNumber: null,
+    });
+    expect(alternativeDraft).toMatchObject({
+      recipeId: alternative.id,
+      basedOnVersionId: null,
+      targetBatchGrams: "1000",
+      markdownNotes: "主配方",
+    });
+
+    await api.updateRecipeScheme(alternative.id, {
+      schemeName: "供应商 B 可可粉正式替代",
+      schemeStatus: "current",
+    });
+    expect(await api.getRecipe(alternative.id)).toMatchObject({
+      schemeName: "供应商 B 可可粉正式替代",
+      schemeStatus: "current",
+    });
+    expect(await api.getRecipe(primary.id)).toMatchObject({
+      schemeStatus: "approved",
+    });
+  });
+
+  it("persists drafts and immutable versions in browser schema v8", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;
     const api = new BrowserDemoApi({
@@ -241,9 +424,9 @@ describe("recipe desktop API", () => {
     );
     const copied = await reopened.copyRecipeVersionToDraft(firstVersion.id);
 
-    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v7") ?? "{}"))
+    expect(JSON.parse(storage.getItem("food-rd.browser-demo.v8") ?? "{}"))
       .toMatchObject({
-        schemaVersion: 7,
+        schemaVersion: 8,
         recipes: {
           [recipe.id]: { name: "低糖乳饮料", latestVersionNumber: 2 },
         },
@@ -273,10 +456,10 @@ describe("recipe desktop API", () => {
       now: () => "2026-07-30T10:30:00.000Z",
     });
     await original.createAgentConversation("升级前的研发对话");
-    const v5 = JSON.parse(
-      storage.getItem("food-rd.browser-demo.v7") ?? "{}",
+    const v8 = JSON.parse(
+      storage.getItem("food-rd.browser-demo.v8") ?? "{}",
     ) as Record<string, unknown>;
-    const v4 = { ...v5 };
+    const v4 = { ...v8 };
     delete v4.recipes;
     delete v4.recipeDrafts;
     delete v4.recipeVersions;
@@ -297,9 +480,9 @@ describe("recipe desktop API", () => {
     ]);
     expect(await migrated.listRecipes()).toEqual([]);
     expect(
-      JSON.parse(storage.getItem("food-rd.browser-demo.v7") ?? "{}"),
+      JSON.parse(storage.getItem("food-rd.browser-demo.v8") ?? "{}"),
     ).toMatchObject({
-      schemaVersion: 7,
+      schemaVersion: 8,
       recipes: {},
       recipeDrafts: {},
       recipeVersions: {},

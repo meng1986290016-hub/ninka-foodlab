@@ -8,11 +8,12 @@ use serde_json::{Map, Value, json};
 use tauri::State;
 
 use crate::{
+    agent_recipe::repository::AgentRecipeRepository,
     ingredients::repository::{IngredientRepository, RepositoryError},
     recipes::{
         model::{
-            Recipe, RecipeDraft, RecipeDraftInput, RecipeInput, RecipeSummary, RecipeVersion,
-            RecipeVersionInput,
+            Recipe, RecipeAlternativeInput, RecipeDraft, RecipeDraftInput, RecipeInput,
+            RecipeSchemeInput, RecipeSummary, RecipeVersion, RecipeVersionInput,
         },
         repository::{RecipeRepository, version_reference},
     },
@@ -67,6 +68,32 @@ pub fn create_recipe(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn create_recipe_alternative(
+    input: RecipeAlternativeInput,
+    state: State<'_, AppState>,
+) -> Result<Recipe, CommandError> {
+    let mut repository = recipe_repository(&state)?;
+    let source_version = repository.get_version(&input.source_version_id)?;
+    let alternative = repository.create_alternative_recipe(
+        &source_version.recipe_id,
+        &input.scheme_name,
+        input.scheme_status,
+    )?;
+    drop(repository);
+
+    let draft_input = draft_payload_from_version(&source_version, &alternative.id, None)?;
+    if let Err(error) = save_recipe_draft_at_path(&state.database_path, draft_input) {
+        if let Ok(mut cleanup) = RecipeRepository::open(&state.database_path) {
+            let _ = cleanup.delete_empty_recipe(&alternative.id);
+        }
+        return Err(error);
+    }
+    recipe_repository(&state)?
+        .get_recipe(&alternative.id)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub fn update_recipe(
     id: String,
     input: RecipeInput,
@@ -78,9 +105,45 @@ pub fn update_recipe(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn update_recipe_scheme(
+    id: String,
+    input: RecipeSchemeInput,
+    state: State<'_, AppState>,
+) -> Result<Recipe, CommandError> {
+    recipe_repository(&state)?
+        .update_recipe_scheme(&id, input)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub fn archive_recipe(id: String, state: State<'_, AppState>) -> Result<(), CommandError> {
     recipe_repository(&state)?
         .archive_recipe(&id)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn restore_recipe(id: String, state: State<'_, AppState>) -> Result<(), CommandError> {
+    recipe_repository(&state)?
+        .restore_recipe(&id)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn permanently_delete_recipe(
+    id: String,
+    confirmation_name: String,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    recipe_repository(&state)?
+        .permanently_delete_recipe(&id, &confirmation_name)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn delete_recipe_version(id: String, state: State<'_, AppState>) -> Result<(), CommandError> {
+    recipe_repository(&state)?
+        .delete_version(&id)
         .map_err(Into::into)
 }
 
@@ -145,6 +208,15 @@ pub fn copy_recipe_version_to_draft(
     state: State<'_, AppState>,
 ) -> Result<Value, CommandError> {
     let version = recipe_repository(&state)?.get_version(&version_id)?;
+    let input = draft_payload_from_version(&version, &version.recipe_id, Some(&version.id))?;
+    save_recipe_draft_at_path(&state.database_path, input)
+}
+
+fn draft_payload_from_version(
+    version: &RecipeVersion,
+    target_recipe_id: &str,
+    based_on_version_id: Option<&str>,
+) -> Result<Value, CommandError> {
     let snapshot = version
         .snapshot
         .as_object()
@@ -157,8 +229,8 @@ pub fn copy_recipe_version_to_draft(
         .map(draft_item_from_snapshot)
         .collect::<Result<Vec<_>, _>>()?;
     let input = json!({
-        "recipeId": version.recipe_id,
-        "basedOnVersionId": version.id,
+        "recipeId": target_recipe_id,
+        "basedOnVersionId": based_on_version_id,
         "source": "manual",
         "targetBatchGrams": snapshot.get("targetBatchGrams").cloned().unwrap_or(Value::String("0".into())),
         "finishedMassGrams": snapshot.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
@@ -172,7 +244,7 @@ pub fn copy_recipe_version_to_draft(
         "calculation": snapshot.get("calculation").cloned().unwrap_or(Value::Null),
         "calculationIssues": [],
     });
-    save_recipe_draft_at_path(&state.database_path, input)
+    Ok(input)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -263,6 +335,7 @@ fn materialize_draft(path: &Path, draft: RecipeDraft) -> Result<Value, CommandEr
         .ok_or_else(|| command_error("storage_failure", "配方草稿原料无法读取"))?;
     let ingredient_repository = IngredientRepository::open(path)?;
     let recipe_repository = RecipeRepository::open(path)?;
+    let agent_recipe_repository = AgentRecipeRepository::open(path)?;
     let items = items
         .into_iter()
         .map(|mut item| {
@@ -293,6 +366,18 @@ fn materialize_draft(path: &Path, draft: RecipeDraft) -> Result<Value, CommandEr
                         "recipeVersion".into(),
                         serde_json::to_value(version_reference(&version))
                             .map_err(RepositoryError::from)?,
+                    );
+                }
+                Some("material_need") => {
+                    let need_id = string_field(
+                        item_object,
+                        "materialNeedId",
+                        "找不到配方中的待补充原料需求",
+                    )?;
+                    let need = agent_recipe_repository.get_material_need(&need_id)?;
+                    item_object.insert(
+                        "materialNeed".into(),
+                        serde_json::to_value(need).map_err(RepositoryError::from)?,
                     );
                 }
                 _ => {

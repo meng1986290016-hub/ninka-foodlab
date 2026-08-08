@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { DesktopApi } from "../../api/desktop-api";
 import type { ImportFilePicker } from "../../api/import-file-picker";
 import type { IngredientExchangeFormat } from "../../api/import-types";
+import { Icon } from "../../components/Icon";
 
 interface IngredientExchangeMenuProps {
   api: DesktopApi;
@@ -53,6 +54,7 @@ export function IngredientExchangeMenu({
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
+        <Icon name="database" size={17} />
         数据交换
       </button>
       {open ? (
@@ -65,15 +67,19 @@ export function IngredientExchangeMenu({
             }}
             type="button"
           >
+            <Icon name="import" size={16} />
             导入原料资料
           </button>
           <button disabled={busy} onClick={() => void exportFile("template", "csv")} type="button">
+            <Icon name="export" size={16} />
             下载 CSV 模板
           </button>
           <button disabled={busy} onClick={() => void exportFile("template", "xlsx")} type="button">
+            <Icon name="export" size={16} />
             下载 XLSX 模板
           </button>
           <button disabled={busy} onClick={() => void exportFile("library", "xlsx")} type="button">
+            <Icon name="export" size={16} />
             导出原料库
           </button>
         </div>

@@ -32,6 +32,35 @@ describe("calculateNutrition", () => {
     });
   });
 
+  it("concentrates non-volatile nutrients when water loss lowers finished mass", () => {
+    const result = calculateNutrition({
+      components: [
+        {
+          id: "milk-solids",
+          name: "乳固体原料",
+          massGrams: "200",
+          nutrientsPer100g: { protein: "50" },
+        },
+        {
+          id: "water",
+          name: "水",
+          massGrams: "800",
+          nutrientsPer100g: { protein: "0" },
+        },
+      ],
+      finishedMassGrams: "950",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.inputMassGrams).toBe("1000");
+    expect(result.value.basisMassGrams).toBe("950");
+    expect(result.value.nutrients.protein.totalKnownAmount).toBe("100");
+    expect(result.value.nutrients.protein.per100gKnownAmount).toBe(
+      "10.52631578947368421052631578947368421053",
+    );
+  });
+
   it("keeps unknown distinct from confirmed zero", () => {
     const result = calculateNutrition({
       components: [

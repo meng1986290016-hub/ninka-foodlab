@@ -35,8 +35,8 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     create_offline_backup(source.backup_source(), &backup_path).unwrap();
 
     let preflight = preflight_offline_backup(&backup_path).unwrap();
-    assert_eq!(preflight.source_schema_version, 7);
-    assert_eq!(preflight.target_schema_version, 7);
+    assert_eq!(preflight.source_schema_version, 11);
+    assert_eq!(preflight.target_schema_version, 11);
     assert!(!preflight.requires_migration);
     assert_eq!(preflight.attachment_count, 1);
     assert!(preflight.attachment_bytes > 0);
@@ -46,7 +46,7 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     let result = restore_offline_backup(&backup_path, fixture.target()).unwrap();
 
     assert_eq!(result.preflight, preflight);
-    assert_eq!(result.restored_schema_version, 7);
+    assert_eq!(result.restored_schema_version, 11);
     assert!(
         result
             .safety_backup_file_name
@@ -55,7 +55,7 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     let safety = fixture
         .safety_backup_directory
         .join(&result.safety_backup_file_name);
-    assert_eq!(inspect_offline_backup(&safety).unwrap().schema_version, 7);
+    assert_eq!(inspect_offline_backup(&safety).unwrap().schema_version, 11);
     assert_database_has_only_material(&fixture.database_path, "备份数据原料");
     assert!(
         fixture
@@ -137,10 +137,10 @@ fn historical_schema_is_migrated_but_future_schema_is_rejected_without_mutation(
 
     let preflight = preflight_offline_backup(&historical_backup).unwrap();
     assert_eq!(preflight.source_schema_version, 1);
-    assert_eq!(preflight.target_schema_version, 7);
+    assert_eq!(preflight.target_schema_version, 11);
     assert!(preflight.requires_migration);
     let result = restore_offline_backup(&historical_backup, fixture.target()).unwrap();
-    assert_eq!(result.restored_schema_version, 7);
+    assert_eq!(result.restored_schema_version, 11);
     assert_database_has_only_material(&fixture.database_path, "历史原料");
     let connection = Connection::open(&fixture.database_path).unwrap();
     assert_eq!(
@@ -156,15 +156,16 @@ fn historical_schema_is_migrated_but_future_schema_is_rejected_without_mutation(
 
     let future_database = fixture.root.join("future.sqlite3");
     create_schema_one_database(&future_database, "未来原料");
+    let future_schema_version = migrations::LATEST_SCHEMA_VERSION + 1;
     Connection::open(&future_database)
         .unwrap()
         .execute(
-            "INSERT INTO schema_migrations (version, applied_at) VALUES (8, ?1)",
-            [NOW],
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
+            rusqlite::params![future_schema_version, NOW],
         )
         .unwrap();
     let future_backup = fixture.root.join("future.foodrd-backup");
-    create_manual_backup(&future_database, 8, &future_backup);
+    create_manual_backup(&future_database, future_schema_version, &future_backup);
     let error = preflight_offline_backup(&future_backup).unwrap_err();
     assert_eq!(error.code(), "unsupported_backup");
     let error = restore_offline_backup(&future_backup, fixture.target()).unwrap_err();

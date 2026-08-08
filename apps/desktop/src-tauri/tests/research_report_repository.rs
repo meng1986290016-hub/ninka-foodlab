@@ -17,8 +17,8 @@ use food_rd_desktop::{
     },
     reports::{
         export::{
-            ResearchReportExportFormat, ResearchReportExportRequest, export_research_report,
-            research_report_document_hash,
+            ResearchReportExportFormat, ResearchReportExportRequest, SampleSheetExportRequest,
+            export_research_report, export_sample_sheet, research_report_document_hash,
         },
         model::ResearchReportInput,
         repository::ResearchReportRepository,
@@ -181,7 +181,7 @@ fn migration_seven_creates_report_table_indexes_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 11);
     for object in [
         "research_reports",
         "research_reports_recipe_version_idx",
@@ -461,6 +461,25 @@ fn failed_export_preserves_existing_target_and_removes_temporary_file() {
     fs::remove_file(path).unwrap();
 }
 
+#[test]
+fn sample_sheet_export_accepts_a_safe_single_sheet_xlsx() {
+    let export_root = unique_export_directory("sample-sheet-export");
+    fs::create_dir(&export_root).unwrap();
+    let destination = export_root.join("打样配料单.xlsx");
+    let bytes = sample_sheet_xlsx_fixture();
+
+    export_sample_sheet(SampleSheetExportRequest {
+        destination_path: destination.to_string_lossy().into_owned(),
+        file_name: "打样配料单.xlsx".into(),
+        bytes_base64: STANDARD.encode(&bytes),
+    })
+    .unwrap();
+
+    let workbook = open_workbook_auto(&destination).unwrap();
+    assert_eq!(workbook.sheet_names(), ["打样配料单"]);
+    fs::remove_dir_all(export_root).unwrap();
+}
+
 fn unique_export_directory(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
         "food-rd-{name}-{}-{}",
@@ -538,5 +557,14 @@ fn xlsx_fixture() -> Vec<u8> {
         sheet.set_name(name).unwrap();
         sheet.write_string(0, 0, "可回读").unwrap();
     }
+    workbook.save_to_buffer().unwrap()
+}
+
+fn sample_sheet_xlsx_fixture() -> Vec<u8> {
+    let mut workbook = Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("打样配料单").unwrap();
+    sheet.write_string(0, 0, "原料").unwrap();
+    sheet.write_string(0, 1, "应添加量").unwrap();
     workbook.save_to_buffer().unwrap()
 }

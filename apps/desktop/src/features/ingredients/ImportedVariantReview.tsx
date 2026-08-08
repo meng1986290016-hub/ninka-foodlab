@@ -16,6 +16,7 @@ import type {
 import { Icon } from "../../components/Icon";
 import { AllergenEditor } from "../imports/AllergenEditor";
 import { ImportIssueList } from "../imports/ImportIssueList";
+import { DraftSourceEvidence } from "../imports/DraftSourceEvidence";
 import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { NutritionEditor } from "./NutritionEditor";
 import { VariantBasicFields } from "./VariantBasicFields";
@@ -23,8 +24,11 @@ import { VariantBasicFields } from "./VariantBasicFields";
 interface ImportedVariantReviewProps {
   api: DesktopApi;
   draft: IngredientImportDraft;
+  queuePosition?: number;
+  queueTotal?: number;
   onCancel(): void;
   onSaved(variant: IngredientVariant): void | Promise<void>;
+  onSavedAndNext?(variant: IngredientVariant): void | Promise<void>;
 }
 
 function cloneReview(
@@ -41,8 +45,11 @@ function cloneReview(
 export function ImportedVariantReview({
   api,
   draft,
+  queuePosition = 1,
+  queueTotal = 1,
   onCancel,
   onSaved,
+  onSavedAndNext,
 }: ImportedVariantReviewProps) {
   const [tab, setTab] = useState<"basic" | "nutrition">("basic");
   const [review, setReview] = useState(() => cloneReview(draft.review));
@@ -175,8 +182,7 @@ export function ImportedVariantReview({
     });
   }
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveReview(continueToNext: boolean) {
     setSaving(true);
     setError("");
     try {
@@ -184,7 +190,11 @@ export function ImportedVariantReview({
         draft.id,
         review,
       );
-      await onSaved(saved);
+      if (continueToNext && onSavedAndNext) {
+        await onSavedAndNext(saved);
+      } else {
+        await onSaved(saved);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "原料草稿保存失败",
@@ -192,6 +202,11 @@ export function ImportedVariantReview({
     } finally {
       setSaving(false);
     }
+  }
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void saveReview(false);
   }
 
   const customNutrients = review.nutrients.filter(
@@ -210,6 +225,11 @@ export function ImportedVariantReview({
           <h2>人工复核原料草稿</h2>
           <p>确认后才会正式保存到原料库</p>
         </div>
+        {queueTotal > 1 ? (
+          <span className="imported-review__progress">
+            第 {queuePosition} / {queueTotal} 张
+          </span>
+        ) : null}
         <button
           aria-label="关闭原料草稿复核"
           className="icon-button"
@@ -226,6 +246,7 @@ export function ImportedVariantReview({
       >
         <ImportIssueList issues={draft.issues} />
         <SourceAttachmentList attachments={draft.attachments} />
+        <DraftSourceEvidence draft={draft} />
 
         <div aria-label="原料草稿信息" className="editor-tabs" role="tablist">
           <button
@@ -378,12 +399,30 @@ export function ImportedVariantReview({
             取消
           </button>
           <button
-            className="button button--primary"
+            className={
+              onSavedAndNext
+                ? "button button--secondary"
+                : "button button--primary"
+            }
             disabled={saving}
             type="submit"
           >
-            {saving ? "正在保存…" : "保存供应商版本"}
+            {saving
+              ? "正在保存…"
+              : onSavedAndNext
+                ? "仅保存并关闭"
+                : "保存供应商版本"}
           </button>
+          {onSavedAndNext ? (
+            <button
+              className="button button--primary imported-review__next-button"
+              disabled={saving}
+              onClick={() => void saveReview(true)}
+              type="button"
+            >
+              {saving ? "正在保存…" : "保存并复核下一张"}
+            </button>
+          ) : null}
         </div>
       </form>
     </aside>

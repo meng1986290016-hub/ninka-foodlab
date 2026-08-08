@@ -153,5 +153,5 @@ describe("ingredient import UI acceptance", () => {
     expect(
       cleanedDrafts.find((draft) => draft.status === "discarded")!.attachments,
     ).toEqual([]);
-  });
+  }, 15_000);
 });

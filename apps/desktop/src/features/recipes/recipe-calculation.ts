@@ -149,6 +149,39 @@ export function calculateRecipeDraft(
       continue;
     }
 
+    if (item.kind === "material_need") {
+      const ingredientId = `material-need:${item.materialNeedId}`;
+      rootItems.push({
+        kind: "ingredient",
+        ingredient: {
+          id: ingredientId,
+          name: `${item.materialNeed.materialName}（待补充）`,
+          nutrientsPer100g: Object.fromEntries(
+            request.nutrientDefinitions.map((definition) => [
+              definition.id,
+              null,
+            ]),
+          ),
+          pricePerKg: null,
+        },
+        massGrams: mass.value,
+      });
+      context.sourceItemByIngredientId.set(ingredientId, item.id);
+      context.allergensByIngredientId.set(ingredientId, {
+        contains: [],
+        mayContain: [],
+        sourceItemId: item.id,
+      });
+      conversionIssues.push({
+        code: "material_need_unresolved",
+        severity: "warning",
+        message: "该原料尚未关联供应商版本，营养与成本暂按缺失数据处理",
+        field: "materialNeedId",
+        itemId: item.id,
+      });
+      continue;
+    }
+
     rootItems.push({
       kind: "recipe",
       recipeVersionId: item.recipeVersionId,
@@ -167,7 +200,7 @@ export function calculateRecipeDraft(
     });
   }
 
-  if (conversionIssues.length > 0) {
+  if (conversionIssues.some((issue) => issue.severity === "error")) {
     return { ok: false, issues: conversionIssues };
   }
 
@@ -335,6 +368,7 @@ export function calculateRecipeDraft(
     calculatedAt: request.calculatedAt,
   };
   const warnings = [
+    ...conversionIssues,
     ...calculated.warnings.map((issue) => adaptIssue(issue)),
     ...missingCostItemIds.map(
       (itemId): RecipeCalculationIssue => ({

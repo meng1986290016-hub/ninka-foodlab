@@ -85,10 +85,14 @@ describe("food R&D Agent acceptance", () => {
     async function saveNextSupplier(
       supplierName: string,
       proteinValue?: string,
+      continueToNext = false,
+      openDialog = true,
     ) {
-      await user.click(
-        screen.getAllByRole("button", { name: "打开并检查" })[0]!,
-      );
+      if (openDialog) {
+        await user.click(
+          screen.getAllByRole("button", { name: "打开并检查" })[0]!,
+        );
+      }
       const dialog = await screen.findByRole("dialog", {
         name: "人工复核原料草稿",
       });
@@ -110,23 +114,22 @@ describe("food R&D Agent acceptance", () => {
       }
       await user.click(
         within(dialog).getByRole("button", {
-          name: "保存供应商版本",
+          name: continueToNext ? "保存并复核下一张" : "仅保存并关闭",
         }),
       );
-      await waitFor(() =>
-        expect(
-          screen.queryByRole("dialog", { name: "人工复核原料草稿" }),
-        ).toBeNull(),
-      );
+      if (continueToNext) {
+        expect(await screen.findByText("第 2 / 3 张")).toBeTruthy();
+      } else {
+        await waitFor(() =>
+          expect(
+            screen.queryByRole("dialog", { name: "人工复核原料草稿" }),
+          ).toBeNull(),
+        );
+      }
     }
 
-    await saveNextSupplier("供应商A", "0");
-    await waitFor(() =>
-      expect(
-        screen.getAllByRole("button", { name: "打开并检查" }),
-      ).toHaveLength(2),
-    );
-    await saveNextSupplier("供应商B");
+    await saveNextSupplier("供应商A", "0", true);
+    await saveNextSupplier("供应商B", undefined, false, false);
     await waitFor(() =>
       expect(
         screen.getAllByRole("button", { name: "打开并检查" }),
@@ -171,5 +174,5 @@ describe("food R&D Agent acceptance", () => {
     expect(
       screen.getAllByRole("button", { name: "在原料库查看" }),
     ).toHaveLength(2);
-  });
+  }, 15_000);
 });

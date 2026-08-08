@@ -14,6 +14,15 @@ import type {
   AgentRunRequest,
   CliDetectionResult,
 } from "./agent-types";
+import type {
+  AcceptedAgentRecipeProposal,
+  AgentRecipeProposal,
+  AgentRecipeProposalAcceptInput,
+  AgentRecipeProposalEvaluation,
+  AgentRecipeProposalPayload,
+  MaterialNeed,
+  MaterialNeedStatus,
+} from "./agent-recipe-types";
 import type { DesktopApi } from "./desktop-api";
 import type {
   BackupManifest,
@@ -38,9 +47,11 @@ import type {
 } from "./nutrition-label-types";
 import type {
   Recipe,
+  RecipeAlternativeCreateInput,
   RecipeDraft,
   RecipeDraftSaveInput,
   RecipeInput,
+  RecipeSchemeUpdateInput,
   RecipeSummary,
   RecipeVersion,
   RecipeVersionComparison,
@@ -51,6 +62,7 @@ import type {
   ResearchReportRecord,
   ResearchReportRecordInput,
 } from "./research-report-types";
+import type { SampleSheetExportRequest } from "./sample-sheet-types";
 import { DesktopApiError } from "./types";
 import type {
   Category,
@@ -173,6 +185,10 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<void>("export_research_report", { request });
   }
 
+  exportSampleSheet(request: SampleSheetExportRequest) {
+    return this.invoke<void>("export_sample_sheet", { request });
+  }
+
   listNutritionLabels(recipeId: string) {
     return this.invoke<NutritionLabel[]>("list_nutrition_labels", {
       recipeId,
@@ -239,12 +255,35 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<Recipe>("create_recipe", { input });
   }
 
+  createRecipeAlternative(input: RecipeAlternativeCreateInput) {
+    return this.invoke<Recipe>("create_recipe_alternative", { input });
+  }
+
   updateRecipe(id: string, input: RecipeInput) {
     return this.invoke<Recipe>("update_recipe", { id, input });
   }
 
+  updateRecipeScheme(id: string, input: RecipeSchemeUpdateInput) {
+    return this.invoke<Recipe>("update_recipe_scheme", { id, input });
+  }
+
   archiveRecipe(id: string) {
     return this.invoke<void>("archive_recipe", { id });
+  }
+
+  restoreRecipe(id: string) {
+    return this.invoke<void>("restore_recipe", { id });
+  }
+
+  permanentlyDeleteRecipe(id: string, confirmationName: string) {
+    return this.invoke<void>("permanently_delete_recipe", {
+      id,
+      confirmationName,
+    });
+  }
+
+  deleteRecipeVersion(id: string) {
+    return this.invoke<void>("delete_recipe_version", { id });
   }
 
   getRecipeDraft(recipeId: string) {
@@ -371,6 +410,57 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<IngredientImportDraft[]>("list_agent_import_drafts", {
       runId,
     });
+  }
+
+  listAgentRecipeProposals(conversationId: string) {
+    return this.invoke<AgentRecipeProposal[]>("list_agent_recipe_proposals", {
+      conversationId,
+    });
+  }
+
+  getAgentRecipeProposal(id: string) {
+    return this.invoke<AgentRecipeProposal>("get_agent_recipe_proposal", { id });
+  }
+
+  evaluateAgentRecipeProposal(input: AgentRecipeProposalPayload) {
+    return this.invoke<AgentRecipeProposalEvaluation>(
+      "evaluate_agent_recipe_proposal",
+      { input },
+    );
+  }
+
+  updateAgentRecipeProposal(id: string, input: AgentRecipeProposalPayload) {
+    return this.invoke<AgentRecipeProposal>("update_agent_recipe_proposal", {
+      id,
+      input,
+    });
+  }
+
+  acceptAgentRecipeProposal(input: AgentRecipeProposalAcceptInput) {
+    return this.invoke<AcceptedAgentRecipeProposal>("accept_agent_recipe_proposal", {
+      input,
+    });
+  }
+
+  discardAgentRecipeProposal(id: string) {
+    return this.invoke<AgentRecipeProposal>("discard_agent_recipe_proposal", { id });
+  }
+
+  listMaterialNeeds(status?: MaterialNeedStatus) {
+    return this.invoke<MaterialNeed[]>("list_material_needs", {
+      status: status ?? null,
+    });
+  }
+
+  resolveMaterialNeed(id: string, ingredientVariantId: string) {
+    return this.invoke<MaterialNeed>("resolve_material_need", {
+      id,
+      ingredientVariantId,
+    });
+  }
+
+  dismissMaterialNeed(id: string) {
+    return this.invoke<MaterialNeed>("dismiss_material_need", { id });
   }
 
   createIngredientImportJob(request: IngredientImportJobRequest) {

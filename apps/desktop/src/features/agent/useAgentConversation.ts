@@ -10,6 +10,7 @@ import type {
   AgentRun,
 } from "../../api/agent-types";
 import type { DesktopApi } from "../../api/desktop-api";
+import type { AgentRecipeProposal } from "../../api/agent-recipe-types";
 import type {
   ImportFileReference,
   IngredientImportDraft,
@@ -29,6 +30,9 @@ const toolStatus: Record<string, string> = {
   discard_ingredient_import_draft: "正在移除原料草稿",
   validate_ingredient_import_draft: "正在检查原料草稿",
   request_open_ingredient_review: "正在准备人工复核",
+  diagnose_recipe: "正在诊断当前配方",
+  review_recipe_development: "正在复盘研发记录",
+  compare_supplier_variant: "正在计算替代原料影响",
 };
 
 interface InitialAgentState {
@@ -38,6 +42,7 @@ interface InitialAgentState {
   providers: AgentProviderConfig[];
   lastRun: AgentRun | null;
   drafts: IngredientImportDraft[];
+  proposals: AgentRecipeProposal[];
 }
 
 export function useAgentConversation(
@@ -53,6 +58,7 @@ export function useAgentConversation(
   const [currentRun, setCurrentRun] = useState<AgentRun | null>(null);
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
   const [drafts, setDrafts] = useState<IngredientImportDraft[]>([]);
+  const [proposals, setProposals] = useState<AgentRecipeProposal[]>([]);
   const [streamingText, setStreamingText] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
   const [error, setError] = useState("");
@@ -94,6 +100,20 @@ export function useAgentConversation(
     [api, lastRun?.id],
   );
 
+  const refreshProposals = useCallback(
+    async (conversationId?: string) => {
+      const id = conversationId ?? conversationRef.current?.id;
+      if (!id) {
+        setProposals([]);
+        return [];
+      }
+      const next = await api.listAgentRecipeProposals(id);
+      setProposals(next);
+      return next;
+    },
+    [api],
+  );
+
   useEffect(() => {
     let active = true;
     if (!initializationRef.current) {
@@ -106,7 +126,10 @@ export function useAgentConversation(
           ]);
         const nextConversation =
           conversations[0] ?? (await api.createAgentConversation("食品研发对话"));
-        const messages = await api.listAgentMessages(nextConversation.id);
+        const [messages, proposals] = await Promise.all([
+          api.listAgentMessages(nextConversation.id),
+          api.listAgentRecipeProposals(nextConversation.id),
+        ]);
         const lastRunId = [...messages]
           .reverse()
           .find((message) => message.runId)?.runId;
@@ -120,6 +143,7 @@ export function useAgentConversation(
           drafts: lastRun
             ? await api.listAgentImportDrafts(lastRun.id)
             : [],
+          proposals,
         };
       })();
     }
@@ -133,6 +157,7 @@ export function useAgentConversation(
         setProviders(initial.providers);
         setLastRun(initial.lastRun);
         setDrafts(initial.drafts);
+        setProposals(initial.proposals);
       })
       .catch((reason: unknown) => {
         if (!active) return;
@@ -165,6 +190,14 @@ export function useAgentConversation(
           setDrafts(nextDrafts);
           setTaskStatus(`已生成 ${nextDrafts.length} 张待复核草稿`);
         });
+      } else if (event.type === "recipe_proposals_changed") {
+        void refreshProposals().then((next) => {
+          if (!active) return;
+          const pending = next.filter(
+            (proposal) => proposal.status === "pending_review",
+          ).length;
+          setTaskStatus(`已生成 ${pending} 张待复核配方提案`);
+        });
       } else if (event.type === "run_completed") {
         setStreamingText("");
         setTaskStatus("本次任务已完成");
@@ -176,6 +209,7 @@ export function useAgentConversation(
           void refreshDrafts(run.id);
         });
         void refreshMessages();
+        void refreshProposals();
       } else if (event.type === "run_failed") {
         setStreamingText("");
         setTaskStatus(
@@ -189,6 +223,7 @@ export function useAgentConversation(
           void refreshDrafts(run.id);
         });
         void refreshMessages();
+        void refreshProposals();
       }
     };
     void events.subscribe(receive).then((stop) => {
@@ -199,7 +234,7 @@ export function useAgentConversation(
       active = false;
       unsubscribe();
     };
-  }, [api, events, refreshDrafts, refreshMessages]);
+  }, [api, events, refreshDrafts, refreshMessages, refreshProposals]);
 
   const send = useCallback(
     async (
@@ -208,6 +243,11 @@ export function useAgentConversation(
       options: {
         retryRunId?: string;
         continueRunId?: string;
+        recipeContext?: {
+          recipeId: string;
+          recipeName: string;
+          draftFingerprint: string;
+        };
       } = {},
     ) => {
       const activeConversation = conversationRef.current;
@@ -220,6 +260,9 @@ export function useAgentConversation(
           conversationId: activeConversation.id,
           content,
           files,
+          ...(options.recipeContext
+            ? { recipeContext: options.recipeContext }
+            : {}),
           ...(options.retryRunId
             ? { retryRunId: options.retryRunId }
             : {}),
@@ -234,6 +277,7 @@ export function useAgentConversation(
           setCurrentRun(null);
           setLastRun(run);
           await refreshDrafts(run.id);
+          await refreshProposals(activeConversation.id);
           setTaskStatus(
             run.status === "completed" ? "本次任务已完成" : "本次任务未完成",
           );
@@ -245,7 +289,7 @@ export function useAgentConversation(
         return null;
       }
     },
-    [api, refreshDrafts, refreshMessages],
+    [api, refreshDrafts, refreshMessages, refreshProposals],
   );
 
   const cancel = useCallback(async () => {
@@ -301,6 +345,7 @@ export function useAgentConversation(
     setCurrentRun(null);
     setLastRun(null);
     setDrafts([]);
+    setProposals([]);
     setStreamingText("");
     setTaskStatus("");
     setError("");
@@ -318,9 +363,11 @@ export function useAgentConversation(
     lastRun,
     loading,
     messages,
+    proposals,
     preferences,
     refreshConfiguration,
     refreshDrafts,
+    refreshProposals,
     retry,
     send,
     streamingText,

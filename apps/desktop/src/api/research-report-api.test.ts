@@ -286,7 +286,7 @@ describe("research report desktop API", () => {
     });
     const { recipeVersion, labelVersion } = await createFormalSources(api);
     const v7 = JSON.parse(
-      storage.getItem("food-rd.browser-demo.v7") ?? "{}",
+      storage.getItem("food-rd.browser-demo.v8") ?? "{}",
     ) as Record<string, unknown>;
     storage.clear();
     storage.setItem(

@@ -192,6 +192,7 @@ export type DesktopErrorCode =
   | "invalid_backup"
   | "unsupported_backup"
   | "confirmation_required"
+  | "confirmation_mismatch"
   | "restore_rollback_failed"
   | "restore_completed_restart_required"
   | "unsupported_operation"

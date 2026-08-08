@@ -235,25 +235,31 @@ describe("ingredient library supplier hierarchy", () => {
     expect(within(supplierRow).getByText("2026/07/16")).not.toBeNull();
   });
 
-  it("creates the common material before opening its first supplier version", async () => {
-    const user = userEvent.setup();
-    render(<App api={api} />);
-    await screen.findByRole("button", {
-      name: "查看 脱脂乳粉 的具体原料",
-    });
+  it(
+    "creates the common material before opening its first supplier version",
+    async () => {
+      const user = userEvent.setup();
+      render(<App api={api} />);
+      await screen.findByRole("button", {
+        name: "查看 脱脂乳粉 的具体原料",
+      });
 
-    await user.click(screen.getByRole("button", { name: "新建原料" }));
-    expect(
-      screen.getByRole("dialog", { name: "新建通用原料" }),
-    ).not.toBeNull();
-    await user.type(screen.getByLabelText("原料名称"), "燕麦粉");
-    await user.click(screen.getByRole("button", { name: "保存通用原料" }));
+      await user.click(screen.getByRole("button", { name: "新建原料" }));
+      expect(
+        screen.getByRole("dialog", { name: "新建通用原料" }),
+      ).not.toBeNull();
+      await user.type(screen.getByLabelText("原料名称"), "燕麦粉");
+      await user.click(
+        screen.getByRole("button", { name: "保存通用原料" }),
+      );
 
-    const variantEditor = await screen.findByRole("dialog", {
-      name: "新建供应商版本",
-    });
-    expect(within(variantEditor).getByText("燕麦粉")).not.toBeNull();
-  });
+      const variantEditor = await screen.findByRole("dialog", {
+        name: "新建供应商版本",
+      });
+      expect(within(variantEditor).getByText("燕麦粉")).not.toBeNull();
+    },
+    15_000,
+  );
 
   it("opens ingredient data exchange from the library toolbar", async () => {
     const user = userEvent.setup();

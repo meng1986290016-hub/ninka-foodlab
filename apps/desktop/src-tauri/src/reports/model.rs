@@ -49,3 +49,11 @@ pub struct ResearchReportExportRequest {
     pub document_hash: String,
     pub bytes_base64: String,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SampleSheetExportRequest {
+    pub destination_path: String,
+    pub file_name: String,
+    pub bytes_base64: String,
+}

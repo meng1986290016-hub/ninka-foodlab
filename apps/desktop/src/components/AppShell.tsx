@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
+import brandSymbolUrl from "../../../../assets/branding/source/ninka-symbol-color-dark.svg?url";
 import type { DatabaseStatus } from "../api/types";
 import { APP_NAME } from "../app-metadata";
 import { Icon, type IconName } from "./Icon";
@@ -14,12 +15,11 @@ interface AppShellProps {
   onToggleAgent(): void;
 }
 
-export type AppPage = "ingredients" | "recipes" | "recipe-library" | "settings";
+export type AppPage = "ingredients" | "recipe-library" | "settings";
 
 const navigation: Array<{ id: AppPage; label: string; icon: IconName }> = [
-  { id: "ingredients", label: "原料库", icon: "ingredients" },
-  { id: "recipes", label: "配方工作台", icon: "flask" },
-  { id: "recipe-library", label: "配方库", icon: "formula" },
+  { id: "ingredients", label: "原料库", icon: "ingredient-library" },
+  { id: "recipe-library", label: "配方库", icon: "recipe-library" },
   { id: "settings", label: "设置", icon: "settings" },
 ];
 
@@ -33,30 +33,58 @@ export function AppShell({
   onToggleAgent,
 }: AppShellProps) {
   const isBrowserDemo = databaseStatus?.mode !== "sqlite";
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const shellClassName = [
+    "app-shell",
+    agentOpen ? "is-agent-open" : "",
+    sidebarCollapsed ? "is-sidebar-collapsed" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={agentOpen ? "app-shell is-agent-open" : "app-shell"}>
+    <div className={shellClassName}>
       <aside className="sidebar">
-        <div className="brand">{APP_NAME}</div>
+        <div className="brand" title={`${APP_NAME} · Ninka FoodLab`}>
+          <img
+            alt="Ninka FoodLab 品牌标志"
+            className="brand__mark"
+            src={brandSymbolUrl}
+          />
+          <span className="brand__identity">
+            <strong>{APP_NAME}</strong>
+            <small>Ninka FoodLab</small>
+          </span>
+        </div>
         <nav aria-label="主导航" className="primary-nav">
           {navigation.map((item) => (
             <button
+              aria-label={item.label}
               aria-current={item.id === activePage ? "page" : undefined}
               className={
                 item.id === activePage ? "nav-item nav-item--active" : "nav-item"
               }
+              data-label={item.label}
               key={item.label}
               onClick={() => onNavigate(item.id)}
+              title={item.label}
               type="button"
             >
               <Icon name={item.icon} />
-              <span>{item.label}</span>
+              <span className="nav-item__label">{item.label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <button aria-label="收起导航" className="collapse-button" type="button">
-          ‹‹
+        <button
+          aria-label={sidebarCollapsed ? "展开导航" : "收起导航"}
+          aria-pressed={sidebarCollapsed}
+          className="collapse-button"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          title={sidebarCollapsed ? "展开导航" : "收起导航"}
+          type="button"
+        >
+          {sidebarCollapsed ? "››" : "‹‹"}
         </button>
       </aside>
 
@@ -72,7 +100,7 @@ export function AppShell({
           onClick={onToggleAgent}
           type="button"
         >
-          <Icon name="message" size={18} />
+          <Icon name="ai-assistant" size={18} />
           <span>{agentOpen ? "关闭 Agent" : "食品研发 Agent"}</span>
         </button>
         <span className="topbar-spacer" />

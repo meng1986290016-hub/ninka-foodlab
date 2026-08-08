@@ -52,7 +52,7 @@ export function renderResearchReportSvg(
   y += 24;
   const metricWidth = CONTENT_WIDTH / 4;
   const metrics = [
-    ["目标批量", `${document.recipe.targetBatchGrams} g`],
+    ["计划投料总量", `${document.recipe.targetBatchGrams} g`],
     ["数据完整度", `${document.recipe.completenessPercent}%`],
     ["整批成本", money(document.cost.batchTotal)],
     ["适用标准", document.nutrition.standardCode],

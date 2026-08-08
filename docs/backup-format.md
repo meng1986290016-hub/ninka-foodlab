@@ -7,7 +7,7 @@
 格式版本与数据库 schema 版本分别管理：
 
 - `formatVersion` 描述备份包结构，当前为 `1`。
-- `schemaVersion` 描述包内 SQLite 数据库版本，当前为 `7`。
+- `schemaVersion` 描述包内 SQLite 数据库版本，当前为 `11`。
 - 完整性由每个业务文件的 SHA-256 提供，主要检测文件损坏、截断和不完整复制。
 
 ## ZIP 白名单结构
@@ -30,7 +30,7 @@ attachments/<哈希前两位>/<SHA-256>.<扩展名>
   "applicationId": "food-rd-studio",
   "applicationVersion": "0.1.0",
   "createdAt": "2026-07-31T10:30:00+08:00",
-  "schemaVersion": 7,
+  "schemaVersion": 11,
   "database": {
     "path": "database.sqlite3",
     "byteSize": 409600,
@@ -79,7 +79,7 @@ attachments/<哈希前两位>/<SHA-256>.<扩展名>
 
 1. SQLite 可只读打开，`PRAGMA quick_check` 与 `foreign_key_check` 均通过。
 2. 清单 `schemaVersion` 与数据库迁移记录一致。
-3. schema 处于当前发布版支持的 `1..=7` 范围；旧版在临时副本上实际迁移到最新版，未来版本直接拒绝，避免静默降级。
+3. schema 处于当前发布版支持的 `1..=11` 范围；旧版在临时副本上实际迁移到最新版，未来版本直接拒绝，避免静默降级。
 4. 数据库登记的附件与包内附件双向一致，不允许多余或缺失文件。
 5. 汇总数据库大小、附件数量与大小，以及原料、配方、标签、报告和 Agent 会话记录数，供恢复确认界面展示。
 

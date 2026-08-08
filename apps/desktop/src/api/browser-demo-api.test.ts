@@ -87,6 +87,25 @@ describe("BrowserDemoApi", () => {
       materialName: "演示原料",
       supplierName: "演示供应商",
     });
+    expect(drafts[0]?.sourceLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: "materialName",
+          attachmentId: drafts[0]?.attachments[0]?.id,
+          confidence: "high",
+        }),
+        expect.objectContaining({
+          fieldPath: "supplierName",
+          attachmentId: drafts[0]?.attachments[0]?.id,
+          confidence: "medium",
+        }),
+        expect.objectContaining({
+          fieldPath: "nutritionBasis",
+          attachmentId: drafts[0]?.attachments[0]?.id,
+          confidence: "low",
+        }),
+      ]),
+    );
   });
 
   it("migrates v2 storage to v7 without changing ingredient data", async () => {
@@ -95,10 +114,10 @@ describe("BrowserDemoApi", () => {
 
     expect(await migrated.listMaterialGroups()).toEqual([]);
     const stored = JSON.parse(
-      v2.getItem("food-rd.browser-demo.v7") ?? "null",
+      v2.getItem("food-rd.browser-demo.v8") ?? "null",
     ) as Record<string, unknown>;
     expect(stored).toMatchObject({
-      schemaVersion: 7,
+      schemaVersion: 8,
       categories: [],
       suppliers: [],
       materialGroups: [],
@@ -120,6 +139,27 @@ describe("BrowserDemoApi", () => {
       nutritionLabels: {},
       nutritionLabelDrafts: {},
       nutritionLabelVersions: {},
+    });
+  });
+
+  it("repairs supplier variants saved before allergen fields were introduced", async () => {
+    await api.listMaterialGroups();
+    const stored = JSON.parse(
+      storage.getItem("food-rd.browser-demo.v8") ?? "null",
+    ) as {
+      materialGroups: Array<{
+        variants: Array<{ allergens?: unknown }>;
+      }>;
+    };
+    delete stored.materialGroups[0]?.variants[0]?.allergens;
+    storage.setItem("food-rd.browser-demo.v8", JSON.stringify(stored));
+
+    const reopened = new BrowserDemoApi({ storage });
+    const groups = await reopened.listMaterialGroups();
+
+    expect(groups[0]?.variants[0]?.allergens).toEqual({
+      contains: [],
+      mayContain: [],
     });
   });
 
@@ -244,7 +284,7 @@ describe("BrowserDemoApi", () => {
       sourceAttachments: [],
       updatedAt: "2026-07-12T01:15:00.000Z",
     });
-    expect(storage.getItem("food-rd.browser-demo.v7")).not.toBeNull();
+    expect(storage.getItem("food-rd.browser-demo.v8")).not.toBeNull();
     expect(await migrated.getSetting("appearance.compact")).toBe(true);
   });
 
@@ -279,7 +319,21 @@ describe("BrowserDemoApi", () => {
     expect(variant.supplierName).toBe("供应商A");
     expect(variant.allergens).toEqual({ contains: ["乳"], mayContain: [] });
     expect(variant.sourceAttachments).toEqual([]);
-    expect((await groupedApi.listMaterialGroups("供应商A"))[0]?.variants).toHaveLength(1);
+    await groupedApi.saveIngredientVariant({
+      materialGroupId: group.id,
+      supplierId: supplier.id,
+      modelOrSpecification: "速溶型",
+      internalCode: null,
+      currentPrice: "32.00",
+      priceUnit: "kg",
+      densityGPerMl: null,
+      source: "供应商规格书",
+      researchNotes: "同供应商的另一型号",
+      nutrition: { basis: "per_100g", values: [] },
+    });
+    expect(
+      (await groupedApi.listMaterialGroups("供应商A"))[0]?.variants,
+    ).toHaveLength(2);
     expect((await groupedApi.listMaterialGroups("低热型"))[0]?.id).toBe(group.id);
     expect((await groupedApi.listMaterialGroups("溶解性好"))[0]?.id).toBe(group.id);
   });

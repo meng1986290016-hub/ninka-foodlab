@@ -19,6 +19,9 @@ import { ImportedVariantReview } from "./features/ingredients/ImportedVariantRev
 import { NutritionLabelWorkspace } from "./features/labels/NutritionLabelWorkspace";
 import { RecipeLibrary } from "./features/recipes/RecipeLibrary";
 import { RecipeWorkbench } from "./features/recipes/RecipeWorkbench";
+import { SampleSheetWorkspace } from "./features/recipes/SampleSheetWorkspace";
+import type { SampleSheetLaunch } from "./features/recipes/sample-sheet-source";
+import type { RecipeAgentWorkbenchContext } from "./features/recipes/recipe-agent-analysis";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import "./styles/app.css";
 
@@ -48,6 +51,9 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   >("general");
   const [reviewDraft, setReviewDraft] =
     useState<IngredientImportDraft | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<IngredientImportDraft[]>([]);
+  const [reviewQueueTotal, setReviewQueueTotal] = useState(0);
+  const [reviewQueueCompleted, setReviewQueueCompleted] = useState(0);
   const [ingredientRefreshToken, setIngredientRefreshToken] = useState(0);
   const [draftRefreshToken, setDraftRefreshToken] = useState(0);
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(
@@ -57,6 +63,10 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     recipeId: string;
     recipeVersionId: string;
   } | null>(null);
+  const [sampleSheetLaunch, setSampleSheetLaunch] =
+    useState<SampleSheetLaunch | null>(null);
+  const [recipeAgentContext, setRecipeAgentContext] =
+    useState<RecipeAgentWorkbenchContext | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +81,9 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   function navigate(page: AppPage) {
     if (page === "settings") setSettingsSection("general");
     setActiveNutritionLabel(null);
+    setSampleSheetLaunch(null);
+    if (page !== "recipe-library") setActiveRecipeId(null);
+    if (page !== "recipe-library") setRecipeAgentContext(null);
     setActivePage(page);
   }
 
@@ -87,6 +100,43 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     setDraftRefreshToken((current) => current + 1);
     setActiveRecipeId(null);
     setActiveNutritionLabel(null);
+    setSampleSheetLaunch(null);
+  }
+
+  function openReviewQueue(
+    draft: IngredientImportDraft,
+    drafts: IngredientImportDraft[],
+  ) {
+    const reviewable = drafts.filter(
+      (candidate) =>
+        candidate.status !== "imported" && candidate.status !== "discarded",
+    );
+    const currentIndex = reviewable.findIndex(
+      (candidate) => candidate.id === draft.id,
+    );
+    const ordered =
+      currentIndex >= 0
+        ? [
+            ...reviewable.slice(currentIndex),
+            ...reviewable.slice(0, currentIndex),
+          ]
+        : [draft, ...reviewable];
+    setReviewQueue(ordered);
+    setReviewQueueTotal(ordered.length);
+    setReviewQueueCompleted(0);
+    setReviewDraft(draft);
+  }
+
+  function refreshAfterIngredientImport() {
+    setIngredientRefreshToken((current) => current + 1);
+    setDraftRefreshToken((current) => current + 1);
+  }
+
+  function closeReviewQueue() {
+    setReviewDraft(null);
+    setReviewQueue([]);
+    setReviewQueueTotal(0);
+    setReviewQueueCompleted(0);
   }
 
   return (
@@ -106,49 +156,82 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
               setActivePage("ingredients");
               setAgentOpen(false);
             }}
-            onReviewDraft={setReviewDraft}
+            onOpenRecipeDraft={(recipeId) => {
+              setActiveNutritionLabel(null);
+              setSampleSheetLaunch(null);
+              setActiveRecipeId(recipeId);
+              setActivePage("recipe-library");
+            }}
+            onReviewDraft={openReviewQueue}
             open={agentOpen}
+            recipeContext={recipeAgentContext}
           />
         }
         databaseStatus={databaseStatus}
         onNavigate={navigate}
         onToggleAgent={() => setAgentOpen((current) => !current)}
       >
-        {activePage === "ingredients" ? (
+        {sampleSheetLaunch ? (
+          <SampleSheetWorkspace
+            api={desktopApi}
+            launch={sampleSheetLaunch}
+            onBack={() => setSampleSheetLaunch(null)}
+          />
+        ) : activePage === "ingredients" ? (
           <IngredientLibrary
             api={desktopApi}
             refreshToken={ingredientRefreshToken}
           />
-        ) : activePage === "recipes" ? (
-          <RecipeWorkbench api={desktopApi} recipeId={activeRecipeId} />
         ) : activePage === "recipe-library" ? (
-          activeNutritionLabel ? (
-            <NutritionLabelWorkspace
-              api={desktopApi}
-              onBack={() => setActiveNutritionLabel(null)}
-              recipeId={activeNutritionLabel.recipeId}
-              recipeVersionId={
-                activeNutritionLabel.recipeVersionId
+          <>
+            <div
+              className={
+                activeRecipeId || activeNutritionLabel
+                  ? "app-view-cache is-hidden"
+                  : "app-view-cache"
               }
-            />
-          ) : (
-            <RecipeLibrary
-              api={desktopApi}
-              onOpenDraft={(recipeId) => {
-                setActiveRecipeId(recipeId);
-                setActivePage("recipes");
-              }}
-              onOpenNutritionLabel={(
-                recipeId,
-                recipeVersionId,
-              ) =>
-                setActiveNutritionLabel({
+            >
+              <RecipeLibrary
+                api={desktopApi}
+                onOpenDraft={setActiveRecipeId}
+                onOpenNutritionLabel={(
                   recipeId,
                   recipeVersionId,
-                })
-              }
-            />
-          )
+                ) =>
+                  setActiveNutritionLabel({
+                    recipeId,
+                    recipeVersionId,
+                  })
+                }
+                onOpenSampleSheet={(recipeId, versionId) =>
+                  setSampleSheetLaunch({
+                    origin: "library",
+                    recipeId,
+                    initialVersionId: versionId,
+                  })
+                }
+              />
+            </div>
+            {activeRecipeId ? (
+              <RecipeWorkbench
+                api={desktopApi}
+                onAgentContextChange={setRecipeAgentContext}
+                onBack={() => setActiveRecipeId(null)}
+                onOpenAgent={() => setAgentOpen(true)}
+                onOpenSampleSheet={setSampleSheetLaunch}
+                recipeId={activeRecipeId}
+              />
+            ) : activeNutritionLabel ? (
+              <NutritionLabelWorkspace
+                api={desktopApi}
+                onBack={() => setActiveNutritionLabel(null)}
+                recipeId={activeNutritionLabel.recipeId}
+                recipeVersionId={
+                  activeNutritionLabel.recipeVersionId
+                }
+              />
+            ) : null}
+          </>
         ) : activePage === "settings" ? (
           <SettingsPage
             api={desktopApi}
@@ -162,13 +245,25 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
         <ImportedVariantReview
           api={desktopApi}
           draft={reviewDraft}
-          onCancel={() => setReviewDraft(null)}
+          onCancel={closeReviewQueue}
           onSaved={() => {
-            setReviewDraft(null);
-            setIngredientRefreshToken((current) => current + 1);
-            setDraftRefreshToken((current) => current + 1);
+            closeReviewQueue();
+            refreshAfterIngredientImport();
             setActivePage("ingredients");
           }}
+          {...(reviewQueue.length > 1
+            ? {
+                onSavedAndNext: () => {
+                  const remaining = reviewQueue.slice(1);
+                  refreshAfterIngredientImport();
+                  setReviewQueue(remaining);
+                  setReviewQueueCompleted((current) => current + 1);
+                  setReviewDraft(remaining[0] ?? null);
+                },
+              }
+            : {})}
+          queuePosition={reviewQueueCompleted + 1}
+          queueTotal={reviewQueueTotal}
         />
       ) : null}
     </>

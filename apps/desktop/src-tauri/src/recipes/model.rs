@@ -8,6 +8,15 @@ pub enum RecipeKind {
     SemiFinished,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecipeSchemeStatus {
+    Current,
+    Approved,
+    Researching,
+    Inactive,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecipeInput {
@@ -30,6 +39,24 @@ pub struct Recipe {
     pub created_at: String,
     pub updated_at: String,
     pub archived_at: Option<String>,
+    pub product_id: String,
+    pub scheme_name: String,
+    pub scheme_status: RecipeSchemeStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeAlternativeInput {
+    pub source_version_id: String,
+    pub scheme_name: String,
+    pub scheme_status: RecipeSchemeStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeSchemeInput {
+    pub scheme_name: String,
+    pub scheme_status: RecipeSchemeStatus,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

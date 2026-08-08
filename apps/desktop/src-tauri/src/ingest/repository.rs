@@ -463,14 +463,19 @@ fn insert_source_links(
     for link in source_links {
         connection.execute(
             "INSERT OR IGNORE INTO import_draft_source_links (
-               id, draft_id, field_path, attachment_id, source_locator
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+               id, draft_id, field_path, attachment_id, source_locator, confidence
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 create_id(),
                 draft_id,
                 link.field_path,
                 link.attachment_id,
-                link.source_locator
+                link.source_locator,
+                link.confidence.map(|value| match value {
+                    super::model::ImportFieldConfidence::High => "high",
+                    super::model::ImportFieldConfidence::Medium => "medium",
+                    super::model::ImportFieldConfidence::Low => "low",
+                }),
             ],
         )?;
     }
@@ -602,7 +607,7 @@ fn hydrate_draft(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut link_statement = connection.prepare(
-        "SELECT field_path, attachment_id, source_locator
+        "SELECT field_path, attachment_id, source_locator, confidence
          FROM import_draft_source_links WHERE draft_id = ?1 ORDER BY id",
     )?;
     let source_links = link_statement
@@ -611,6 +616,15 @@ fn hydrate_draft(
                 field_path: row.get(0)?,
                 attachment_id: row.get(1)?,
                 source_locator: row.get(2)?,
+                confidence: row
+                    .get::<_, Option<String>>(3)?
+                    .map(|value| match value.as_str() {
+                        "high" => Ok(super::model::ImportFieldConfidence::High),
+                        "medium" => Ok(super::model::ImportFieldConfidence::Medium),
+                        "low" => Ok(super::model::ImportFieldConfidence::Low),
+                        _ => Err(rusqlite::Error::InvalidQuery),
+                    })
+                    .transpose()?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;

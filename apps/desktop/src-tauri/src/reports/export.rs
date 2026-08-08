@@ -16,7 +16,9 @@ use zip::ZipArchive;
 use crate::ingredients::repository::RepositoryError;
 
 use super::model::ResearchReport;
-pub use super::model::{ResearchReportExportFormat, ResearchReportExportRequest};
+pub use super::model::{
+    ResearchReportExportFormat, ResearchReportExportRequest, SampleSheetExportRequest,
+};
 
 const MAX_EXPORT_BYTES: usize = 64 * 1024 * 1024;
 
@@ -41,6 +43,20 @@ pub fn export_research_report(
         return Err(domain("invalid_input", "研发报告导出数据大小无效"));
     }
     validate_bytes(request.format, &bytes, report, &expected_hash)?;
+    write_atomic(&destination, &bytes)
+}
+
+pub fn export_sample_sheet(request: SampleSheetExportRequest) -> Result<(), RepositoryError> {
+    validate_file_name(&request.file_name, ResearchReportExportFormat::Xlsx)?;
+    let destination = PathBuf::from(&request.destination_path);
+    validate_destination(&destination, ResearchReportExportFormat::Xlsx)?;
+    let bytes = STANDARD
+        .decode(request.bytes_base64)
+        .map_err(|_| domain("invalid_input", "打样配料单导出数据无效"))?;
+    if bytes.is_empty() || bytes.len() > MAX_EXPORT_BYTES {
+        return Err(domain("invalid_input", "打样配料单导出数据大小无效"));
+    }
+    validate_sample_sheet_xlsx(&bytes)?;
     write_atomic(&destination, &bytes)
 }
 
@@ -162,6 +178,40 @@ fn validate_xlsx(bytes: &[u8]) -> Result<(), RepositoryError> {
     ] {
         if !names.contains(required) {
             return Err(domain("invalid_input", "研发报告 XLSX 缺少必要工作表"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_sample_sheet_xlsx(bytes: &[u8]) -> Result<(), RepositoryError> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes))
+        .map_err(|_| domain("invalid_input", "打样配料单 XLSX 无效"))?;
+    let mut names = HashSet::new();
+    for index in 0..archive.len() {
+        let mut file = archive
+            .by_index(index)
+            .map_err(|_| domain("invalid_input", "打样配料单 XLSX 无效"))?;
+        if file.enclosed_name().is_none() {
+            return Err(domain("invalid_input", "打样配料单 XLSX 路径无效"));
+        }
+        let name = file.name().to_string();
+        if name.ends_with(".xml") {
+            let mut xml = String::new();
+            file.read_to_string(&mut xml)
+                .map_err(|_| domain("invalid_input", "打样配料单 XLSX 无效"))?;
+            if contains_formula_element(&xml) || contains_local_path_marker(&xml) {
+                return Err(domain("invalid_input", "打样配料单 XLSX 包含不安全内容"));
+            }
+        }
+        names.insert(name);
+    }
+    for required in [
+        "[Content_Types].xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+    ] {
+        if !names.contains(required) {
+            return Err(domain("invalid_input", "打样配料单 XLSX 缺少必要工作表"));
         }
     }
     Ok(())

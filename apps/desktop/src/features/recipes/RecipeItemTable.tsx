@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { useState } from "react";
 
 import type {
   RecipeCalculationIssue,
@@ -20,6 +21,7 @@ interface RecipeItemTableProps {
   onLockChange(id: string): void;
   onMove(id: string, direction: -1 | 1): void;
   onRemove(id: string): void;
+  onReplaceMaterialNeed(id: string): void;
   onUnitChange(id: string, unit: RecipeItemUnit): void;
   onUpgradeVersion(id: string, version: RecipeVersion): void;
 }
@@ -38,9 +40,12 @@ export function RecipeItemTable({
   onLockChange,
   onMove,
   onRemove,
+  onReplaceMaterialNeed,
   onUnitChange,
   onUpgradeVersion,
 }: RecipeItemTableProps) {
+  const [focusedAmountId, setFocusedAmountId] = useState<string | null>(null);
+
   return (
     <div className="recipe-table-frame">
       <div className="recipe-table-scroll">
@@ -69,6 +74,10 @@ export function RecipeItemTable({
             ) : (
               items.map((item, index) => {
                 const label = itemLabel(item);
+                const displayedAmount =
+                  focusedAmountId === item.id && !item.autoFill
+                    ? item.amount
+                    : formatDisplayedAmount(item.amount);
                 const itemIssues = issues.filter(
                   (issue) => issue.itemId === item.id,
                 );
@@ -129,6 +138,17 @@ export function RecipeItemTable({
                       <strong>{label}</strong>
                       <span>
                         {itemDetail(item)}
+                        {item.kind === "material_need" &&
+                        item.materialNeed.status === "resolved" &&
+                        item.materialNeed.resolvedIngredientVariantId ? (
+                          <button
+                            className="recipe-version-upgrade"
+                            onClick={() => onReplaceMaterialNeed(item.id)}
+                            type="button"
+                          >
+                            使用已关联原料
+                          </button>
+                        ) : null}
                         {versionUpgrades[item.id] ? (
                           <button
                             aria-label={`将${label}升级到 V${versionUpgrades[item.id]!.versionNumber}`}
@@ -165,13 +185,17 @@ export function RecipeItemTable({
                         onChange={(event) =>
                           onAmountChange(item.id, event.target.value)
                         }
+                        onBlur={() => setFocusedAmountId(null)}
+                        onFocus={() => setFocusedAmountId(item.id)}
                         readOnly={item.autoFill}
                         title={
                           item.autoFill
-                            ? "取消补足后可手动编辑"
-                            : undefined
+                            ? `取消补足后可手动编辑。精确值：${item.amount}`
+                            : displayedAmount !== item.amount
+                              ? `精确值：${item.amount}`
+                              : undefined
                         }
-                        value={item.amount}
+                        value={displayedAmount}
                       />
                       {itemIssues[0] ? (
                         <small role="alert">
@@ -255,15 +279,29 @@ export function RecipeItemTable({
   );
 }
 
+function formatDisplayedAmount(value: string) {
+  try {
+    const amount = new Decimal(value);
+    if (!amount.isFinite()) return value;
+    const decimalPlaces = amount.abs().lt(1) ? 6 : 3;
+    return amount.toDecimalPlaces(decimalPlaces).toFixed();
+  } catch {
+    return value;
+  }
+}
+
 function itemLabel(item: RecipeDraftItem) {
-  return item.kind === "ingredient"
-    ? item.materialName
-    : item.recipeVersion.recipeName;
+  if (item.kind === "ingredient") return item.materialName;
+  if (item.kind === "material_need") return item.materialNeed.materialName;
+  return item.recipeVersion.recipeName;
 }
 
 function itemDetail(item: RecipeDraftItem) {
   if (item.kind === "recipe_version") {
     return `半成品 · V${item.recipeVersion.versionNumber}`;
+  }
+  if (item.kind === "material_need") {
+    return `待补充原料 · ${item.materialNeed.desiredSpecification || item.materialNeed.missingReason}`;
   }
   return [
     item.ingredientVariant.supplierName,
@@ -296,6 +334,17 @@ function completeness(
 ) {
   if (item.kind === "recipe_version") {
     return <span className="recipe-data-status is-complete">版本固定</span>;
+  }
+  if (item.kind === "material_need") {
+    return (
+      <span
+        className="recipe-data-status has-warning"
+        title="关联真实供应商版本后才可保存正式版本"
+      >
+        <Icon name="warning" size={15} />
+        待补充
+      </span>
+    );
   }
   const percent = item.ingredientVariant.completeness.percent;
   return (

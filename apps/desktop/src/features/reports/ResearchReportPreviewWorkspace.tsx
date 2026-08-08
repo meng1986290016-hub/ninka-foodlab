@@ -37,13 +37,13 @@ interface ReportContentItem {
 }
 
 const reportContent: ReportContentItem[] = [
-  { icon: "formula", label: "配方" },
-  { icon: "ingredients", label: "供应商" },
-  { icon: "scale", label: "营养" },
-  { icon: "database", label: "成本" },
-  { icon: "trend", label: "目标" },
-  { icon: "warning", label: "过敏原" },
-  { icon: "edit", label: "研发备注" },
+  { icon: "recipe-workbench", label: "配方" },
+  { icon: "supplier", label: "供应商" },
+  { icon: "nutrition", label: "营养" },
+  { icon: "cost", label: "成本" },
+  { icon: "target", label: "目标" },
+  { icon: "allergen", label: "过敏原" },
+  { icon: "note", label: "研发备注" },
 ];
 
 const defaultNow = () => new Date().toISOString();
@@ -185,6 +185,7 @@ export function ResearchReportPreviewWorkspace({
             onClick={() => void saveRecord()}
             type="button"
           >
+            <Icon name="report" size={17} />
             {savedRecord !== null
               ? "报告记录已保存"
               : saving
@@ -196,6 +197,7 @@ export function ResearchReportPreviewWorkspace({
             onClick={() => window.print()}
             type="button"
           >
+            <Icon name="printer" size={17} />
             打印
           </button>
           <div className="research-report-export">
@@ -207,6 +209,7 @@ export function ResearchReportPreviewWorkspace({
               onClick={() => setExportMenuOpen((open) => !open)}
               type="button"
             >
+              <Icon name="export" size={17} />
               {exporting !== null ? "正在导出…" : "导出报告"}
               <Icon name="chevron-down" size={15} />
             </button>

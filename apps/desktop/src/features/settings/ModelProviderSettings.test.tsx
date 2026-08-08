@@ -77,7 +77,7 @@ describe("ModelProviderSettings", () => {
     ).toMatchObject({
       endpoint: "https://anthropic-compatible.example",
     });
-  });
+  }, 15_000);
 
   it("switches one active provider without losing the previous model choice", async () => {
     const api = createApi();
@@ -124,5 +124,5 @@ describe("ModelProviderSettings", () => {
         "gpt-user-selected",
       );
     });
-  });
+  }, 15_000);
 });

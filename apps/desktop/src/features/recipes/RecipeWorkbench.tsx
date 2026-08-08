@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import Decimal from "decimal.js";
@@ -14,9 +15,9 @@ import type {
   RecipeDraftItem,
   RecipeItemUnit,
   RecipeSummary,
-  RecipeTarget,
   RecipeVersion,
 } from "../../api/recipe-types";
+import { recipeSchemeStatus } from "../../api/recipe-types";
 import type {
   IngredientVariant,
   MaterialGroup,
@@ -29,7 +30,6 @@ import { RecipeHeader } from "./RecipeHeader";
 import { RecipeIngredientPicker } from "./RecipeIngredientPicker";
 import { RecipeItemTable } from "./RecipeItemTable";
 import { rebalanceDraftItems } from "./recipe-rebalance";
-import { RecipeTargetEditor } from "./RecipeTargetEditor";
 import { RecipeVersionDialog } from "./RecipeVersionDialog";
 import {
   prepareRecipeVersion,
@@ -37,21 +37,35 @@ import {
   type RecipeVersionValidationIssue,
 } from "./recipe-versioning";
 import { useRecipeDraft } from "./useRecipeDraft";
+import type { SampleSheetLaunch } from "./sample-sheet-source";
+import {
+  recipeDraftFingerprint,
+  type RecipeAgentWorkbenchContext,
+} from "./recipe-agent-analysis";
 
 interface RecipeWorkbenchProps {
   api: DesktopApi;
   recipeId?: string | null;
+  /** Kept for compatibility with older embedded consumers; creation now lives in the library. */
+  onRecipeCreated?(recipeId: string): void;
+  onBack?(): void;
+  onAgentContextChange?(context: RecipeAgentWorkbenchContext | null): void;
+  onOpenAgent?(): void;
+  onOpenSampleSheet?(launch: SampleSheetLaunch): void;
 }
 
-type NarrowView = "formula" | "results" | "targets";
+type NarrowView = "formula" | "results" | "allergens";
 
 export function RecipeWorkbench({
   api,
-  recipeId = null,
+  recipeId,
+  onBack,
+  onAgentContextChange,
+  onOpenAgent,
+  onOpenSampleSheet,
 }: RecipeWorkbenchProps) {
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -75,36 +89,15 @@ export function RecipeWorkbench({
   const active =
     recipes.find(
       (summary) =>
-        summary.recipe.id === recipeId &&
-        summary.recipe.archivedAt === null,
+        summary.recipe.id === recipeId,
     ) ??
-    recipes.find(
-      (summary) =>
-        summary.recipe.kind === "formula" &&
-        summary.recipe.archivedAt === null,
-    ) ??
-    recipes.find((summary) => summary.recipe.archivedAt === null) ??
-    null;
-
-  async function createFirstRecipe() {
-    setCreating(true);
-    setError(null);
-    try {
-      await api.createRecipe({
-        name: "未命名配方",
-        code: null,
-        tags: [],
-        kind: "formula",
-      });
-      await refresh();
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "新配方无法创建",
-      );
-    } finally {
-      setCreating(false);
-    }
-  }
+    (recipeId == null
+      ? recipes.find(
+          (summary) =>
+            summary.recipe.kind === "formula" &&
+            summary.recipe.archivedAt === null,
+        ) ?? recipes.find((summary) => summary.recipe.archivedAt === null) ?? null
+      : null);
 
   if (loading) {
     return (
@@ -117,22 +110,16 @@ export function RecipeWorkbench({
     return (
       <section className="recipe-workbench recipe-workbench--empty">
         <div>
-          <Icon name="flask" size={32} />
+          <Icon name="recipe-workbench" size={32} />
           <h1>配方工作台</h1>
-          <p>新建第一个配方，开始选择原料并记录研发调整。</p>
+          <p>没有找到要打开的配方，请返回配方库重新选择。</p>
           {error ? (
             <p className="page-error" role="alert">
               {error}
             </p>
           ) : null}
-          <button
-            className="button button--primary"
-            disabled={creating}
-            onClick={() => void createFirstRecipe()}
-            type="button"
-          >
-            <Icon name="plus" size={18} />
-            {creating ? "正在创建…" : "新建配方"}
+          <button className="button button--primary" onClick={onBack} type="button">
+            返回配方库
           </button>
         </div>
       </section>
@@ -143,6 +130,9 @@ export function RecipeWorkbench({
     <RecipeEditorLoader
       api={api}
       key={active.recipe.id}
+      onAgentContextChange={onAgentContextChange}
+      onBack={onBack}
+      onOpenAgent={onOpenAgent}
       onRecipeUpdated={(recipe) =>
         setRecipes((current) =>
           current.map((summary) =>
@@ -152,6 +142,7 @@ export function RecipeWorkbench({
           ),
         )
       }
+      onOpenSampleSheet={onOpenSampleSheet}
       recipe={active.recipe}
     />
   );
@@ -160,13 +151,21 @@ export function RecipeWorkbench({
 interface RecipeEditorLoaderProps {
   api: DesktopApi;
   recipe: Recipe;
+  onAgentContextChange: ((context: RecipeAgentWorkbenchContext | null) => void) | undefined;
+  onBack: (() => void) | undefined;
+  onOpenAgent: (() => void) | undefined;
   onRecipeUpdated(recipe: Recipe): void;
+  onOpenSampleSheet: ((launch: SampleSheetLaunch) => void) | undefined;
 }
 
 function RecipeEditorLoader({
   api,
   recipe,
+  onAgentContextChange,
+  onBack,
+  onOpenAgent,
   onRecipeUpdated,
+  onOpenSampleSheet,
 }: RecipeEditorLoaderProps) {
   const [nutrients, setNutrients] = useState<NutrientDefinition[] | null>(
     null,
@@ -235,7 +234,11 @@ function RecipeEditorLoader({
       api={api}
       initialVersions={versions}
       nutrientDefinitions={nutrients}
+      onAgentContextChange={onAgentContextChange}
       onRecipeUpdated={onRecipeUpdated}
+      onBack={onBack}
+      onOpenAgent={onOpenAgent}
+      onOpenSampleSheet={onOpenSampleSheet}
       recipe={recipe}
     />
   );
@@ -246,7 +249,11 @@ interface RecipeEditorProps {
   initialVersions: RecipeVersion[];
   nutrientDefinitions: NutrientDefinition[];
   recipe: Recipe;
+  onAgentContextChange: ((context: RecipeAgentWorkbenchContext | null) => void) | undefined;
+  onBack: (() => void) | undefined;
+  onOpenAgent: (() => void) | undefined;
   onRecipeUpdated(recipe: Recipe): void;
+  onOpenSampleSheet: ((launch: SampleSheetLaunch) => void) | undefined;
 }
 
 function RecipeEditor({
@@ -254,7 +261,11 @@ function RecipeEditor({
   initialVersions,
   nutrientDefinitions,
   recipe,
+  onAgentContextChange,
+  onBack,
+  onOpenAgent,
   onRecipeUpdated,
+  onOpenSampleSheet,
 }: RecipeEditorProps) {
   const [referencedVersions, setReferencedVersions] =
     useState(initialVersions);
@@ -289,6 +300,64 @@ function RecipeEditor({
   );
   const draftState = useRecipeDraft(api, recipe.id, { calculate });
   const { draft, dispatch } = draftState;
+  const inactive = recipeSchemeStatus(recipe) === "inactive";
+  const applyIngredientSubstitution = useCallback(
+    (
+      itemId: string,
+      group: MaterialGroup,
+      variant: IngredientVariant,
+    ) => {
+      dispatch({
+        type: "set_items",
+        items: normalizePositions(
+          draft.items.map((item) =>
+            item.id === itemId && item.kind === "ingredient"
+              ? {
+                  ...item,
+                  materialName: group.name,
+                  ingredientVariantId: variant.id,
+                  ingredientVariant: variant,
+                }
+              : item,
+          ),
+        ),
+      });
+      setVersionNotice(
+        `已替换为 ${variant.supplierName} · ${variant.modelOrSpecification || "未填写规格"}，草稿将自动保存`,
+      );
+    },
+    [dispatch, draft.items],
+  );
+  const agentContext = useMemo<RecipeAgentWorkbenchContext>(
+    () => ({
+      recipe,
+      draft,
+      referencedVersions,
+      nutrientDefinitions,
+      readOnly: inactive,
+      draftFingerprint: recipeDraftFingerprint(draft),
+      applyIngredientSubstitution,
+    }),
+    [
+      applyIngredientSubstitution,
+      draft,
+      inactive,
+      nutrientDefinitions,
+      recipe,
+      referencedVersions,
+    ],
+  );
+
+  useEffect(() => {
+    onAgentContextChange?.(agentContext);
+  }, [agentContext, onAgentContextChange]);
+
+  useEffect(
+    () => () => {
+      onAgentContextChange?.(null);
+    },
+    [onAgentContextChange],
+  );
   const versionReferenceKey = draft.items
     .flatMap((item) =>
       item.kind === "recipe_version"
@@ -375,6 +444,44 @@ function RecipeEditor({
       onRecipeUpdated(updated);
     } catch {
       setRecipeName(recipe.name);
+    }
+  }
+
+  async function changeRecipeKind(kind: Recipe["kind"]) {
+    if (kind === recipe.kind) return;
+    try {
+      const updated = await api.updateRecipe(recipe.id, {
+        name: recipeName.trim() || recipe.name,
+        code: recipe.code,
+        tags: recipe.tags,
+        kind,
+      });
+      setRecipeName(updated.name);
+      onRecipeUpdated(updated);
+      setVersionNotice(
+        kind === "semi_finished"
+          ? "已设为半成品；保存正式版本后可加入其他配方"
+          : "已设为成品配方",
+      );
+    } catch (cause) {
+      setRebalanceError(
+        cause instanceof Error ? cause.message : "配方类型更新失败",
+      );
+    }
+  }
+
+  async function returnToLibrary() {
+    setRebalanceError(null);
+    try {
+      await commitRecipeName();
+      if (recipeSchemeStatus(recipe) !== "inactive") {
+        await draftState.saveNow();
+      }
+      onBack?.();
+    } catch (cause) {
+      setRebalanceError(
+        cause instanceof Error ? cause.message : "草稿保存失败，暂未返回配方库",
+      );
     }
   }
 
@@ -487,6 +594,54 @@ function RecipeEditor({
     }
   }
 
+  async function replaceMaterialNeed(itemId: string) {
+    const item = draft.items.find(
+      (candidate) => candidate.id === itemId && candidate.kind === "material_need",
+    );
+    if (
+      !item ||
+      item.kind !== "material_need" ||
+      !item.materialNeed.resolvedIngredientVariantId
+    ) {
+      return;
+    }
+    try {
+      const groups = await api.listMaterialGroups();
+      const selected = groups
+        .flatMap((group) =>
+          group.variants.map((variant) => ({ group, variant })),
+        )
+        .find(
+          ({ variant }) =>
+            variant.id === item.materialNeed.resolvedIngredientVariantId,
+        );
+      if (!selected) throw new Error("已关联的供应商原料版本不可用");
+      setItems(
+        draft.items.map((candidate) =>
+          candidate.id === itemId
+            ? {
+                id: candidate.id,
+                position: candidate.position,
+                kind: "ingredient" as const,
+                ingredientVariantId: selected.variant.id,
+                materialName: selected.group.name,
+                ingredientVariant: selected.variant,
+                amount: candidate.amount,
+                unit: candidate.unit,
+                locked: candidate.locked,
+                autoFill: candidate.autoFill,
+              }
+            : candidate,
+        ),
+      );
+      setVersionNotice(`${item.materialNeed.materialName} 已替换为真实供应商原料版本`);
+    } catch (cause) {
+      setRebalanceError(
+        cause instanceof Error ? cause.message : "待补充原料替换失败",
+      );
+    }
+  }
+
   function moveItem(id: string, direction: -1 | 1) {
     const index = draft.items.findIndex((item) => item.id === id);
     const target = index + direction;
@@ -518,20 +673,6 @@ function RecipeEditor({
     if (!result.ok) {
       setRebalanceError(result.message);
       setItems(items);
-      return;
-    }
-    setRebalanceError(null);
-    setItems(result.items);
-  }
-
-  function scaleToTarget() {
-    const result = rebalanceDraftItems(
-      draft.items,
-      draft.targetBatchGrams,
-      { type: "proportional" },
-    );
-    if (!result.ok) {
-      setRebalanceError(result.message);
       return;
     }
     setRebalanceError(null);
@@ -621,6 +762,9 @@ function RecipeEditor({
             code: updatedRecipe.code,
             tags: [...updatedRecipe.tags],
             kind: updatedRecipe.kind,
+            productId: updatedRecipe.productId ?? updatedRecipe.id,
+            schemeName: updatedRecipe.schemeName ?? "主配方",
+            schemeStatus: updatedRecipe.schemeStatus ?? "current",
           },
         },
       });
@@ -667,7 +811,6 @@ function RecipeEditor({
     calculation?.yieldPercent === undefined
       ? "—"
       : `${displayNumber(calculation.yieldPercent)}%`;
-
   if (draftState.loading) {
     return (
       <section className="recipe-workbench recipe-workbench--loading">
@@ -677,19 +820,35 @@ function RecipeEditor({
   }
 
   return (
-    <section className="recipe-workbench">
+    <section className={inactive ? "recipe-workbench is-read-only" : "recipe-workbench"}>
       <RecipeHeader
         draft={draft}
         hasFormulaInput={inputMass !== "0"}
         name={recipeName}
         onNameChange={setRecipeName}
         onNameCommit={() => void commitRecipeName()}
+        onKindChange={(kind) => void changeRecipeKind(kind)}
+        onBack={() => void returnToLibrary()}
+        onOpenAgent={() => onOpenAgent?.()}
+        onOpenSampleSheet={() =>
+          onOpenSampleSheet?.({
+            origin: "workbench",
+            recipe,
+            draft,
+            referencedVersions,
+          })
+        }
         onSaveVersion={openVersionDialog}
         recipe={recipe}
         saveStatus={draftState.saveStatus}
         versionSaving={versionSaving}
       />
 
+      <fieldset
+        aria-label={inactive ? "已停用配方只读内容" : "配方编辑内容"}
+        className="recipe-workbench__readonly-scope"
+        disabled={inactive}
+      >
       <div className="recipe-workbench__body">
         <div
           className={
@@ -706,9 +865,9 @@ function RecipeEditor({
           ) : null}
           <div className="recipe-batch-bar">
             <label>
-              <span>目标批量</span>
+              <span>计划投料总量</span>
               <input
-                aria-label="目标批量"
+                aria-label="计划投料总量"
                 inputMode="decimal"
                 onChange={(event) => {
                   setRebalanceError(null);
@@ -723,15 +882,19 @@ function RecipeEditor({
               />
               <small>g</small>
             </label>
-            <span className="recipe-batch-value">
-              <span>投料合计</span>
+            <output
+              aria-label="当前投料合计"
+              className="recipe-batch-value recipe-batch-value--computed"
+            >
+              <span>当前投料合计</span>
               <strong>{inputMass}</strong>
               <small>g</small>
-            </span>
+              <em>由下方配方用量自动汇总</em>
+            </output>
             <label>
-              <span>成品重量</span>
+              <span>出成重量</span>
               <input
-                aria-label="成品重量"
+                aria-label="出成重量"
                 inputMode="decimal"
                 onChange={(event) =>
                   dispatch({
@@ -753,15 +916,9 @@ function RecipeEditor({
               <span>得率</span>
               <strong>{yieldLabel}</strong>
             </span>
-            <button
-              className="button button--secondary recipe-scale-button"
-              disabled={draft.items.length === 0}
-              onClick={scaleToTarget}
-              type="button"
-            >
-              <Icon name="scale" size={17} />
-              按比例调整
-            </button>
+            <p className="recipe-batch-help">
+              出成重量用于折算得率、每100g营养和单位成本；未填写时按当前投料合计计算。
+            </p>
           </div>
 
           {rebalanceError ? (
@@ -809,6 +966,7 @@ function RecipeEditor({
                 draft.items.filter((item) => item.id !== id),
               )
             }
+            onReplaceMaterialNeed={(id) => void replaceMaterialNeed(id)}
             onUnitChange={(id, unit) => {
               const items = draft.items.map((item) =>
                 item.id === id ? { ...item, unit } : item,
@@ -862,11 +1020,6 @@ function RecipeEditor({
           activeView={narrowView}
           calculation={calculation}
           issues={visibleIssues}
-          nutrientDefinitions={nutrientDefinitions}
-          onTargetsChange={(targets) =>
-            dispatch({ type: "set_targets", targets })
-          }
-          targets={draft.targets}
         />
       </div>
 
@@ -885,6 +1038,7 @@ function RecipeEditor({
           查看实时结果
         </button>
       </div>
+      </fieldset>
 
       <RecipeIngredientPicker
         api={api}
@@ -951,13 +1105,13 @@ function NarrowTabs({
         )}
       </button>
       <button
-        aria-selected={value === "targets"}
-        className={value === "targets" ? "is-active" : ""}
-        onClick={() => onChange("targets")}
+        aria-selected={value === "allergens"}
+        className={value === "allergens" ? "is-active" : ""}
+        onClick={() => onChange("allergens")}
         role="tab"
         type="button"
       >
-        目标与过敏原
+        过敏原
       </button>
     </div>
   );
@@ -967,18 +1121,12 @@ interface RecipeResultsInspectorProps {
   activeView: NarrowView;
   calculation: ReturnType<typeof useRecipeDraft>["draft"]["calculation"];
   issues: ReturnType<typeof useRecipeDraft>["draft"]["calculationIssues"];
-  nutrientDefinitions: NutrientDefinition[];
-  targets: RecipeTarget[];
-  onTargetsChange(targets: RecipeTarget[]): void;
 }
 
 function RecipeResultsInspector({
   activeView,
   calculation,
   issues,
-  nutrientDefinitions,
-  targets,
-  onTargetsChange,
 }: RecipeResultsInspectorProps) {
   const visibleClass =
     activeView === "formula"
@@ -988,7 +1136,7 @@ function RecipeResultsInspector({
     <aside className={visibleClass} aria-label="实时结果">
       <header>
         <h2>
-          {activeView === "targets" ? "目标与过敏原" : "实时结果"}
+          {activeView === "allergens" ? "过敏原" : "实时结果"}
         </h2>
         {calculation ? (
           <span>
@@ -1004,16 +1152,8 @@ function RecipeResultsInspector({
           <span>营养、成本和数据完整度会随配方实时更新。</span>
           {issues[0] ? <small>{issues[0].message}</small> : null}
         </div>
-      ) : activeView === "targets" ? (
-        <>
-          <RecipeTargetEditor
-            evaluations={calculation.targets}
-            nutrientDefinitions={nutrientDefinitions}
-            onChange={onTargetsChange}
-            targets={targets}
-          />
-          <ResultAllergens calculation={calculation} />
-        </>
+      ) : activeView === "allergens" ? (
+        <ResultAllergens calculation={calculation} />
       ) : (
         <>
           <section className="recipe-result-section">
@@ -1060,12 +1200,6 @@ function RecipeResultsInspector({
               </div>
             </dl>
           </section>
-          <RecipeTargetEditor
-            evaluations={calculation.targets}
-            nutrientDefinitions={nutrientDefinitions}
-            onChange={onTargetsChange}
-            targets={targets}
-          />
           <ResultAllergens calculation={calculation} />
         </>
       )}

@@ -103,6 +103,8 @@ pub enum AgentRuntimeEvent {
         import_job_id: String,
     },
     #[serde(rename_all = "camelCase")]
+    RecipeProposalsChanged { run_id: String },
+    #[serde(rename_all = "camelCase")]
     RunCompleted { run_id: String },
     #[serde(rename_all = "camelCase")]
     RunFailed {
@@ -189,6 +191,7 @@ impl AgentRuntime {
             return Err(AgentError::invalid_input("请输入问题或选择原料资料"));
         }
         self.repository.get_conversation(&request.conversation_id)?;
+        let recipe_context = request.recipe_context.clone();
 
         let reused_run_id = request
             .retry_run_id
@@ -295,6 +298,12 @@ impl AgentRuntime {
             allowed_attachment_ids: attachment_ids.iter().cloned().collect(),
             provider_kind: self.provider_config.kind,
             model: self.provider_config.model.clone(),
+            active_recipe_id: recipe_context
+                .as_ref()
+                .map(|context| context.recipe_id.clone()),
+            active_recipe_name: recipe_context
+                .as_ref()
+                .map(|context| context.recipe_name.clone()),
         };
         let provider = match (self.provider_factory)(&self.provider_config, &context) {
             Ok(provider) => provider,
@@ -413,12 +422,24 @@ impl AgentRuntime {
     ) -> Result<String, AgentError> {
         for _ in 0..MAX_AGENT_TURNS {
             self.require_not_cancelled()?;
-            let messages = self
+            let mut messages = self
                 .repository
                 .list_messages(conversation_id)?
                 .into_iter()
                 .filter(|message| message.id != assistant.id)
                 .collect::<Vec<_>>();
+            if let (Some(recipe_id), Some(recipe_name)) = (
+                context.active_recipe_id.as_deref(),
+                context.active_recipe_name.as_deref(),
+            ) && let Some(message) = messages
+                .iter_mut()
+                .rev()
+                .find(|message| message.role == AgentMessageRole::User)
+            {
+                message.content.push_str(&format!(
+                    "\n\n[当前工作台上下文：配方“{recipe_name}”，recipeId={recipe_id}。当用户要求诊断当前配方时必须调用 diagnose_recipe；要求复盘研发记录或给出下一轮打样建议时必须调用 review_recipe_development，并严格区分已记录事实、待确认项和建议，没有记录的工艺或感官信息必须明确写未记录；比较供应商替代影响时必须调用 compare_supplier_variant。这些工具只读，不能宣称已经修改配方。]"
+                ));
+            }
             let turn = self
                 .run_provider_turn(
                     ProviderTurnRequest {
@@ -570,6 +591,11 @@ impl AgentRuntime {
                 import_job_id: context.import_job_id.clone(),
             });
         }
+        if mutates_recipe_proposals(&call.name) {
+            (self.events)(AgentRuntimeEvent::RecipeProposalsChanged {
+                run_id: context.run_id.clone(),
+            });
+        }
         Ok(())
     }
 
@@ -594,6 +620,11 @@ impl AgentRuntime {
                         .ok()
                         .and_then(|run| run.import_job_id)
                         .unwrap_or_default(),
+                });
+            }
+            if mutates_recipe_proposals(&call.name) {
+                (self.events)(AgentRuntimeEvent::RecipeProposalsChanged {
+                    run_id: run_id.into(),
                 });
             }
         }
@@ -770,6 +801,10 @@ fn mutates_drafts(name: &str) -> bool {
             | "split_ingredient_import_draft"
             | "discard_ingredient_import_draft"
     )
+}
+
+fn mutates_recipe_proposals(name: &str) -> bool {
+    matches!(name, "create_recipe_proposal" | "update_recipe_proposal")
 }
 
 fn map_ingest_error(error: IngestError) -> AgentError {

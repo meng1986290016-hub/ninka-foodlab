@@ -52,10 +52,13 @@ export interface ImportFileReference {
 
 export type SourceAttachment = IngredientSourceAttachment;
 
+export type ImportFieldConfidence = "high" | "medium" | "low";
+
 export interface DraftSourceLink {
   fieldPath: string;
   attachmentId: EntityId;
   sourceLocator: string | null;
+  confidence: ImportFieldConfidence | null;
 }
 
 export interface ImportedNutrientValue {

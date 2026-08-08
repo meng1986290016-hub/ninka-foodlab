@@ -61,54 +61,56 @@ export function AgentGeneralSettings({ api }: AgentGeneralSettingsProps) {
         <p>Agent 默认开启；所有原料导入结果都必须经过人工复核才能保存。</p>
       </div>
 
-      <div className="settings-row">
-        <div>
-          <strong>启用食品研发 Agent</strong>
-          <p>关闭后不影响原料库、表格导入和其他手动研发功能。</p>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <strong>启用食品研发 Agent</strong>
+            <p>关闭后不影响原料库、表格导入和其他手动研发功能。</p>
+          </div>
+          <button
+            aria-checked={preferences.enabled}
+            aria-label="启用食品研发 Agent"
+            className={preferences.enabled ? "switch is-on" : "switch"}
+            onClick={() =>
+              void save({ ...preferences, enabled: !preferences.enabled })
+            }
+            role="switch"
+            type="button"
+          >
+            <span />
+          </button>
         </div>
-        <button
-          aria-checked={preferences.enabled}
-          aria-label="启用食品研发 Agent"
-          className={preferences.enabled ? "switch is-on" : "switch"}
-          onClick={() =>
-            void save({ ...preferences, enabled: !preferences.enabled })
-          }
-          role="switch"
-          type="button"
-        >
-          <span />
-        </button>
-      </div>
 
-      <label className="settings-field settings-field--wide">
-        <span>图片识别模型</span>
-        <select
-          onChange={(event) =>
-            void save({
-              ...preferences,
-              visionProviderConfigId: event.target.value || null,
-            })
-          }
-          value={preferences.visionProviderConfigId ?? ""}
-        >
-          <option value="">
-            {activeProvider?.capabilities.images
-              ? "使用当前聊天模型"
-              : "尚未选择"}
-          </option>
-          {imageProviders.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.displayName}
+        <label className="settings-field settings-field--wide">
+          <span>图片识别模型</span>
+          <select
+            onChange={(event) =>
+              void save({
+                ...preferences,
+                visionProviderConfigId: event.target.value || null,
+              })
+            }
+            value={preferences.visionProviderConfigId ?? ""}
+          >
+            <option value="">
+              {activeProvider?.capabilities.images
+                ? "使用当前聊天模型"
+                : "尚未选择"}
             </option>
-          ))}
-        </select>
-        <small>
-          当前聊天模型不支持图片时，标签照片会交给这里选择的模型读取。
-        </small>
-      </label>
+            {imageProviders.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.displayName}
+              </option>
+            ))}
+          </select>
+          <small>
+            当前聊天模型不支持图片时，标签照片会交给这里选择的模型读取。
+          </small>
+        </label>
 
-      <div className="settings-safety-note">
-        Agent 可以读取原料库、附件和导入草稿，但不能绕过人工复核直接正式入库。
+        <div className="settings-safety-note">
+          Agent 可以读取原料库、附件和导入草稿，但不能绕过人工复核直接正式入库。
+        </div>
       </div>
       {message ? <p className="settings-message">{message}</p> : null}
     </section>

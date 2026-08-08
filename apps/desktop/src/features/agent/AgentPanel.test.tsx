@@ -9,6 +9,7 @@ import { BrowserDemoApi } from "../../api/browser-demo-api";
 import type { ImportFilePicker } from "../../api/import-file-picker";
 import type { ImportFileReference } from "../../api/import-types";
 import { AgentPanel } from "./AgentPanel";
+import { recipeDraftFingerprint } from "../recipes/recipe-agent-analysis";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -94,6 +95,35 @@ class ControlledRunApi extends BrowserDemoApi {
 }
 
 describe("AgentPanel", () => {
+  it("offers common food R&D tasks and fills the composer for review", async () => {
+    const { api, events } = setup();
+    const user = userEvent.setup();
+    render(
+      <AgentPanel
+        api={api}
+        events={events}
+        filePicker={picker()}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    expect(await screen.findByText("你想先做什么？")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /设计新产品/ }));
+
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "给食品研发 Agent 发消息",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toContain("我想设计一款新产品");
+    expect(screen.getByText("人工复核后才会写入原料库或创建配方草稿")).toBeTruthy();
+  });
+
   it("keeps the same conversation after closing, navigating, and reopening", async () => {
     const { api, events } = setup();
     const user = userEvent.setup();
@@ -248,5 +278,70 @@ describe("AgentPanel", () => {
       files: [],
       retryRunId: expect.any(String),
     });
+  });
+
+  it("reviews the current recipe notes without creating or changing a formula", async () => {
+    const { api, events } = setup();
+    const recipe = await api.createRecipe({
+      name: "复盘测试冰淇淋",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft({
+      recipeId: recipe.id,
+      basedOnVersionId: null,
+      source: "manual",
+      targetBatchGrams: "1000",
+      finishedMassGrams: null,
+      servingMassGrams: null,
+      packageCount: null,
+      items: [],
+      packagingCosts: [],
+      additionalCosts: [],
+      targets: [],
+      markdownNotes: "本轮降低甜度，口感偏硬。",
+      calculation: null,
+      calculationIssues: [],
+    });
+    const user = userEvent.setup();
+    render(
+      <AgentPanel
+        api={api}
+        events={events}
+        filePicker={picker()}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+        recipeContext={{
+          recipe,
+          draft,
+          referencedVersions: [],
+          nutrientDefinitions: await api.listNutrientDefinitions(),
+          readOnly: false,
+          draftFingerprint: recipeDraftFingerprint(draft),
+          applyIngredientSubstitution: () => {},
+        }}
+      />,
+    );
+
+    const reviewButton = await screen.findByRole("button", {
+      name: "复盘研发记录",
+    });
+    await waitFor(() =>
+      expect((reviewButton as HTMLButtonElement).disabled).toBe(false),
+    );
+    await user.click(reviewButton);
+
+    expect(
+      await screen.findByText(/研发复盘（仅基于当前草稿）/),
+    ).toBeTruthy();
+    expect(screen.getByText(/本轮降低甜度，口感偏硬/)).toBeTruthy();
+    expect(await api.listRecipeVersions(recipe.id)).toHaveLength(0);
+    expect((await api.getRecipeDraft(recipe.id))?.markdownNotes).toBe(
+      "本轮降低甜度，口感偏硬。",
+    );
   });
 });

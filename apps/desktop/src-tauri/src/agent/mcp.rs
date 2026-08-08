@@ -263,7 +263,7 @@ impl McpServer {
                     "version": env!("CARGO_PKG_VERSION"),
                     "description": "仅提供当前食品研发任务范围内的读取与待复核草稿操作"
                 },
-                "instructions": "所有原料草稿都必须由用户人工复核后才能正式保存。"
+                "instructions": "原料草稿和配方提案都必须由用户人工复核；配方试算必须调用确定性计算工具，模型不能直接保存正式版本。"
             }),
         )
     }

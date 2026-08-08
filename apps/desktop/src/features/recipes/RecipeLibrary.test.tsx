@@ -236,7 +236,7 @@ function createApi() {
     tags: ["基底"],
     latestVersionNumber: 1,
   });
-  const baseVersions = [version(base, 1, "18")];
+  const baseVersions = [version(base, 1, "18.1235")];
   const draftOnly = recipe("draft-only", "燕麦试验配方", {
     tags: ["小试"],
   });
@@ -277,12 +277,64 @@ function createApi() {
     copyRecipeVersionToDraft: vi.fn(async () => ({
       id: "copied-draft",
     })),
+    createRecipeAlternative: vi.fn(async (input) =>
+      recipe("yogurt-supplier-b", yogurt.name, {
+        productId: yogurt.id,
+        schemeName: input.schemeName,
+        schemeStatus: input.schemeStatus,
+        currentDraftId: "draft-yogurt-supplier-b",
+      }),
+    ),
+    updateRecipeScheme: vi.fn(async (id, input) => {
+      const found = summaries.find((item) => item.recipe.id === id);
+      if (!found) throw new Error("找不到配方");
+      found.recipe.schemeName = input.schemeName;
+      found.recipe.schemeStatus = input.schemeStatus;
+      return found.recipe;
+    }),
     archiveRecipe: vi.fn(async (id: string) => {
       const found = summaries.find((item) => item.recipe.id === id);
       if (found) {
         found.recipe.archivedAt = "2026-07-31T09:00:00.000Z";
       }
     }),
+    restoreRecipe: vi.fn(async (id: string) => {
+      const found = summaries.find((item) => item.recipe.id === id);
+      if (found) {
+        found.recipe.archivedAt = null;
+        found.recipe.updatedAt = "2026-07-31T10:00:00.000Z";
+      }
+    }),
+    deleteRecipeVersion: vi.fn(async (id: string) => {
+      const found = allVersions.find((item) => item.id === id);
+      if (!found) throw new Error("找不到版本");
+      const recipeVersions = versionsByRecipe.get(found.recipeId) ?? [];
+      const index = recipeVersions.findIndex((item) => item.id === id);
+      if (index >= 0) recipeVersions.splice(index, 1);
+      const allIndex = allVersions.findIndex((item) => item.id === id);
+      if (allIndex >= 0) allVersions.splice(allIndex, 1);
+      const foundSummary = summaries.find(
+        (item) => item.recipe.id === found.recipeId,
+      );
+      if (foundSummary) {
+        foundSummary.recipe.latestVersionNumber =
+          recipeVersions[0]?.versionNumber ?? null;
+        foundSummary.latestVersion = recipeVersions[0]
+          ? summary(foundSummary.recipe, recipeVersions).latestVersion
+          : null;
+      }
+    }),
+    permanentlyDeleteRecipe: vi.fn(
+      async (id: string, confirmationName: string) => {
+        const index = summaries.findIndex((item) => item.recipe.id === id);
+        const found = summaries[index];
+        if (!found || found.recipe.name !== confirmationName) {
+          throw new Error("输入的配方名称不一致");
+        }
+        summaries.splice(index, 1);
+        versionsByRecipe.delete(id);
+      },
+    ),
     compareRecipeVersions: vi.fn(async () => ({
       before: {
         id: yogurtVersions[1]!.id,
@@ -379,6 +431,7 @@ describe("RecipeLibrary", () => {
     );
     expect(within(table).getByText("乳基底")).toBeTruthy();
     expect(within(table).queryByText("高蛋白酸奶")).toBeNull();
+    expect(within(table).getByText("¥18.12")).toBeTruthy();
 
     await user.selectOptions(
       screen.getByRole("combobox", { name: "配方类型" }),
@@ -400,7 +453,7 @@ describe("RecipeLibrary", () => {
 
     expect(within(inspector).getAllByText("V2").length).toBeGreaterThan(0);
     expect(
-      (await within(inspector).findAllByText("¥42")).length,
+      (await within(inspector).findAllByText("¥42.00")).length,
     ).toBeGreaterThan(0);
     expect(
       within(inspector).getByText("发酵温度 42℃，口感更顺滑。"),
@@ -411,9 +464,9 @@ describe("RecipeLibrary", () => {
       within(inspector).getByRole("button", { name: /V1/ }),
     );
     expect(
-      (await within(inspector).findAllByText("¥30")).length,
+      (await within(inspector).findAllByText("¥30.00")).length,
     ).toBeGreaterThan(0);
-    expect(within(inspector).queryByText("¥42")).toBeNull();
+    expect(within(inspector).queryByText("¥42.00")).toBeNull();
   });
 
   it("copies the selected immutable version into a workbench draft", async () => {
@@ -430,6 +483,34 @@ describe("RecipeLibrary", () => {
         yogurtVersions[0]!.id,
       );
       expect(onOpenDraft).toHaveBeenCalledWith("yogurt");
+    });
+  });
+
+  it("creates a custom-named alternative recipe from the selected formal version", async () => {
+    const { api, yogurtVersions } = createApi();
+    const onOpenDraft = vi.fn();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={onOpenDraft} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "创建替代配方" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "创建替代配方" });
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "替代配方名称" }),
+      "供应商 B 可可粉版本",
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "创建并进入工作台" }),
+    );
+
+    await waitFor(() => {
+      expect(api.createRecipeAlternative).toHaveBeenCalledWith({
+        sourceVersionId: yogurtVersions[0]!.id,
+        schemeName: "供应商 B 可可粉版本",
+        schemeStatus: "researching",
+      });
+      expect(onOpenDraft).toHaveBeenCalledWith("yogurt-supplier-b");
     });
   });
 
@@ -467,7 +548,7 @@ describe("RecipeLibrary", () => {
       }),
     );
     const comparison = await screen.findByRole("status");
-    expect(within(comparison).getByText("¥99")).toBeTruthy();
+    expect(within(comparison).getByText("¥99.00")).toBeTruthy();
     expect(
       within(comparison).getByText(
         "仅用于当前决策，正式版本的冻结快照没有改变。",
@@ -495,6 +576,118 @@ describe("RecipeLibrary", () => {
     await waitFor(() => {
       expect(api.archiveRecipe).toHaveBeenCalledWith("yogurt");
     });
+  });
+
+  it("separates active and archived recipes and restores an archived recipe", async () => {
+    const { api } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    expect(await screen.findByText("高蛋白酸奶")).toBeTruthy();
+    expect(screen.queryByText("旧版布丁")).toBeNull();
+    await user.click(await screen.findByRole("tab", { name: /归档库/ }));
+    expect((await screen.findAllByText("旧版布丁")).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "取消归档" }));
+
+    await waitFor(() => {
+      expect(api.restoreRecipe).toHaveBeenCalledWith("archived");
+      expect(
+        screen.getByRole("tab", { name: /研发中/ }).getAttribute("aria-selected"),
+      ).toBe("true");
+    });
+    expect((await screen.findAllByText("旧版布丁")).length).toBeGreaterThan(0);
+  });
+
+  it("opens recipe details from the row and exposes a close action for narrow layouts", async () => {
+    const { api } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    const table = await screen.findByRole("table");
+    const identity = await within(table).findByText("高蛋白酸奶");
+    const row = identity.closest("tr");
+    expect(row).not.toBeNull();
+    await user.click(row!);
+
+    const inspector = screen.getByLabelText("高蛋白酸奶版本详情");
+    expect(inspector.className).toContain("is-narrow-open");
+    await user.click(screen.getByRole("button", { name: "关闭配方详情" }));
+    expect(inspector.className).not.toContain("is-narrow-open");
+  });
+
+  it("deletes one formal version after an irreversible-action confirmation", async () => {
+    const { api, yogurtVersions } = createApi();
+    const selectedVersionId = yogurtVersions[0]!.id;
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "删除此版本" }),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: "删除正式版本 V2？",
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: "永久删除版本" }),
+    );
+
+    await waitFor(() => {
+      expect(api.deleteRecipeVersion).toHaveBeenCalledWith(
+        selectedVersionId,
+      );
+    });
+    expect(await screen.findByText("正式版本 V2 已永久删除")).toBeTruthy();
+  });
+
+  it("requires the archived recipe name before permanent deletion", async () => {
+    const { api } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    await user.click(await screen.findByRole("tab", { name: /归档库/ }));
+    await screen.findByLabelText("旧版布丁版本详情");
+    await user.click(
+      screen.getByRole("button", { name: "永久删除配方" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "永久删除配方" });
+    const confirmButton = within(dialog).getByRole("button", {
+      name: "确认永久删除",
+    }) as HTMLButtonElement;
+    expect(confirmButton.disabled).toBe(true);
+
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "输入配方名称确认" }),
+      "旧版布丁",
+    );
+    expect(confirmButton.disabled).toBe(false);
+    await user.click(confirmButton);
+
+    await waitFor(() => {
+      expect(api.permanentlyDeleteRecipe).toHaveBeenCalledWith(
+        "archived",
+        "旧版布丁",
+      );
+    });
+    expect(await screen.findByText("“旧版布丁”已永久删除")).toBeTruthy();
+  });
+
+  it("opens the selected version as a sampling source", async () => {
+    const { api, yogurtVersions } = createApi();
+    const onOpenSampleSheet = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RecipeLibrary
+        api={api}
+        onOpenDraft={() => undefined}
+        onOpenSampleSheet={onOpenSampleSheet}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "我要打样" }));
+    expect(onOpenSampleSheet).toHaveBeenCalledWith(
+      "yogurt",
+      yogurtVersions[0]!.id,
+    );
   });
 
   it("protects a recipe that is referenced by formal versions", async () => {

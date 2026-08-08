@@ -1,0 +1,54 @@
+name: 功能建议
+description: 描述一个真实食品研发场景和希望改进的工作流
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请从研发场景和当前困难出发，不必先设计技术方案。项目优先保持离线、可追溯和人工确认边界。
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 研发场景
+      description: 谁在什么阶段使用？需要完成什么任务？
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 当前困难和临时做法
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 希望得到的结果
+      description: 描述完成后的业务结果，不要求给出界面或代码实现。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要范围
+      options:
+        - 原料与供应商版本
+        - 配方研发与版本管理
+        - 打样配料单
+        - 营养标签与报告
+        - 备份、导入与数据交换
+        - 食品研发 Agent
+        - 安装、开源与其他
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 数据、法规或 AI 边界
+      description: 是否涉及真实配方、外部网络、模型发送、法规判断、正式版本或删除操作？
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 数据确认
+      options:
+        - label: 我没有在建议中包含真实配方、供应商秘密、API Key 或个人信息。
+          required: true

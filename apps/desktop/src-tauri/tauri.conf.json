@@ -26,6 +26,32 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "publisher": "Ninka FoodLab",
+    "category": "Business",
+    "shortDescription": "面向食品研发人员的本地原料与配方工作台",
+    "longDescription": "离线管理原料、供应商版本、配方、营养估算、成本、研发报告与人工复核的食品研发桌面应用。",
+    "copyright": "Copyright © 2026 Ninka FoodLab",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../../LICENSE": "licenses/LICENSE",
+      "../../../NOTICE": "licenses/NOTICE",
+      "../../../THIRD_PARTY_LICENSES.md": "licenses/THIRD_PARTY_LICENSES.md"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

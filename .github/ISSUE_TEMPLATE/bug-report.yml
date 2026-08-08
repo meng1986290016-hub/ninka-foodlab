@@ -1,0 +1,72 @@
+name: 缺陷报告
+description: 报告可以稳定复现的功能、数据或界面问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请勿上传真实配方、供应商资料、API Key、数据库或 `.foodrd-backup`。安全漏洞请按 `SECURITY.md` 私下报告。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明你看到了什么问题，以及它为什么影响食品研发工作。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 最短复现步骤
+      placeholder: |
+        1. 打开……
+        2. 选择……
+        3. 输入脱敏演示数据……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 运行模式
+      options:
+        - Tauri 桌面版
+        - 浏览器演示模式
+        - 无法确认
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - macOS Apple Silicon
+        - macOS Intel
+        - Windows 11
+        - Windows 10
+        - 其他或无法确认
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本或提交号
+      placeholder: 例如 0.1.0 或 Git commit
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏证据
+      description: 可粘贴不含秘密的错误信息或截图。涉及计算时请注明单位、密度、投料量、出成重量和规则版本。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 数据确认
+      options:
+        - label: 我已删除真实配方、价格、供应商身份、个人信息、API Key 和备份文件。
+          required: true

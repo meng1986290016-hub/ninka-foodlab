@@ -1,0 +1,90 @@
+name: Build unsigned desktop installers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS Apple Silicon
+            os: macos-15
+            command: desktop:bundle:macos
+            artifact: macos-arm64
+          - label: macOS Intel
+            os: macos-15-intel
+            command: desktop:bundle:macos
+            artifact: macos-x64
+          - label: Windows x64
+            os: windows-2025
+            command: desktop:bundle:windows
+            artifact: windows-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install brand verification dependencies
+        run: python -m pip install -r scripts/branding/requirements.txt
+
+      - name: Verify frontend and brand assets
+        env:
+          PYTHONPATH: scripts/branding
+        run: |
+          pnpm licenses:generate
+          pnpm open-source:verify
+          pnpm typecheck
+          python scripts/branding/verify_assets.py
+
+      - name: Build installer
+        run: pnpm ${{ matrix.command }}
+
+      - name: Create non-interactive DMG
+        if: runner.os == 'macOS'
+        run: pnpm desktop:bundle:macos:dmg
+
+      - name: Collect installer and checksum
+        run: pnpm desktop:artifacts
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: food-rd-studio-${{ matrix.artifact }}
+          path: dist/installers/*
+          if-no-files-found: error
+          retention-days: 14

@@ -15,6 +15,14 @@ const userMessage: AgentMessage = {
   createdAt: "2026-08-09T12:00:00.000Z",
 };
 
+const assistantPlaceholder: AgentMessage = {
+  ...userMessage,
+  id: "message-2",
+  role: "assistant",
+  content: "",
+  status: "streaming",
+};
+
 describe("AgentMessageList thinking status", () => {
   it("renders the compact working orb after the latest user message", () => {
     const { container } = render(
@@ -62,5 +70,35 @@ describe("AgentMessageList thinking status", () => {
 
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("正在整理结果")).toBeTruthy();
+  });
+
+  it("does not render the empty assistant placeholder above the thinking row", () => {
+    const { container } = render(
+      <AgentMessageList
+        loading={false}
+        messages={[userMessage, assistantPlaceholder]}
+        streamingText=""
+        thinkingStatus="正在思考"
+      />,
+    );
+
+    expect(screen.getByRole("status").textContent).toBe("正在思考");
+    expect(container.querySelector(".agent-message--assistant")).toBeNull();
+  });
+
+  it("keeps the fallback message for an empty failed assistant response", () => {
+    render(
+      <AgentMessageList
+        loading={false}
+        messages={[
+          userMessage,
+          { ...assistantPlaceholder, status: "failed" },
+        ]}
+        streamingText=""
+        thinkingStatus={null}
+      />,
+    );
+
+    expect(screen.getByText("任务未完成")).toBeTruthy();
   });
 });

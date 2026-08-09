@@ -52,7 +52,15 @@ export function AgentMessageList({
 }: AgentMessageListProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestMessageRef = useRef<HTMLElement | null>(null);
-  const visibleMessages = messages.filter((message) => message.role !== "tool");
+  const visibleMessages = messages.filter(
+    (message) =>
+      message.role !== "tool" &&
+      !(
+        message.role === "assistant" &&
+        message.status !== "failed" &&
+        message.content.trim() === ""
+      ),
+  );
 
   useEffect(() => {
     if (streamingText || thinkingStatus) {
@@ -70,7 +78,7 @@ export function AgentMessageList({
     >
       {loading ? (
         <p className="agent-empty-state">正在读取本地对话…</p>
-      ) : visibleMessages.length === 0 && !streamingText ? (
+      ) : visibleMessages.length === 0 && !streamingText && !thinkingStatus ? (
         <div className="agent-welcome">
           <span>从一个研发任务开始</span>
           <h3>你想先做什么？</h3>

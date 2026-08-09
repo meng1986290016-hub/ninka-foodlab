@@ -5,7 +5,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BrowserDemoApi } from "../../api/browser-demo-api";
 import type {
@@ -50,6 +50,29 @@ function createApi() {
     now: () => "2026-07-31T02:00:00.000Z",
   });
 }
+
+function mockObservedWidth(width: number) {
+  class WidthResizeObserver implements ResizeObserver {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+
+    disconnect() {}
+
+    observe(target: Element) {
+      this.callback(
+        [{ target, contentRect: { width } } as ResizeObserverEntry],
+        this,
+      );
+    }
+
+    unobserve() {}
+  }
+
+  vi.stubGlobal("ResizeObserver", WidthResizeObserver);
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function emptyCalculation(): RecipeCalculation {
   return {
@@ -212,6 +235,65 @@ describe("RecipeWorkbench", () => {
         },
       });
     });
+  });
+
+  it("moves secondary actions into an accessible menu in a very narrow workbench", async () => {
+    mockObservedWidth(680);
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "极窄配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    const onOpenAgent = vi.fn();
+    const onOpenSampleSheet = vi.fn();
+    render(
+      <RecipeWorkbench
+        api={api}
+        onOpenAgent={onOpenAgent}
+        onOpenSampleSheet={onOpenSampleSheet}
+        recipeId={recipe.id}
+      />,
+    );
+
+    await screen.findByDisplayValue("极窄配方");
+    const moreButton = await screen.findByRole("button", { name: "更多操作" });
+
+    await user.click(moreButton);
+    let menu = screen.getByRole("menu", { name: "配方工作台更多操作" });
+    expect(
+      (within(menu).getByRole("menuitem", {
+        name: "我要打样",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(moreButton);
+
+    await user.click(moreButton);
+    await user.click(screen.getByRole("heading", { name: "配方工作台" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    await addIngredient(user, "脱脂乳粉");
+
+    await user.click(moreButton);
+    menu = screen.getByRole("menu", { name: "配方工作台更多操作" });
+    await user.click(
+      within(menu).getByRole("menuitem", { name: "Agent 诊断" }),
+    );
+    expect(onOpenAgent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    await user.click(moreButton);
+    menu = screen.getByRole("menu", { name: "配方工作台更多操作" });
+    await user.click(
+      within(menu).getByRole("menuitem", { name: "我要打样" }),
+    );
+    expect(onOpenSampleSheet).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("adds a concrete supplier variant, edits its amount and locks it", async () => {

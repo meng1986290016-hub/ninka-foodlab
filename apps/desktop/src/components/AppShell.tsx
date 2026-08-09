@@ -36,7 +36,6 @@ export function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const shellClassName = [
     "app-shell",
-    agentOpen ? "is-agent-open" : "",
     sidebarCollapsed ? "is-sidebar-collapsed" : "",
   ]
     .filter(Boolean)

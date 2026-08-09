@@ -1,3 +1,51 @@
+# Ninka FoodLab 顶部操作区与 Agent 覆盖层响应式 QA
+
+- reported issue paths:
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-43fd2f3c-e67b-4cdf-b9f4-d49cbfe875c3.png`
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-bc0f8ddf-d370-4ce2-a878-b23f85678abc.png`
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-7cf9ba58-48ff-4030-81f8-0c68f2d96a02.png`
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-9b6d52d5-1f20-4c6f-9ae5-b640dcbbe088.png`
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-6a005391-3afa-4065-82ae-f86ebb37b18d.png`
+- recipe library overlay screenshot: `/Users/andrew/Documents/食品研发工具/docs/testing/screenshots/agent-overlay-qa-recipe-library.jpg`
+- workbench overlay screenshot: `/Users/andrew/Documents/食品研发工具/docs/testing/screenshots/agent-overlay-qa-workbench.jpg`
+- narrow overlay screenshot: `/Users/andrew/Documents/食品研发工具/docs/testing/screenshots/agent-overlay-qa-narrow.jpg`
+- viewport: 主验收 `1280 × 800` CSS px；极窄状态 `600 × 800` CSS px
+- implementation dimensions: 主验收截图 `1600 × 1000` px；极窄截图 `750 × 1000` px；布局尺寸均以页面 CSS px 实测
+- state: 浏览器演示模式；原料新建层、配方版本详情、配方工作台实时结果和 Agent 开启状态
+
+## Findings and fixes
+
+- root cause 1: 操作按钮允许 CJK 字符间换行，空间不足时会出现逐字竖排。
+  - fix: 操作按钮统一 `white-space: nowrap` 与 `word-break: keep-all`，不设置全局固定宽度。
+- root cause 2: 原料库、配方库和工作台只按窗口宽度响应，不能准确反映当前内容容器宽度。
+  - fix: 三个工作区使用 container query；空间不足时重排信息层级，工作台极窄状态把 Agent 与打样收入“更多”。
+- root cause 3: Agent 原来是 AppShell 网格的第三列，打开时会压缩下层内容，并触发侧栏、表格和按钮的额外响应式变化。
+  - fix: Agent 改为绝对定位的右侧覆盖抽屉；AppShell 和下层页面不再根据 Agent 开关修改网格或侧栏状态。
+
+## Measured layout evidence
+
+- `1280 × 800` 下，Agent 开启前后侧栏均为 `168 px`，主内容均为 `1112 px`；用户手动侧栏状态保持不变。
+- 配方库版本详情保持 `396.8 px` 宽、`x = 883.2 px`；其操作按钮在 Agent 开启前后坐标逐项一致，Agent 以 `400 px` 宽覆盖在右侧。
+- 配方工作台头部保持 `1112 × 124 px`，编辑区保持 `772 px` 宽，实时结果保持 `340 px` 宽；Agent 开启前后几何位置一致。
+- `600 × 800` 下，Agent 使用 `600 px` 全屏覆盖；下层工作台尺寸和位置不变，关闭后原位恢复。
+- Agent 覆盖层为 `position: absolute`、`z-index: 60`，不会再触发下层 container query 或表格字段隐藏规则。
+
+## Interaction and accessibility
+
+- “更多”触发器暴露 `aria-haspopup="menu"`、`aria-controls` 和实时 `aria-expanded`；Escape 关闭后焦点返回触发按钮，点击外部也会关闭。
+- 空配方的“我要打样”仍为禁用；加入原料后，Agent 与打样调用原有回调并自动关闭菜单。
+- Agent 开关的 `aria-expanded` 保留；关闭覆盖层后，主内容可见且用户此前的手动侧栏状态不变。
+
+## Verification
+
+- 内置浏览器页面标题为 `Ninka FoodLab`，DOM 有实际业务内容，无框架错误覆盖层，控制台无 error 或 warning。
+- Vitest：51 个测试文件、202 项测试全部通过。
+- TypeScript 类型检查、Vite 生产构建和 `git diff --check` 通过；构建仅保留项目既有的大分块提示。
+
+final result: passed
+
+---
+
 # Ninka FoodLab Agent 思考状态 QA
 
 - source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-2ac347eb-7a1e-4e39-bd69-51c20c20ef5d.png`

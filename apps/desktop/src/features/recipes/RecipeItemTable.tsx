@@ -81,6 +81,10 @@ export function RecipeItemTable({
                 const itemIssues = issues.filter(
                   (issue) => issue.itemId === item.id,
                 );
+                const amountIssue = itemIssues.find(isAmountIssue);
+                const dataIssue = itemIssues.find(
+                  (issue) => !isAmountIssue(issue),
+                );
                 return (
                   <tr
                     data-recipe-item="true"
@@ -169,17 +173,7 @@ export function RecipeItemTable({
                     </td>
                     <td className="recipe-amount-cell">
                       <input
-                        aria-invalid={
-                          itemIssues.some((issue) =>
-                            [
-                              "invalid_number",
-                              "negative_value",
-                              "non_positive_value",
-                            ].includes(issue.code),
-                          )
-                            ? "true"
-                            : undefined
-                        }
+                        aria-invalid={amountIssue ? "true" : undefined}
                         aria-label={`${label}用量`}
                         inputMode="decimal"
                         onChange={(event) =>
@@ -197,9 +191,13 @@ export function RecipeItemTable({
                         }
                         value={displayedAmount}
                       />
-                      {itemIssues[0] ? (
-                        <small role="alert">
-                          {itemIssues[0].message}
+                      {amountIssue ? (
+                        <small
+                          className="recipe-cell-issue"
+                          role="alert"
+                          title={amountIssue.message}
+                        >
+                          {amountIssue.message}
                         </small>
                       ) : null}
                     </td>
@@ -244,11 +242,26 @@ export function RecipeItemTable({
                         {item.autoFill ? "补足" : "—"}
                       </button>
                     </td>
-                    <td>
-                      {completeness(
-                        item,
-                        missingData[item.id] ?? [],
-                      )}
+                    <td className="recipe-data-column">
+                      <span className="recipe-data-cell">
+                        {completeness(
+                          item,
+                          missingData[item.id] ?? [],
+                        )}
+                        {dataIssue ? (
+                          <small
+                            className="recipe-cell-issue"
+                            role={
+                              dataIssue.severity === "error"
+                                ? "alert"
+                                : "status"
+                            }
+                            title={dataIssue.message}
+                          >
+                            {dataIssue.message}
+                          </small>
+                        ) : null}
+                      </span>
                     </td>
                     <td className="recipe-row-actions">
                       <button
@@ -348,7 +361,7 @@ function completeness(
   }
   const percent = item.ingredientVariant.completeness.percent;
   return (
-    <span className="recipe-data-cell">
+    <>
       <span
         className={
           missingData.length === 0 && percent >= 100
@@ -378,6 +391,10 @@ function completeness(
           {missingData.length > 3 ? `等${missingData.length}项` : ""}
         </small>
       ) : null}
-    </span>
+    </>
   );
+}
+
+function isAmountIssue(issue: RecipeCalculationIssue) {
+  return issue.field === "amount";
 }

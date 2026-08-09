@@ -7273,7 +7273,8 @@ tbody tr:hover {
 }
 
 .recipe-amount-cell {
-  overflow: visible;
+  overflow: hidden;
+  vertical-align: middle;
 }
 
 .recipe-amount-cell input,
@@ -7309,16 +7310,18 @@ tbody tr:hover {
   border-color: var(--color-warning);
 }
 
-.recipe-amount-cell small {
-  position: absolute;
-  z-index: 3;
+.recipe-cell-issue {
   display: block;
+  overflow: hidden;
+  width: 100%;
   margin-top: 2px;
   padding: 2px 5px;
   border-radius: 3px;
   background: #fff8ed;
   color: var(--color-warning);
   font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -7363,8 +7366,8 @@ tbody tr:hover {
 }
 
 .recipe-data-cell {
-  display: inline-flex;
-  max-width: 150px;
+  display: flex;
+  width: 100%;
   align-items: flex-start;
   flex-direction: column;
   gap: 2px;

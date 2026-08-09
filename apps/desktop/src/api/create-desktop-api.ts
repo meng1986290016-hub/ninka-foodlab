@@ -16,7 +16,7 @@ export function createDesktopApi(agentEvents?: AgentEventSource): DesktopApi {
   return window.__TAURI_INTERNALS__ === undefined
     ? new BrowserDemoApi(
         agentEvents instanceof BrowserAgentEventSource
-          ? { agentEvents }
+          ? { agentEvents, agentResponseDelayMs: 900 }
           : {},
       )
     : new TauriDesktopApi();

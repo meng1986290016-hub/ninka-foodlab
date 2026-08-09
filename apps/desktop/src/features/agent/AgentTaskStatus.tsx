@@ -1,7 +1,6 @@
 import type { AgentRun } from "../../api/agent-types";
 
 interface AgentTaskStatusProps {
-  currentRun: AgentRun | null;
   lastRun: AgentRun | null;
   status: string;
   error: string;
@@ -9,7 +8,6 @@ interface AgentTaskStatusProps {
 }
 
 export function AgentTaskStatus({
-  currentRun,
   lastRun,
   status,
   error,
@@ -17,15 +15,14 @@ export function AgentTaskStatus({
 }: AgentTaskStatusProps) {
   if (!status && !error) return null;
   const canRetry =
-    !currentRun &&
-    (lastRun?.status === "failed" || lastRun?.status === "cancelled");
+    lastRun?.status === "failed" || lastRun?.status === "cancelled";
 
   return (
     <div
       className={error ? "agent-task-status is-error" : "agent-task-status"}
       role={error ? "alert" : "status"}
     >
-      <span className={currentRun ? "agent-status-dot is-running" : "agent-status-dot"} />
+      <span className="agent-status-dot" />
       <div>
         {status ? <strong>{status}</strong> : null}
         {error ? <p>{error}</p> : null}

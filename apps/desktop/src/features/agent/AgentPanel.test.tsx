@@ -95,6 +95,48 @@ class ControlledRunApi extends BrowserDemoApi {
 }
 
 describe("AgentPanel", () => {
+  it("shows the thinking orb while the browser demo response is pending", async () => {
+    const events = new BrowserAgentEventSource();
+    const api = new BrowserDemoApi({
+      storage: new MemoryStorage(),
+      agentEvents: events,
+      agentResponseDelayMs: 2_000,
+      now: () => "2026-08-09T12:00:00.000Z",
+    });
+    const user = userEvent.setup();
+    render(
+      <AgentPanel
+        api={api}
+        events={events}
+        filePicker={picker()}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    await user.type(
+      await screen.findByRole("textbox", {
+        name: "给食品研发 Agent 发消息",
+      }),
+      "帮我检查这份配方",
+    );
+    await user.click(screen.getByRole("button", { name: "发送" }));
+
+    expect(await screen.findByText("正在思考")).toBeTruthy();
+    expect(screen.getByText("帮我检查这份配方")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        /我已结合原料库中的具体供应商版本生成配方提案/,
+        {},
+        { timeout: 4_000 },
+      ),
+    ).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("正在思考")).toBeNull());
+  });
+
   it("offers common food R&D tasks and fills the composer for review", async () => {
     const { api, events } = setup();
     const user = userEvent.setup();

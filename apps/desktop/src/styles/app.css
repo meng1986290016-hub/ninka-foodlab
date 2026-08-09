@@ -2935,6 +2935,25 @@
   font-size: 10px;
 }
 
+.agent-thinking-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  color: var(--color-ink);
+  line-height: 20px;
+}
+
+.agent-thinking-status__orb {
+  flex: 0 0 20px;
+}
+
+.agent-thinking-status strong {
+  font-size: 13px;
+  font-weight: 620;
+}
+
 .agent-message.is-streaming p::after {
   display: inline-block;
   width: 5px;
@@ -3174,17 +3193,6 @@
   margin-top: 4px;
   border-radius: 50%;
   background: var(--color-accent);
-}
-
-.agent-status-dot.is-running {
-  animation: agent-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes agent-pulse {
-  50% {
-    opacity: 0.35;
-    transform: scale(0.8);
-  }
 }
 
 .agent-composer {

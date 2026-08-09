@@ -55,6 +55,7 @@ export function useAgentConversation(
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [preferences, setPreferences] = useState<AgentPreferences | null>(null);
   const [providers, setProviders] = useState<AgentProviderConfig[]>([]);
+  const [starting, setStarting] = useState(false);
   const [currentRun, setCurrentRun] = useState<AgentRun | null>(null);
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
   const [drafts, setDrafts] = useState<IngredientImportDraft[]>([]);
@@ -179,6 +180,7 @@ export function useAgentConversation(
     const receive = (event: AgentEvent) => {
       if (!active) return;
       if (event.type === "message_delta") {
+        setStarting(false);
         setStreamingText((current) => current + event.text);
       } else if (event.type === "tool_started") {
         setTaskStatus(toolStatus[event.toolName] ?? "正在执行食品研发任务");
@@ -199,6 +201,7 @@ export function useAgentConversation(
           setTaskStatus(`已生成 ${pending} 张待复核配方提案`);
         });
       } else if (event.type === "run_completed") {
+        setStarting(false);
         setStreamingText("");
         setTaskStatus("本次任务已完成");
         setError("");
@@ -211,6 +214,7 @@ export function useAgentConversation(
         void refreshMessages();
         void refreshProposals();
       } else if (event.type === "run_failed") {
+        setStarting(false);
         setStreamingText("");
         setTaskStatus(
           event.code === "cancelled" ? "本次任务已停止" : "本次任务未完成",
@@ -252,6 +256,7 @@ export function useAgentConversation(
     ) => {
       const activeConversation = conversationRef.current;
       if (!activeConversation) return null;
+      setStarting(true);
       setError("");
       setTaskStatus(files.length > 0 ? "正在读取原料资料" : "正在思考");
       setStreamingText("");
@@ -271,6 +276,7 @@ export function useAgentConversation(
             : {}),
         });
         await refreshMessages(activeConversation.id);
+        setStarting(false);
         if (run.status === "queued" || run.status === "running") {
           setCurrentRun(run);
         } else {
@@ -284,6 +290,7 @@ export function useAgentConversation(
         }
         return run;
       } catch (reason) {
+        setStarting(false);
         setTaskStatus("");
         setError(reason instanceof Error ? reason.message : "Agent 任务启动失败");
         return null;
@@ -342,6 +349,7 @@ export function useAgentConversation(
     conversationRef.current = next;
     setConversation(next);
     setMessages([]);
+    setStarting(false);
     setCurrentRun(null);
     setLastRun(null);
     setDrafts([]);
@@ -370,6 +378,7 @@ export function useAgentConversation(
     refreshProposals,
     retry,
     send,
+    starting,
     streamingText,
     taskStatus,
   };

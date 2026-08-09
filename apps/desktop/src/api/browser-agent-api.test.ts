@@ -27,6 +27,44 @@ class MemoryStorage implements Storage {
 }
 
 describe("BrowserDemoApi Agent", () => {
+  it("keeps a delayed demo run visible before emitting its completed response", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = new MemoryStorage();
+      const events = new BrowserAgentEventSource();
+      const listener = vi.fn();
+      await events.subscribe(listener);
+      const api = new BrowserDemoApi({
+        storage,
+        agentEvents: events,
+        agentResponseDelayMs: 900,
+        now: () => "2026-08-09T12:00:00.000Z",
+      });
+      const conversation = await api.createAgentConversation("动效测试");
+
+      const run = await api.startAgentRun({
+        conversationId: conversation.id,
+        content: "帮我检查这份配方",
+        files: [],
+      });
+
+      expect(run.status).toBe("running");
+      expect(await api.listAgentMessages(conversation.id)).toHaveLength(1);
+      expect(listener).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(900);
+
+      expect((await api.getAgentRun(run.id)).status).toBe("completed");
+      expect(await api.listAgentMessages(conversation.id)).toHaveLength(2);
+      expect(listener).toHaveBeenCalledWith({
+        type: "run_completed",
+        runId: run.id,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("recognizes multiple demo files into separate review drafts without network access", async () => {
     const storage = new MemoryStorage();
     const events = new BrowserAgentEventSource();

@@ -1,3 +1,68 @@
+# Ninka FoodLab Agent 思考状态 QA
+
+- source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-2ac347eb-7a1e-4e39-bd69-51c20c20ef5d.png`
+- reported missing-state path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-efe8d64a-7b31-41ac-99ea-fcf7bc400f5a.png`
+- animation reference: `https://github.com/Jakubantalik/thinking-orbs`，官方 `working` / `20 px` 内联预设
+- implementation screenshot path: `/private/tmp/ninka-thinking-final-desktop.png`
+- live send-flow screenshot path: `/private/tmp/ninka-thinking-live-flow.png`
+- responsive screenshot path: `/private/tmp/ninka-thinking-final-mobile.png`
+- combined focused comparison: `/private/tmp/ninka-thinking-final-comparison.png`
+- viewport: 桌面 `900 × 760` CSS px；窄屏检查触发 `≤620 px` 断点，内置浏览器实际 `innerWidth = 487 px`
+- source dimensions: `752 × 236` px
+- implementation dimensions: 桌面 `1125 × 950` px，浏览器密度约 `1.25`；Agent 面板 `420 × 620` CSS px
+- state: 最新用户消息已进入时间线、模型尚未输出首段正文、状态为“正在思考”
+
+## Full-view comparison evidence
+
+- 思考状态已从输入框上方的独立整宽卡片移动到最新用户消息之后，成为对话时间线的一部分。
+- 桌面面板保持 `420 px` 宽；窄屏断点下无水平溢出，思考行仍为 `80 × 20 px`。
+- 输入框、用户消息、Agent 标题和模型状态未因新动效发生位移或遮挡。
+
+## Focused region comparison evidence
+
+- 组合图上半部为旧版，使用淡绿背景、边框和单个脉冲圆点；下半部为实现，使用官方 20 px 点阵轨道球与同一条“正在思考”文案。
+- 新思考行实测背景透明、无边框、总高 `20 px`，文案为 `13 px / 620`，视觉层级明显低于用户消息、但仍可读。
+- 两张间隔 `350 ms` 的浏览器截图哈希不同；页面没有其他动画，证明 Canvas 思考球正在更新帧。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 沿用现有系统 UI 字体；13 px 状态文案与消息正文比例协调，无换行或截断。
+- Spacing and layout rhythm: 20 px 动效与 8 px 间距形成一行；移除旧状态卡的内边距、背景和边框，减少输入区上方的视觉重量。
+- Colors and visual tokens: 继续使用应用浅色表面与正文墨色；思考球固定 `theme="light"`，避免操作系统深色偏好造成浅底不可见。
+- Image quality and asset fidelity: 直接使用 `thinking-orbs@0.2.0` 的 Canvas 点阵轨道动画，没有用 CSS 图形或近似重绘替代。
+- Copy and content: 保留“正在思考”及现有工具阶段文案；错误、停止、完成和重试文案不变。
+
+## Findings and comparison history
+
+### Pass 1
+
+- [P3] 额外的 `opacity: 0.86` 让 20 px 点阵在浅色面板上偏淡。
+  - fix: 移除额外透明度，使用官方组件原始点阵明暗。
+
+### Pass 2
+
+- post-fix evidence: `/private/tmp/ninka-thinking-final-desktop.png`
+- 桌面与窄屏均无 P0/P1/P2 问题；最终浏览器控制台无 error 或 warning。
+
+### Pass 3 — 真实发送链路补测
+
+- [P1] 浏览器离线演示模型同步写入回复并直接返回 `completed`，界面没有进入可渲染的运行态；静态预览可见，但真实发送时思考动效不会出现。
+  - root cause: 思考行只依赖 `currentRun`；演示 API 在同一轮调用内依次发出正文与完成事件，`currentRun` 始终为 `null`。
+  - fix: 将“请求正在启动”与“任务运行中”拆开；浏览器演示 API 先保存用户消息并返回 `running`，保留 `900 ms` 的真实运行窗口，再发送演示回复和完成事件。
+  - post-fix evidence: `/private/tmp/ninka-thinking-live-flow.png`；用户消息之后显示 1 条“正在思考”，间隔 `250 ms` 的两帧哈希不同，完成后思考行数量归零、回复出现。
+
+## Verification
+
+- 页面身份、非空内容、框架错误覆盖层、控制台和运行中状态均通过内置浏览器检查。
+- 交互检查：真实点击发送后，用户消息、思考行、演示回复按顺序出现；完成后思考行退出。
+- Vitest：51 个测试文件、198 项测试在双 worker 完整回归中全部通过。
+- TypeScript 类型检查和 Vite 生产构建通过；仅保留项目既有的大分块提示。
+- `thinking-orbs` 的 MIT 许可已进入 `NOTICE` 和生成的 `THIRD_PARTY_LICENSES.md`。
+
+final result: passed
+
+---
+
 # Ninka FoodLab 基础品牌接入 QA
 
 - source visual truth path: `/Users/andrew/Documents/食品研发工具/assets/branding/preview/ninka-brand-sheet.png`

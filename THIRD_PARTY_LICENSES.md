@@ -10,7 +10,7 @@ Regenerate from the repository root with:
 pnpm licenses:generate
 ```
 
-## JavaScript dependencies (115)
+## JavaScript dependencies (116)
 
 | Package | Version | Declared license |
 | --- | --- | --- |
@@ -109,6 +109,7 @@ pnpm licenses:generate
 | `stackback` | `0.0.2` | MIT |
 | `std-env` | `4.2.0` | MIT |
 | `symbol-tree` | `3.2.4` | MIT |
+| `thinking-orbs` | `0.2.0` | MIT |
 | `tinybench` | `2.9.0` | MIT |
 | `tinyexec` | `1.2.4` | MIT |
 | `tinyglobby` | `0.2.17` | MIT |

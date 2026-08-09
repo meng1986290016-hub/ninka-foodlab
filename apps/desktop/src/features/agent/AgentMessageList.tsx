@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import type { AgentMessage } from "../../api/agent-types";
 import { Icon, type IconName } from "../../components/Icon";
+import { AgentThinkingStatus } from "./AgentThinkingStatus";
 
 interface QuickTask {
   description: string;
@@ -37,6 +38,7 @@ const quickTasks: QuickTask[] = [
 interface AgentMessageListProps {
   messages: AgentMessage[];
   streamingText: string;
+  thinkingStatus: string | null;
   loading: boolean;
   onQuickStart?: ((prompt: string) => void) | undefined;
 }
@@ -44,6 +46,7 @@ interface AgentMessageListProps {
 export function AgentMessageList({
   messages,
   streamingText,
+  thinkingStatus,
   loading,
   onQuickStart,
 }: AgentMessageListProps) {
@@ -52,12 +55,12 @@ export function AgentMessageList({
   const visibleMessages = messages.filter((message) => message.role !== "tool");
 
   useEffect(() => {
-    if (streamingText) {
+    if (streamingText || thinkingStatus) {
       endRef.current?.scrollIntoView?.({ block: "end" });
     } else {
       latestMessageRef.current?.scrollIntoView?.({ block: "start" });
     }
-  }, [messages, streamingText]);
+  }, [messages, streamingText, thinkingStatus]);
 
   return (
     <div
@@ -117,6 +120,10 @@ export function AgentMessageList({
           ) : null}
         </article>
       ))}
+
+      {thinkingStatus ? (
+        <AgentThinkingStatus status={thinkingStatus} />
+      ) : null}
 
       {streamingText ? (
         <article className="agent-message agent-message--assistant is-streaming">

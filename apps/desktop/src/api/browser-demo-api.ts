@@ -116,6 +116,7 @@ interface BrowserDemoApiOptions {
   createId?: () => string;
   now?: () => string;
   agentEvents?: BrowserAgentEventSource;
+  agentResponseDelayMs?: number;
 }
 
 const seedIngredients: Ingredient[] = [
@@ -707,12 +708,14 @@ export class BrowserDemoApi implements DesktopApi {
   private readonly createId: () => string;
   private readonly now: () => string;
   private readonly agentEvents: BrowserAgentEventSource | undefined;
+  private readonly agentResponseDelayMs: number;
 
   constructor(options: BrowserDemoApiOptions = {}) {
     this.storage = options.storage ?? defaultStorage();
     this.createId = options.createId ?? defaultId;
     this.now = options.now ?? (() => new Date().toISOString());
     this.agentEvents = options.agentEvents;
+    this.agentResponseDelayMs = Math.max(0, options.agentResponseDelayMs ?? 0);
   }
 
   private unsupportedImport<T>(): Promise<T> {
@@ -1995,7 +1998,6 @@ export class BrowserDemoApi implements DesktopApi {
         createdAt: timestamp,
         updatedAt: timestamp,
       };
-      state.agentRecipeProposals[proposal.id] = proposal;
     }
     const finalText = retrospectiveTask && request.recipeContext
       ? browserDemoRecipeRetrospective(
@@ -2033,9 +2035,53 @@ export class BrowserDemoApi implements DesktopApi {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
+
+    if (this.agentResponseDelayMs > 0) {
+      const runningRun: AgentRun = { ...run, status: "running" };
+      state.agentRuns[runningRun.id] = runningRun;
+      state.agentMessages[userMessage.id] = userMessage;
+      state.agentConversations[request.conversationId]!.updatedAt = timestamp;
+      this.write(state);
+
+      globalThis.setTimeout(() => {
+        const latest = this.read();
+        const activeRun = latest.agentRuns[runId];
+        if (!activeRun || !["queued", "running"].includes(activeRun.status)) {
+          return;
+        }
+
+        latest.agentRuns[runId] = {
+          ...activeRun,
+          status: "completed",
+          updatedAt: this.now(),
+        };
+        latest.agentMessages[assistantMessage.id] = assistantMessage;
+        if (proposal) latest.agentRecipeProposals[proposal.id] = proposal;
+        latest.agentConversations[request.conversationId]!.updatedAt =
+          this.now();
+        this.write(latest);
+
+        this.emitAgentEvent({ type: "message_delta", runId, text: finalText });
+        if (draftCount > 0) {
+          this.emitAgentEvent({
+            type: "drafts_changed",
+            runId,
+            importJobId: job.id,
+          });
+        }
+        if (proposal) {
+          this.emitAgentEvent({ type: "recipe_proposals_changed", runId });
+        }
+        this.emitAgentEvent({ type: "run_completed", runId });
+      }, this.agentResponseDelayMs);
+
+      return runningRun;
+    }
+
     state.agentRuns[run.id] = run;
     state.agentMessages[userMessage.id] = userMessage;
     state.agentMessages[assistantMessage.id] = assistantMessage;
+    if (proposal) state.agentRecipeProposals[proposal.id] = proposal;
     state.agentConversations[request.conversationId]!.updatedAt = timestamp;
     this.write(state);
 

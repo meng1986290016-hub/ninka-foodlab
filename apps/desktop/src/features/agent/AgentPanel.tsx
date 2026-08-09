@@ -178,6 +178,7 @@ export function AgentPanel({
   const reviewableDrafts = workflow.drafts.filter(
     (draft) => draft.status !== "imported" && draft.status !== "discarded",
   );
+  const busy = workflow.starting || Boolean(workflow.currentRun);
 
   return (
     <aside
@@ -199,7 +200,7 @@ export function AgentPanel({
         <div className="agent-panel__header-actions">
           <button
             aria-label="清空 Agent 对话"
-            disabled={Boolean(workflow.currentRun)}
+            disabled={busy}
             onClick={() => void clearConversation()}
             title="清空当前对话"
             type="button"
@@ -219,7 +220,7 @@ export function AgentPanel({
       {recipeContext ? (
         <RecipeAgentWorkspace
           api={api}
-          busy={Boolean(workflow.currentRun)}
+          busy={busy}
           canUseModel={Boolean(
             workflow.preferences?.enabled && workflow.activeProvider,
           )}
@@ -272,9 +273,14 @@ export function AgentPanel({
                     }
               }
               streamingText={workflow.streamingText}
+              thinkingStatus={
+                busy && !workflow.streamingText
+                  ? workflow.taskStatus || "正在思考"
+                  : null
+              }
             />
             <IngredientImportDraftList
-              busy={Boolean(workflow.currentRun)}
+              busy={busy}
               drafts={workflow.drafts}
               onDiscard={(draft) => void discardDraft(draft)}
               onMerge={(source, target) =>
@@ -297,7 +303,7 @@ export function AgentPanel({
               unassignedAttachmentCount={unassignedAttachmentCount}
             />
             <AgentRecipeProposalList
-              busy={Boolean(workflow.currentRun)}
+              busy={busy}
               onDiscard={(proposal) => void discardProposal(proposal)}
               onOpen={setReviewProposal}
               onOpenAccepted={(recipeId) => onOpenRecipeDraft?.(recipeId)}
@@ -305,13 +311,14 @@ export function AgentPanel({
             />
             <div aria-hidden="true" ref={timelineEndRef} />
           </div>
-          <AgentTaskStatus
-            currentRun={workflow.currentRun}
-            error={workflow.error}
-            lastRun={workflow.lastRun}
-            onRetry={() => void workflow.retry()}
-            status={workflow.taskStatus}
-          />
+          {!busy ? (
+            <AgentTaskStatus
+              error={workflow.error}
+              lastRun={workflow.lastRun}
+              onRetry={() => void workflow.retry()}
+              status={workflow.taskStatus}
+            />
+          ) : null}
 
           {pending && workflow.activeProvider ? (
             <div className="agent-privacy-confirmation">
@@ -339,7 +346,7 @@ export function AgentPanel({
           ) : null}
 
           <AgentComposer
-            disabled={workflow.loading || !open}
+            disabled={workflow.loading || workflow.starting || !open}
             filePicker={filePicker}
             files={files}
             onFilesChange={setFiles}

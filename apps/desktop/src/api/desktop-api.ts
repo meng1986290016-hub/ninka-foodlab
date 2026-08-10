@@ -126,6 +126,7 @@ export interface DesktopApi extends LegacyIngredientApi {
   updateRecipeScheme(id: string, input: RecipeSchemeUpdateInput): Promise<Recipe>;
   archiveRecipe(id: string): Promise<void>;
   restoreRecipe(id: string): Promise<void>;
+  deleteDraftRecipe(id: string): Promise<void>;
   permanentlyDeleteRecipe(id: string, confirmationName: string): Promise<void>;
   deleteRecipeVersion(id: string): Promise<void>;
   getRecipeDraft(recipeId: string): Promise<RecipeDraft | null>;

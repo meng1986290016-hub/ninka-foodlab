@@ -45,8 +45,8 @@ use commands::labels::{
 };
 use commands::recipes::{
     archive_recipe, compare_recipe_versions, copy_recipe_version_to_draft, create_recipe,
-    create_recipe_alternative, create_recipe_version, delete_recipe_version, get_recipe,
-    get_recipe_draft, get_recipe_version, list_recipe_versions, list_recipes,
+    create_recipe_alternative, create_recipe_version, delete_draft_recipe, delete_recipe_version,
+    get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions, list_recipes,
     permanently_delete_recipe, restore_recipe, save_recipe_draft, update_recipe,
     update_recipe_scheme,
 };
@@ -147,6 +147,7 @@ pub fn run() {
             update_recipe_scheme,
             archive_recipe,
             restore_recipe,
+            delete_draft_recipe,
             permanently_delete_recipe,
             delete_recipe_version,
             get_recipe_draft,

@@ -130,6 +130,13 @@ pub fn restore_recipe(id: String, state: State<'_, AppState>) -> Result<(), Comm
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn delete_draft_recipe(id: String, state: State<'_, AppState>) -> Result<(), CommandError> {
+    recipe_repository(&state)?
+        .delete_draft_recipe(&id)
+        .map_err(Into::into)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub fn permanently_delete_recipe(
     id: String,
     confirmation_name: String,

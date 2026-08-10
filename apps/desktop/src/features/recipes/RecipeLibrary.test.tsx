@@ -324,6 +324,16 @@ function createApi() {
           : null;
       }
     }),
+    deleteDraftRecipe: vi.fn(async (id: string) => {
+      const recipeVersions = versionsByRecipe.get(id) ?? [];
+      if (recipeVersions.length > 0) {
+        throw new Error("该配方已有正式版本，不能按工作草稿删除");
+      }
+      const index = summaries.findIndex((item) => item.recipe.id === id);
+      if (index < 0) throw new Error("找不到配方");
+      summaries.splice(index, 1);
+      versionsByRecipe.delete(id);
+    }),
     permanentlyDeleteRecipe: vi.fn(
       async (id: string, confirmationName: string) => {
         const index = summaries.findIndex((item) => item.recipe.id === id);
@@ -406,6 +416,43 @@ function createApi() {
 }
 
 describe("RecipeLibrary", () => {
+  it("reloads cached rows when returning from the recipe workbench", async () => {
+    const { api, yogurt, yogurtVersions } = createApi();
+    const view = render(
+      <RecipeLibrary
+        api={api}
+        onOpenDraft={() => undefined}
+        refreshToken={0}
+      />,
+    );
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("V2")).toBeTruthy();
+
+    yogurtVersions.unshift(version(yogurt, 3, "55"));
+    view.rerender(
+      <RecipeLibrary
+        api={api}
+        onOpenDraft={() => undefined}
+        refreshToken={1}
+      />,
+    );
+
+    expect(await within(table).findByText("V3")).toBeTruthy();
+    expect(within(table).getByText("¥55.00")).toBeTruthy();
+  });
+
+  it("marks products whose source ingredients changed and shows the current estimate", async () => {
+    const { api } = createApi();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    const table = await screen.findByRole("table");
+    const row = within(table).getByText("高蛋白酸奶").closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText("原料数据有更新")).toBeTruthy();
+    expect(within(row!).getByText("当前估算 ¥99.00")).toBeTruthy();
+    expect(within(row!).getByText("¥42.00")).toBeTruthy();
+  });
+
   it("searches names, optional codes and tags and filters type and status", async () => {
     const { api } = createApi();
     const user = userEvent.setup();
@@ -467,6 +514,54 @@ describe("RecipeLibrary", () => {
       (await within(inspector).findAllByText("¥30.00")).length,
     ).toBeGreaterThan(0);
     expect(within(inspector).queryByText("¥42.00")).toBeNull();
+  });
+
+  it("labels recipes without formal versions as work drafts in the list and inspector", async () => {
+    const { api } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    const table = await screen.findByRole("table");
+    expect(
+      within(table).getByRole("columnheader", { name: "版本状态" }),
+    ).toBeTruthy();
+    const draftName = within(table).getByText("燕麦试验配方");
+    const row = draftName.closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText("工作草稿")).toBeTruthy();
+
+    await user.click(row!);
+    const inspector = await screen.findByLabelText("燕麦试验配方版本详情");
+    expect(within(inspector).getAllByText("工作草稿").length).toBeGreaterThan(1);
+    expect(
+      within(inspector).getByRole("button", { name: "删除工作草稿" }),
+    ).toBeTruthy();
+  });
+
+  it("permanently deletes a work draft after one confirmation without name input", async () => {
+    const { api } = createApi();
+    const user = userEvent.setup();
+    render(<RecipeLibrary api={api} onOpenDraft={() => undefined} />);
+
+    const table = await screen.findByRole("table");
+    const row = within(table).getByText("燕麦试验配方").closest("tr");
+    expect(row).not.toBeNull();
+    await user.click(row!);
+    await user.click(
+      screen.getByRole("button", { name: "删除工作草稿" }),
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "删除工作草稿？" });
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    await user.click(
+      within(dialog).getByRole("button", { name: "永久删除工作草稿" }),
+    );
+
+    await waitFor(() => {
+      expect(api.deleteDraftRecipe).toHaveBeenCalledWith("draft-only");
+    });
+    expect(await screen.findByText("“燕麦试验配方”工作草稿已永久删除")).toBeTruthy();
+    expect(within(screen.getByRole("table")).queryByText("燕麦试验配方")).toBeNull();
   });
 
   it("copies the selected immutable version into a workbench draft", async () => {

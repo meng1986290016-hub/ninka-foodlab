@@ -170,13 +170,21 @@ export function useRecipeDraft(
           isRecipeEditorDraftPayload(editorDraft.payload, recipeId)
             ? editorDraft.payload.draft
             : null;
+        const selectedDraft =
+          restorable ??
+          formalDraft ??
+          createEmptyRecipeDraft(recipeId, now());
+        const reconciled =
+          restorable !== null && formalDraft !== null
+            ? reconcileDraftReferences(restorable, formalDraft)
+            : { draft: selectedDraft, changed: false };
         dispatch({
           type: "hydrate",
-          draft:
-            restorable ??
-            formalDraft ??
-            createEmptyRecipeDraft(recipeId, now()),
-          dirty: restorable !== null,
+          draft: reconciled.draft,
+          dirty:
+            restorable !== null ||
+            reconciled.changed ||
+            hasIngredientUpdateAfterCalculation(reconciled.draft),
         });
       })
       .catch((cause: unknown) => {
@@ -383,5 +391,73 @@ function isRecipeEditorDraftPayload(
     draft.recipeId === recipeId &&
     "items" in draft &&
     Array.isArray(draft.items)
+  );
+}
+
+function reconcileDraftReferences(
+  cachedDraft: RecipeDraft,
+  materializedDraft: RecipeDraft,
+) {
+  const currentItems = new Map(
+    materializedDraft.items.map((item) => [item.id, item]),
+  );
+  let changed = false;
+  const items = cachedDraft.items.map((item) => {
+    const current = currentItems.get(item.id);
+    if (current?.kind !== item.kind) return item;
+    if (item.kind === "ingredient" && current.kind === "ingredient") {
+      if (
+        item.materialName === current.materialName &&
+        JSON.stringify(item.ingredientVariant) ===
+          JSON.stringify(current.ingredientVariant)
+      ) {
+        return item;
+      }
+      changed = true;
+      return {
+        ...item,
+        materialName: current.materialName,
+        ingredientVariant: current.ingredientVariant,
+      };
+    }
+    if (item.kind === "recipe_version" && current.kind === "recipe_version") {
+      if (
+        JSON.stringify(item.recipeVersion) ===
+        JSON.stringify(current.recipeVersion)
+      ) {
+        return item;
+      }
+      changed = true;
+      return { ...item, recipeVersion: current.recipeVersion };
+    }
+    if (item.kind === "material_need" && current.kind === "material_need") {
+      if (
+        JSON.stringify(item.materialNeed) ===
+        JSON.stringify(current.materialNeed)
+      ) {
+        return item;
+      }
+      changed = true;
+      return { ...item, materialNeed: current.materialNeed };
+    }
+    return item;
+  });
+  return {
+    draft: changed ? { ...cachedDraft, items } : cachedDraft,
+    changed,
+  };
+}
+
+function hasIngredientUpdateAfterCalculation(draft: RecipeDraft) {
+  const calculatedAt = draft.calculation?.calculatedAt;
+  if (calculatedAt === undefined) {
+    return draft.items.some((item) => item.kind === "ingredient");
+  }
+  const calculationTime = Date.parse(calculatedAt);
+  if (!Number.isFinite(calculationTime)) return false;
+  return draft.items.some(
+    (item) =>
+      item.kind === "ingredient" &&
+      Date.parse(item.ingredientVariant.updatedAt) > calculationTime,
   );
 }

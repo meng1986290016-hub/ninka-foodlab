@@ -478,6 +478,31 @@ impl RecipeRepository {
         Ok(())
     }
 
+    pub fn delete_draft_recipe(&mut self, id: &str) -> Result<(), RepositoryError> {
+        let recipe = self.get_recipe(id)?;
+        if recipe.archived_at.is_some() {
+            return Err(domain("invalid_state", "已归档配方请从归档库永久删除"));
+        }
+        let has_versions = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM recipe_versions WHERE recipe_id = ?1)",
+            [id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if has_versions {
+            return Err(domain(
+                "invalid_state",
+                "该配方已有正式版本，不能按工作草稿删除",
+            ));
+        }
+        assert_recipe_can_be_deleted(&self.connection, id)?;
+
+        let transaction = self.connection.transaction()?;
+        transaction.execute("DELETE FROM recipe_drafts WHERE recipe_id = ?1", [id])?;
+        transaction.execute("DELETE FROM recipes WHERE id = ?1", [id])?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn permanently_delete_recipe(
         &mut self,
         id: &str,

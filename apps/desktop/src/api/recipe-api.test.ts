@@ -183,6 +183,7 @@ describe("recipe desktop API", () => {
     await api.compareRecipeVersions("version-1", "version-2");
     await api.archiveRecipe("recipe-1");
     await api.restoreRecipe("recipe-1");
+    await api.deleteDraftRecipe("recipe-1");
     await api.deleteRecipeVersion("version-1");
     await api.permanentlyDeleteRecipe("recipe-1", "低糖乳饮料");
 
@@ -220,6 +221,7 @@ describe("recipe desktop API", () => {
       ],
       ["archive_recipe", { id: "recipe-1" }],
       ["restore_recipe", { id: "recipe-1" }],
+      ["delete_draft_recipe", { id: "recipe-1" }],
       ["delete_recipe_version", { id: "version-1" }],
       [
         "permanently_delete_recipe",
@@ -263,6 +265,61 @@ describe("recipe desktop API", () => {
     expect((await api.listRecipeVersions(created.id)).map((item) => item.id)).toEqual([
       savedVersion.id,
     ]);
+  });
+
+  it("deletes active draft recipes but rejects recipes with formal versions", async () => {
+    const storage = new MemoryStorage();
+    let sequence = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      createId: () => `draft-delete-id-${++sequence}`,
+      now: () => "2026-08-03T09:00:00.000Z",
+    });
+
+    const emptyRecipe = await api.createRecipe({
+      name: "尚未开始配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    await api.deleteDraftRecipe(emptyRecipe.id);
+    await expect(api.getRecipe(emptyRecipe.id)).rejects.toMatchObject({
+      code: "not_found",
+    });
+
+    const draftRecipe = await api.createRecipe({
+      name: "只有工作草稿",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    await api.saveRecipeDraft(draftInput(draftRecipe.id, "1000", "0", ""));
+    await api.deleteDraftRecipe(draftRecipe.id);
+    expect(
+      (await api.listRecipes()).some(
+        (entry) => entry.recipe.id === draftRecipe.id,
+      ),
+    ).toBe(false);
+
+    const versionedRecipe = await api.createRecipe({
+      name: "已有正式版本",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft(
+      draftInput(versionedRecipe.id, "1000", "0", ""),
+    );
+    await api.createRecipeVersion({
+      recipeId: versionedRecipe.id,
+      sourceDraftId: draft.id,
+      basedOnVersionId: null,
+      snapshot: snapshot(versionedRecipe, "1000", "0", ""),
+      dependencyVersionIds: [],
+    });
+    await expect(
+      api.deleteDraftRecipe(versionedRecipe.id),
+    ).rejects.toMatchObject({ code: "invalid_state" });
   });
 
   it("permanently deletes confirmed archived recipes and never reuses version numbers", async () => {

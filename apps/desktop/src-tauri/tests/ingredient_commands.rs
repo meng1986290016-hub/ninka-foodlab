@@ -84,7 +84,7 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 88);
+    assert_eq!(REGISTERED_COMMANDS.len(), 89);
     for command in [
         "list_categories",
         "create_supplier",
@@ -95,6 +95,7 @@ fn every_grouped_desktop_api_method_is_registered() {
         "create_recipe_alternative",
         "update_recipe_scheme",
         "restore_recipe",
+        "delete_draft_recipe",
         "permanently_delete_recipe",
         "delete_recipe_version",
         "export_sample_sheet",

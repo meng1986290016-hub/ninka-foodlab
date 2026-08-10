@@ -56,6 +56,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [reviewQueueCompleted, setReviewQueueCompleted] = useState(0);
   const [ingredientRefreshToken, setIngredientRefreshToken] = useState(0);
   const [draftRefreshToken, setDraftRefreshToken] = useState(0);
+  const [recipeRefreshToken, setRecipeRefreshToken] = useState(0);
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(
     null,
   );
@@ -210,13 +211,17 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
                     initialVersionId: versionId,
                   })
                 }
+                refreshToken={recipeRefreshToken}
               />
             </div>
             {activeRecipeId ? (
               <RecipeWorkbench
                 api={desktopApi}
                 onAgentContextChange={setRecipeAgentContext}
-                onBack={() => setActiveRecipeId(null)}
+                onBack={() => {
+                  setActiveRecipeId(null);
+                  setRecipeRefreshToken((current) => current + 1);
+                }}
                 onOpenAgent={() => setAgentOpen(true)}
                 onOpenSampleSheet={setSampleSheetLaunch}
                 recipeId={activeRecipeId}

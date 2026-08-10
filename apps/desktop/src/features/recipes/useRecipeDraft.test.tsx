@@ -201,6 +201,74 @@ afterEach(() => {
 });
 
 describe("recipe draft state and autosave", () => {
+  it("keeps local invalid text but refreshes cached ingredient references", async () => {
+    const staleItem = recipeDraft().items[0]!;
+    if (staleItem.kind !== "ingredient") throw new Error("missing ingredient fixture");
+    const restorable = recipeDraft({
+      items: [{ ...staleItem, amount: "12..5" }],
+    });
+    const currentItem = {
+      ...staleItem,
+      ingredientVariant: {
+        ...staleItem.ingredientVariant,
+        currentPrice: "99",
+        updatedAt: "2026-07-30T06:00:00.000Z",
+      },
+    };
+    const api = mockApi({
+      getRecipeDraft: vi.fn(async () =>
+        recipeDraft({ items: [currentItem] }),
+      ),
+      getDraft: vi.fn(async () => draftRecord({ draft: restorable })),
+    });
+
+    const { result } = renderHook(() =>
+      useRecipeDraft(api, "recipe-1", {
+        calculate: successfulCalculation,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const restoredItem = result.current.draft.items[0];
+    expect(restoredItem?.amount).toBe("12..5");
+    expect(restoredItem?.kind).toBe("ingredient");
+    if (restoredItem?.kind !== "ingredient") {
+      throw new Error("ingredient reference was not restored");
+    }
+    expect(restoredItem.ingredientVariant.currentPrice).toBe("99");
+    expect(restoredItem.ingredientVariant.updatedAt).toBe(
+      "2026-07-30T06:00:00.000Z",
+    );
+  });
+
+  it("recalculates and persists a draft when an ingredient is newer than its result", async () => {
+    const stale = recipeDraft({
+      calculation: {
+        ...calculation(),
+        calculatedAt: "2026-07-30T01:00:00.000Z",
+      },
+    });
+    const api = mockApi({
+      getRecipeDraft: vi.fn(async () => stale),
+    });
+
+    renderHook(() =>
+      useRecipeDraft(api, "recipe-1", {
+        calculate: successfulCalculation,
+        debounceMs: 0,
+      }),
+    );
+
+    await waitFor(() => expect(api.saveRecipeDraft).toHaveBeenCalled());
+    expect(api.saveRecipeDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        calculation: expect.objectContaining({
+          calculatedAt: "2026-07-30T04:00:00.000Z",
+        }),
+      }),
+    );
+  });
+
   it("restores the local editor payload after restart, including invalid user text", async () => {
     const restorable = recipeDraft({
       items: [

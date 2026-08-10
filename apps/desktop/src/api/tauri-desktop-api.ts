@@ -275,6 +275,10 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<void>("restore_recipe", { id });
   }
 
+  deleteDraftRecipe(id: string) {
+    return this.invoke<void>("delete_draft_recipe", { id });
+  }
+
   permanentlyDeleteRecipe(id: string, confirmationName: string) {
     return this.invoke<void>("permanently_delete_recipe", {
       id,

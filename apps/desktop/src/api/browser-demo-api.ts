@@ -1317,6 +1317,48 @@ export class BrowserDemoApi implements DesktopApi {
     this.write(state);
   }
 
+  async deleteDraftRecipe(id: string): Promise<void> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, id);
+    if (recipe.archivedAt !== null) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "已归档配方请从归档库永久删除",
+      );
+    }
+    if (
+      Object.values(state.recipeVersions).some(
+        (version) => version.recipeId === id,
+      )
+    ) {
+      throw new DesktopApiError(
+        "invalid_state",
+        "该配方已有正式版本，不能按工作草稿删除",
+      );
+    }
+    if (
+      Object.values(state.nutritionLabels).some(
+        (label) => label.recipeId === id,
+      )
+    ) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该配方已生成营养标签，不能删除",
+      );
+    }
+
+    delete state.recipeDrafts[id];
+    delete state.recipes[id];
+    delete state.settings[recipeVersionSequenceKey(id)];
+    for (const proposal of Object.values(state.agentRecipeProposals)) {
+      if (proposal.acceptedRecipeId === id) proposal.acceptedRecipeId = null;
+    }
+    for (const need of Object.values(state.materialNeeds)) {
+      if (need.recipeId === id) need.recipeId = null;
+    }
+    this.write(state);
+  }
+
   async permanentlyDeleteRecipe(
     id: string,
     confirmationName: string,

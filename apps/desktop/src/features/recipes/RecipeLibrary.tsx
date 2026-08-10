@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
+import type { MaterialGroup } from "../../api/types";
 import type {
   Recipe,
   RecipeAlternativeCreateInput,
@@ -36,11 +37,14 @@ interface RecipeLibraryProps {
     recipeVersionId: string,
   ): void;
   onOpenSampleSheet?(recipeId: string, versionId: string | null): void;
+  refreshToken?: number;
 }
 
 interface RecipeLibraryEntry {
   summary: RecipeSummary;
   versions: RecipeVersion[];
+  currentPriceEstimate: RecipeCurrentPriceResult | null;
+  ingredientDataChanged: boolean;
 }
 
 type RecipeStatusFilter =
@@ -73,6 +77,7 @@ export function RecipeLibrary({
   onOpenDraft,
   onOpenNutritionLabel,
   onOpenSampleSheet,
+  refreshToken = 0,
 }: RecipeLibraryProps) {
   const [entries, setEntries] = useState<RecipeLibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +106,8 @@ export function RecipeLibrary({
   const [restoring, setRestoring] = useState(false);
   const [deleteRecipeCandidate, setDeleteRecipeCandidate] =
     useState<RecipeSummary | null>(null);
+  const [deleteDraftRecipeCandidate, setDeleteDraftRecipeCandidate] =
+    useState<RecipeSummary | null>(null);
   const [deleteRecipeConfirmation, setDeleteRecipeConfirmation] = useState("");
   const [deletingRecipe, setDeletingRecipe] = useState(false);
   const [deleteVersionCandidate, setDeleteVersionCandidate] =
@@ -120,16 +127,64 @@ export function RecipeLibrary({
     setError(null);
     try {
       const summaries = await api.listRecipes();
-      const versions = await Promise.all(
-        summaries.map((summary) =>
-          api.listRecipeVersions(summary.recipe.id),
+      const [versions, materialGroups] = await Promise.all([
+        Promise.all(
+          summaries.map((summary) =>
+            api.listRecipeVersions(summary.recipe.id),
+          ),
         ),
+        api.listMaterialGroups(),
+      ]);
+      const versionById = new Map(
+        versions.flat().map((version) => [version.id, version]),
       );
       setEntries(
-        summaries.map((summary, index) => ({
-          summary,
-          versions: versions[index] ?? [],
-        })),
+        await Promise.all(
+          summaries.map(async (summary, index) => {
+            const recipeVersions = versions[index] ?? [];
+            const latest = recipeVersions[0] ?? null;
+            if (latest === null) {
+              return {
+                summary,
+                versions: recipeVersions,
+                currentPriceEstimate: null,
+                ingredientDataChanged: false,
+              };
+            }
+            try {
+              const referencedVersions = await loadRecipeVersionClosure(
+                async (id) => {
+                  const loaded = versionById.get(id);
+                  if (loaded !== undefined) return loaded;
+                  const fetched = await api.getRecipeVersion(id);
+                  versionById.set(fetched.id, fetched);
+                  return fetched;
+                },
+                latest,
+              );
+              return {
+                summary,
+                versions: recipeVersions,
+                currentPriceEstimate: calculateRecipeAtCurrentPrices({
+                  rootVersion: latest,
+                  referencedVersions,
+                  materialGroups,
+                }),
+                ingredientDataChanged: hasUpdatedIngredientData(
+                  [latest, ...referencedVersions],
+                  materialGroups,
+                ),
+              };
+            } catch {
+              return {
+                summary,
+                versions: recipeVersions,
+                currentPriceEstimate: null,
+                ingredientDataChanged: false,
+              };
+            }
+          }),
+        ),
       );
     } catch (cause) {
       setError(messageFrom(cause, "配方库无法读取"));
@@ -140,7 +195,7 @@ export function RecipeLibrary({
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, refreshToken]);
 
   const filteredEntries = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("zh-CN");
@@ -336,6 +391,26 @@ export function RecipeLibrary({
       setNotice(`“${deletedName}”已永久删除`);
     } catch (cause) {
       setError(messageFrom(cause, "配方无法永久删除"));
+    } finally {
+      setDeletingRecipe(false);
+    }
+  }
+
+  async function deleteSelectedDraftRecipe() {
+    if (deleteDraftRecipeCandidate === null) return;
+    setDeletingRecipe(true);
+    setError(null);
+    try {
+      const deletedName = deleteDraftRecipeCandidate.recipe.name;
+      await api.deleteDraftRecipe(deleteDraftRecipeCandidate.recipe.id);
+      setDeleteDraftRecipeCandidate(null);
+      setSelectedRecipeId(null);
+      setSelectedVersionId(null);
+      setInspectorOpen(false);
+      await refresh();
+      setNotice(`“${deletedName}”工作草稿已永久删除`);
+    } catch (cause) {
+      setError(messageFrom(cause, "工作草稿无法删除"));
     } finally {
       setDeletingRecipe(false);
     }
@@ -590,7 +665,7 @@ export function RecipeLibrary({
                   <th>产品 / 配方方案</th>
                   <th>方案状态</th>
                   <th>类型</th>
-                  <th>最新版本</th>
+                  <th>版本状态</th>
                   <th>计划投料总量</th>
                   <th>整批成本</th>
                   <th>{tab === "archived" ? "归档时间" : "最近更新"}</th>
@@ -646,7 +721,18 @@ export function RecipeLibrary({
                         <RecipeKindBadge kind={recipe.kind} />
                       </td>
                       <td>
-                        {latest ? `V${latest.versionNumber}` : "—"}
+                        {latest ? (
+                          <span className="recipe-library__version-status">
+                            <strong>{`V${latest.versionNumber}`}</strong>
+                            {entry.ingredientDataChanged ? (
+                              <small>原料数据有更新</small>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="recipe-library__draft-status">
+                            工作草稿
+                          </span>
+                        )}
                       </td>
                       <td>
                         {latest
@@ -657,8 +743,23 @@ export function RecipeLibrary({
                       </td>
                       <td>
                         {latest
-                          ? formatMoney(
-                              latest.snapshot.calculation.cost.batchTotal,
+                          ? (
+                              <span className="recipe-library__cost-status">
+                                <strong>
+                                  {formatMoney(
+                                    latest.snapshot.calculation.cost.batchTotal,
+                                  )}
+                                </strong>
+                                {entry.ingredientDataChanged ? (
+                                  <small>
+                                    {entry.currentPriceEstimate?.status === "complete"
+                                      ? `当前估算 ${formatMoney(
+                                          entry.currentPriceEstimate.currentBatchTotal,
+                                        )}`
+                                      : "当前数据待补全"}
+                                  </small>
+                                ) : null}
+                              </span>
                             )
                           : "—"}
                       </td>
@@ -718,6 +819,12 @@ export function RecipeLibrary({
               setError(null);
               setDeleteRecipeConfirmation("");
               setDeleteRecipeCandidate(selectedEntry.summary);
+            }
+          }}
+          onDeleteDraftRecipe={() => {
+            if (selectedEntry) {
+              setError(null);
+              setDeleteDraftRecipeCandidate(selectedEntry.summary);
             }
           }}
           onDeleteVersion={() => {
@@ -840,6 +947,47 @@ export function RecipeLibrary({
                 type="button"
               >
                 {deletingVersion ? "正在删除…" : "永久删除版本"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {deleteDraftRecipeCandidate ? (
+        <div className="recipe-library-dialog-backdrop">
+          <section
+            aria-labelledby="delete-draft-recipe-title"
+            aria-modal="true"
+            className="recipe-library-dialog recipe-library-dialog--danger"
+            role="dialog"
+          >
+            <div className="recipe-library-dialog__icon">
+              <Icon name="trash" size={22} />
+            </div>
+            <h2 id="delete-draft-recipe-title">删除工作草稿？</h2>
+            <p>
+              将永久删除“{deleteDraftRecipeCandidate.recipe.name}”及其工作草稿，产品会从配方库中移除，删除后无法恢复。
+            </p>
+            {error ? <p className="recipe-library-dialog__error" role="alert">{error}</p> : null}
+            <footer>
+              <button
+                className="button button--secondary"
+                disabled={deletingRecipe}
+                onClick={() => {
+                  setDeleteDraftRecipeCandidate(null);
+                  setError(null);
+                }}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button recipe-library__confirm-delete-button"
+                disabled={deletingRecipe}
+                onClick={() => void deleteSelectedDraftRecipe()}
+                type="button"
+              >
+                {deletingRecipe ? "正在删除…" : "永久删除工作草稿"}
               </button>
             </footer>
           </section>
@@ -995,6 +1143,7 @@ interface RecipeVersionInspectorProps {
   onArchive(): void;
   onRestore(): void;
   onPermanentlyDelete(): void;
+  onDeleteDraftRecipe(): void;
   onDeleteVersion(): void;
   onOpenSampleSheet(): void;
   onCompare(): void;
@@ -1022,6 +1171,7 @@ function RecipeVersionInspector({
   onArchive,
   onRestore,
   onPermanentlyDelete,
+  onDeleteDraftRecipe,
   onDeleteVersion,
   onOpenSampleSheet,
   onCompare,
@@ -1074,11 +1224,15 @@ function RecipeVersionInspector({
             ) : null}
           </p>
         </div>
-        {selectedVersion ? (
-          <strong className="recipe-library-inspector__version">
-            V{selectedVersion.versionNumber}
-          </strong>
-        ) : null}
+        <strong
+          className={
+            selectedVersion
+              ? "recipe-library-inspector__version"
+              : "recipe-library-inspector__version is-draft"
+          }
+        >
+          {selectedVersion ? `V${selectedVersion.versionNumber}` : "工作草稿"}
+        </strong>
         <button
           aria-label="关闭配方详情"
           className="recipe-library-inspector__close"
@@ -1144,15 +1298,27 @@ function RecipeVersionInspector({
           <Icon name="nutrition-label" size={16} />
           生成营养标签
         </button>
-        <button
-          className="button button--secondary recipe-library__danger-button"
-          disabled={selectedVersion === null || deletingVersion}
-          onClick={onDeleteVersion}
-          type="button"
-        >
-          <Icon name="trash" size={16} />
-          {deletingVersion ? "正在删除…" : "删除此版本"}
-        </button>
+        {!archived && entry.versions.length === 0 ? (
+          <button
+            className="button button--secondary recipe-library__danger-button"
+            disabled={deletingRecipe}
+            onClick={onDeleteDraftRecipe}
+            type="button"
+          >
+            <Icon name="trash" size={16} />
+            {deletingRecipe ? "正在删除…" : "删除工作草稿"}
+          </button>
+        ) : (
+          <button
+            className="button button--secondary recipe-library__danger-button"
+            disabled={selectedVersion === null || deletingVersion}
+            onClick={onDeleteVersion}
+            type="button"
+          >
+            <Icon name="trash" size={16} />
+            {deletingVersion ? "正在删除…" : "删除此版本"}
+          </button>
+        )}
         {!archived ? (
           <button
             className="button button--secondary"
@@ -1248,7 +1414,7 @@ function RecipeVersionInspector({
                     <small>
                       {candidate.latestVersionNumber
                         ? `V${candidate.latestVersionNumber}`
-                        : "仅草稿"}
+                        : "工作草稿"}
                     </small>
                   </span>
                   <RecipeSchemeBadge status={recipeSchemeStatus(candidate)} />
@@ -1718,6 +1884,29 @@ function compareRecipeSchemes(left: RecipeLibraryEntry, right: RecipeLibraryEntr
     schemeOrder[recipeSchemeStatus(leftRecipe)] -
       schemeOrder[recipeSchemeStatus(rightRecipe)] ||
     recipeSchemeName(leftRecipe).localeCompare(recipeSchemeName(rightRecipe), "zh-CN")
+  );
+}
+
+function hasUpdatedIngredientData(
+  versions: RecipeVersion[],
+  materialGroups: MaterialGroup[],
+) {
+  const currentVariants = new Map(
+    materialGroups.flatMap((group) =>
+      group.variants.map((variant) => [variant.id, variant] as const),
+    ),
+  );
+  return versions.some((version) =>
+    version.snapshot.items.some((item) => {
+      if (item.kind !== "ingredient") return false;
+      const current = currentVariants.get(
+        item.ingredient.ingredientVariantId,
+      );
+      return (
+        current === undefined ||
+        current.updatedAt !== item.ingredient.ingredientUpdatedAt
+      );
+    }),
   );
 }
 

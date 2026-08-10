@@ -357,6 +357,68 @@ fn archived_recipe_requires_exact_name_before_permanent_deletion() {
 }
 
 #[test]
+fn active_draft_recipe_can_be_deleted_without_archiving() {
+    let mut repository = controlled_repository();
+    let empty_recipe = repository
+        .create_recipe(recipe_input("尚未开始配方", RecipeKind::Formula))
+        .unwrap();
+    repository.delete_draft_recipe(&empty_recipe.id).unwrap();
+    assert_eq!(
+        repository.get_recipe(&empty_recipe.id).unwrap_err().code(),
+        "not_found"
+    );
+
+    let draft_recipe = repository
+        .create_recipe(recipe_input("只有工作草稿", RecipeKind::Formula))
+        .unwrap();
+    repository
+        .save_draft(draft_input(&draft_recipe.id))
+        .unwrap();
+    repository.delete_draft_recipe(&draft_recipe.id).unwrap();
+    assert_eq!(
+        repository.get_recipe(&draft_recipe.id).unwrap_err().code(),
+        "not_found"
+    );
+    assert!(repository.get_draft(&draft_recipe.id).unwrap().is_none());
+}
+
+#[test]
+fn draft_delete_rejects_archived_or_versioned_recipes() {
+    let mut repository = controlled_repository();
+    let versioned_recipe = repository
+        .create_recipe(recipe_input("已有正式版本", RecipeKind::Formula))
+        .unwrap();
+    let draft = repository
+        .save_draft(draft_input(&versioned_recipe.id))
+        .unwrap();
+    repository
+        .create_version(version_input(&versioned_recipe.id, &draft.id, Vec::new()))
+        .unwrap();
+    assert_eq!(
+        repository
+            .delete_draft_recipe(&versioned_recipe.id)
+            .unwrap_err()
+            .code(),
+        "invalid_state"
+    );
+
+    let archived_recipe = repository
+        .create_recipe(recipe_input("已归档草稿", RecipeKind::Formula))
+        .unwrap();
+    repository
+        .save_draft(draft_input(&archived_recipe.id))
+        .unwrap();
+    repository.archive_recipe(&archived_recipe.id).unwrap();
+    assert_eq!(
+        repository
+            .delete_draft_recipe(&archived_recipe.id)
+            .unwrap_err()
+            .code(),
+        "invalid_state"
+    );
+}
+
+#[test]
 fn archived_recipe_can_be_restored_without_changing_versions() {
     let mut repository = controlled_repository();
     let recipe = repository

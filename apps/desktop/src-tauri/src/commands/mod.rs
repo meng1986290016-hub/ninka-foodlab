@@ -25,7 +25,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 88] = [
+pub const REGISTERED_COMMANDS: [&str; 89] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -88,6 +88,7 @@ pub const REGISTERED_COMMANDS: [&str; 88] = [
     "update_recipe_scheme",
     "archive_recipe",
     "restore_recipe",
+    "delete_draft_recipe",
     "permanently_delete_recipe",
     "delete_recipe_version",
     "get_recipe_draft",

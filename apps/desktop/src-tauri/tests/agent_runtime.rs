@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{BTreeSet, VecDeque},
     fs,
     path::PathBuf,
     sync::{
@@ -14,8 +14,9 @@ use food_rd_desktop::{
     agent::{
         AgentError,
         model::{
-            AgentMessageRole, AgentProviderCapabilities, AgentProviderConfig, AgentProviderKind,
-            AgentProviderProtocol, AgentRunRequest, AgentRunStatus, ReasoningEffort,
+            AgentMessageInput, AgentMessageRole, AgentMessageStatus, AgentProviderCapabilities,
+            AgentProviderConfig, AgentProviderKind, AgentProviderProtocol, AgentRunRequest,
+            AgentRunStatus, ReasoningEffort,
         },
         providers::{
             AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult,
@@ -24,7 +25,7 @@ use food_rd_desktop::{
         },
         repository::AgentRepository,
         runtime::{AgentRuntime, AgentRuntimeEvent},
-        tools::AgentToolRegistry,
+        tools::{AgentToolContext, AgentToolRegistry},
     },
     ingest::{
         coordinator::IngredientIngestCoordinator,
@@ -36,6 +37,7 @@ use uuid::Uuid;
 
 struct SequenceProvider {
     responses: Mutex<VecDeque<Result<ProviderTurnResult, AgentError>>>,
+    requests: Mutex<Vec<ProviderTurnRequest>>,
     calls: AtomicUsize,
     delay: Duration,
 }
@@ -44,6 +46,7 @@ impl SequenceProvider {
     fn new(responses: Vec<Result<ProviderTurnResult, AgentError>>) -> Self {
         Self {
             responses: Mutex::new(responses.into()),
+            requests: Mutex::new(Vec::new()),
             calls: AtomicUsize::new(0),
             delay: Duration::ZERO,
         }
@@ -56,6 +59,10 @@ impl SequenceProvider {
 
     fn call_count(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
+    }
+
+    fn requests(&self) -> Vec<ProviderTurnRequest> {
+        self.requests.lock().unwrap().clone()
     }
 }
 
@@ -76,9 +83,10 @@ impl AgentProvider for SequenceProvider {
 
     async fn run(
         &self,
-        _request: ProviderTurnRequest,
+        request: ProviderTurnRequest,
         sink: AgentEventSink,
     ) -> Result<ProviderTurnResult, AgentError> {
+        self.requests.lock().unwrap().push(request);
         self.calls.fetch_add(1, Ordering::SeqCst);
         tokio::time::sleep(self.delay).await;
         let response = self.responses.lock().unwrap().pop_front().unwrap();
@@ -206,6 +214,22 @@ async fn tool_calls_continue_until_final_message_and_persist_progress() {
 
     assert_eq!(run.status, AgentRunStatus::Completed);
     assert_eq!(provider.call_count(), 2);
+    let requests = provider.requests();
+    assert!(requests[0].tool_rounds.is_empty());
+    assert_eq!(requests[1].tool_rounds.len(), 1);
+    assert_eq!(requests[1].tool_rounds[0].calls.len(), 1);
+    assert_eq!(requests[1].tool_rounds[0].results.len(), 1);
+    assert_eq!(
+        requests[1].tool_rounds[0].calls[0].id,
+        requests[1].tool_rounds[0].results[0].call_id
+    );
+    assert!(requests[1].tool_rounds[0].results[0].output["ok"] == true);
+    assert!(
+        requests[1]
+            .messages
+            .iter()
+            .all(|message| message.role != AgentMessageRole::Tool)
+    );
     let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
     let messages = repository.list_messages(&conversation_id).unwrap();
     assert_eq!(
@@ -234,6 +258,120 @@ async fn tool_calls_continue_until_final_message_and_persist_progress() {
             .iter()
             .any(|event| matches!(event, AgentRuntimeEvent::DraftsChanged { .. }))
     );
+}
+
+#[tokio::test]
+async fn every_provider_receives_the_real_current_task_attachment_ids() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已读取本次任务附件。")),
+    ]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+
+    runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap();
+
+    let persisted_user = AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .list_messages(&conversation_id)
+        .unwrap()
+        .into_iter()
+        .find(|message| message.role == AgentMessageRole::User)
+        .unwrap();
+    let attachment_id = persisted_user.attachment_ids.first().unwrap();
+    let requests = provider.requests();
+    let provider_user = requests[0]
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == AgentMessageRole::User)
+        .unwrap();
+
+    assert!(
+        provider_user
+            .content
+            .contains(&format!("attachmentId={attachment_id}"))
+    );
+    assert!(
+        provider_user
+            .content
+            .contains("attachmentIds 传 null 或空数组")
+    );
+    assert!(!persisted_user.content.contains(attachment_id));
+}
+
+#[tokio::test]
+async fn cli_timeout_after_a_completed_draft_write_is_a_reviewable_completion() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![Err(
+        AgentError::provider_timeout("模型整理最终回复超时"),
+    )]));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut config = provider_config();
+    config.id = "codex_cli".into();
+    config.kind = AgentProviderKind::CodexCli;
+    config.protocol = AgentProviderProtocol::CodexCli;
+    let mut runtime = fixture.runtime_with_config(provider, Arc::clone(&events), config);
+    let prepared = runtime
+        .begin(fixture.request(conversation_id.clone()))
+        .unwrap();
+    let pending_run = AgentRuntime::prepared_run(&prepared).clone();
+    let job_id = pending_run.import_job_id.clone().unwrap();
+    let attachment_id = runtime
+        .tools()
+        .coordinator()
+        .list_job_attachments(&job_id)
+        .unwrap()[0]
+        .id
+        .clone();
+    let mut arguments = tool_turn()
+        .events
+        .into_iter()
+        .find_map(|event| match event {
+            ProviderEvent::ToolCall(call) => Some(call.arguments),
+            _ => None,
+        })
+        .unwrap();
+    arguments["attachmentIds"] = json!([attachment_id.clone()]);
+    let coordinator =
+        IngredientIngestCoordinator::open(&fixture.database_path, &fixture.attachment_root)
+            .unwrap();
+    let audit = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let mut registry = AgentToolRegistry::with_audit(coordinator, audit);
+    registry
+        .execute(
+            &AgentToolContext {
+                run_id: pending_run.id.clone(),
+                import_job_id: job_id.clone(),
+                allowed_attachment_ids: BTreeSet::from([attachment_id]),
+                provider_kind: AgentProviderKind::CodexCli,
+                model: "test-model".into(),
+                active_recipe_id: None,
+                active_recipe_name: None,
+            },
+            "create_ingredient_import_draft",
+            arguments,
+        )
+        .unwrap();
+
+    let completed = runtime.execute(prepared).await.unwrap();
+
+    assert_eq!(completed.status, AgentRunStatus::Completed);
+    assert_eq!(completed.error_code, None);
+    let messages = AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .list_messages(&conversation_id)
+        .unwrap();
+    assert!(messages.last().unwrap().content.contains("草稿已安全保留"));
+    assert!(events.lock().unwrap().iter().any(|event| matches!(
+        event,
+        AgentRuntimeEvent::RunCompleted { run_id } if run_id == &completed.id
+    )));
 }
 
 #[tokio::test]
@@ -325,9 +463,10 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
     let failed_run_id = first_user.run_id.clone().unwrap();
     let failed_run = repository.get_run(&failed_run_id).unwrap();
 
-    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
-        "已重新完成识别，请继续人工复核。",
-    ))]));
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已重新完成识别，请继续人工复核。")),
+    ]));
     let mut retry_runtime = fixture.runtime(provider, Arc::new(Mutex::new(Vec::new())));
     let retried = retry_runtime
         .start(AgentRunRequest {
@@ -359,9 +498,10 @@ async fn retry_reuses_the_failed_run_job_and_attachment_ids() {
 async fn completed_run_can_continue_with_the_same_job_and_attachments() {
     let fixture = Fixture::new();
     let conversation_id = fixture.conversation();
-    let first_provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
-        "识别完成，请人工复核。",
-    ))]));
+    let first_provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("识别完成，请人工复核。")),
+    ]));
     let mut first_runtime = fixture.runtime(first_provider, Arc::new(Mutex::new(Vec::new())));
     let first = first_runtime
         .start(fixture.request(conversation_id.clone()))
@@ -377,9 +517,10 @@ async fn completed_run_can_continue_with_the_same_job_and_attachments() {
         })
         .unwrap();
 
-    let continue_provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
-        "已按要求继续调整草稿。",
-    ))]));
+    let continue_provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已按要求继续调整草稿。")),
+    ]));
     let mut continue_runtime = fixture.runtime(continue_provider, Arc::new(Mutex::new(Vec::new())));
     let continued = continue_runtime
         .start(AgentRunRequest {
@@ -414,6 +555,14 @@ async fn cli_tool_observations_are_not_executed_twice_by_runtime() {
     let fixture = Fixture::new();
     let conversation_id = fixture.conversation();
     let mut turn = tool_turn();
+    turn.events = turn
+        .events
+        .into_iter()
+        .map(|event| match event {
+            ProviderEvent::ToolCall(call) => ProviderEvent::ToolObservation(call),
+            other => other,
+        })
+        .collect();
     turn.final_text = r#"{"message":"CLI 已完成任务"}"#.into();
     turn.structured_output = Some(json!({ "message": "CLI 已完成任务" }));
     turn.events.push(ProviderEvent::TextDelta(
@@ -453,6 +602,186 @@ async fn cli_tool_observations_are_not_executed_twice_by_runtime() {
             .iter()
             .any(|event| matches!(event, AgentRuntimeEvent::ToolCompleted { .. }))
     );
+}
+
+#[tokio::test]
+async fn cli_structured_tool_requests_are_executed_by_the_app_runtime() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已创建 1 张待人工复核原料草稿。")),
+    ]));
+    let mut config = provider_config();
+    config.kind = AgentProviderKind::CodexCli;
+    config.protocol = AgentProviderProtocol::CodexCli;
+    let mut runtime =
+        fixture.runtime_with_config(provider.clone(), Arc::new(Mutex::new(Vec::new())), config);
+
+    let run = runtime
+        .start(fixture.request(conversation_id))
+        .await
+        .unwrap();
+
+    assert_eq!(run.status, AgentRunStatus::Completed);
+    assert_eq!(provider.call_count(), 2);
+    assert_eq!(
+        runtime
+            .tools()
+            .coordinator()
+            .list_drafts(run.import_job_id.as_deref().unwrap())
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn attachment_task_cannot_complete_without_a_real_tool_call() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
+        "我已经识别并创建了待复核草稿。",
+    ))]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+
+    let error = runtime
+        .start(fixture.request(conversation_id.clone()))
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "required_tool_not_called");
+    let repository = AgentRepository::open_for_runtime(&fixture.database_path).unwrap();
+    let run_id = repository
+        .list_messages(&conversation_id)
+        .unwrap()
+        .into_iter()
+        .find_map(|message| message.run_id)
+        .unwrap();
+    assert_eq!(
+        repository.get_run(&run_id).unwrap().status,
+        AgentRunStatus::Failed
+    );
+}
+
+#[tokio::test]
+async fn recipe_design_task_cannot_complete_without_a_real_tool_call() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn(
+        "这是一份高脂曲奇配方。",
+    ))]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+
+    let error = runtime
+        .start(AgentRunRequest {
+            conversation_id,
+            content: "我想做一个曲奇，脂肪含量高一点".into(),
+            files: vec![],
+            recipe_context: None,
+            retry_run_id: None,
+            continue_run_id: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "required_tool_not_called");
+    let requests = provider.requests();
+    let tool_names = requests[0]
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<Vec<_>>();
+    assert!(tool_names.contains(&"evaluate_recipe_proposal"));
+    assert!(tool_names.contains(&"create_recipe_proposal"));
+    assert!(!tool_names.contains(&"create_ingredient_import_draft"));
+}
+
+#[tokio::test]
+async fn conversation_only_task_can_complete_without_tools() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn("你好，我在。"))]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+
+    let run = runtime
+        .start(AgentRunRequest {
+            conversation_id,
+            content: "你好".into(),
+            files: vec![],
+            recipe_context: None,
+            retry_run_id: None,
+            continue_run_id: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(run.status, AgentRunStatus::Completed);
+    assert!(provider.requests()[0].tools.is_empty());
+}
+
+#[tokio::test]
+async fn old_empty_history_is_not_sent_to_strict_chat_providers() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    AgentRepository::open_for_runtime(&fixture.database_path)
+        .unwrap()
+        .append_message(AgentMessageInput {
+            conversation_id: conversation_id.clone(),
+            run_id: None,
+            role: AgentMessageRole::User,
+            content: String::new(),
+            attachment_ids: vec![],
+            status: AgentMessageStatus::Complete,
+        })
+        .unwrap();
+    let provider = Arc::new(SequenceProvider::new(vec![Ok(final_turn("你好，我在。"))]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+
+    let run = runtime
+        .start(AgentRunRequest {
+            conversation_id,
+            content: "你好".into(),
+            files: vec![],
+            recipe_context: None,
+            retry_run_id: None,
+            continue_run_id: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(run.status, AgentRunStatus::Completed);
+    assert!(
+        provider.requests()[0]
+            .messages
+            .iter()
+            .all(|message| !message.content.trim().is_empty())
+    );
+}
+
+#[tokio::test]
+async fn current_attachment_only_message_is_scoped_before_empty_history_filtering() {
+    let fixture = Fixture::new();
+    let conversation_id = fixture.conversation();
+    let provider = Arc::new(SequenceProvider::new(vec![
+        Ok(tool_turn()),
+        Ok(final_turn("已读取附件并创建待复核草稿。")),
+    ]));
+    let mut runtime = fixture.runtime(provider.clone(), Arc::new(Mutex::new(Vec::new())));
+    let mut request = fixture.request(conversation_id);
+    request.content.clear();
+
+    runtime.start(request).await.unwrap();
+
+    let requests = provider.requests();
+    let current_user = requests[0]
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == AgentMessageRole::User)
+        .unwrap();
+    assert!(!current_user.content.trim().is_empty());
+    assert!(current_user.content.contains("attachmentId="));
 }
 
 #[tokio::test]

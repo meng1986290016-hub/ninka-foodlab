@@ -1,6 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import type { IngredientImportDraft } from "../../api/import-types";
 import { IngredientImportDraftList } from "./IngredientImportDraftList";
@@ -52,20 +51,16 @@ function draft(id: string, supplierName: string): IngredientImportDraft {
 }
 
 describe("IngredientImportDraftList", () => {
-  it("shows independent supplier cards and requests an explicit merge target", async () => {
+  it("shows independent supplier cards without merge or split actions", () => {
     const drafts = [draft("draft-a", "供应商A"), draft("draft-b", "供应商B")];
-    const onMerge = vi.fn();
-    const user = userEvent.setup();
     render(
       <IngredientImportDraftList
         busy={false}
         drafts={drafts}
         onDiscard={() => {}}
-        onMerge={onMerge}
         onOpen={() => {}}
         onOpenImported={() => {}}
         onRetry={() => {}}
-        onSplit={() => {}}
         unassignedAttachmentCount={1}
       />,
     );
@@ -73,13 +68,7 @@ describe("IngredientImportDraftList", () => {
     expect(screen.getAllByText("脱脂乳粉")).toHaveLength(2);
     expect(screen.getByText("来源：供应商A-规格书.pdf")).toBeTruthy();
     expect(screen.getByText(/还有 1 份资料未归入任何草稿/)).toBeTruthy();
-    const firstCard = screen.getByText("供应商A · SMP-01").closest("article")!;
-    await user.click(within(firstCard).getByRole("button", { name: "合并" }));
-    const secondCard = screen.getByText("供应商B · SMP-01").closest("article")!;
-    await user.click(
-      within(secondCard).getByRole("button", { name: "合并到这里" }),
-    );
-
-    expect(onMerge).toHaveBeenCalledWith(drafts[0], drafts[1]);
+    expect(screen.queryByRole("button", { name: "合并" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "拆分" })).toBeNull();
   });
 });

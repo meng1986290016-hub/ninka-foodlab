@@ -1,7 +1,7 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 
 const BACKUP_FILTER = {
-  name: "食研工作台备份",
+  name: "Ninka FoodLab 备份",
   extensions: ["foodrd-backup"],
 };
 

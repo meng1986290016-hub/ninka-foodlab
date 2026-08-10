@@ -8,8 +8,9 @@ use super::{
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
         HttpProviderCore, add_structured_output_instruction, chat_completion_messages,
-        chat_completion_tools, emit, ensure_attachment_support, fallback_models, model_options,
-        no_op_sink, probe_request, result, schema_is_empty, successful_test,
+        chat_completion_tools, connection_probe_request, emit, ensure_attachment_support,
+        fallback_models, model_options, no_op_sink, probe_request, result, run_agent_loop_probe,
+        schema_is_empty, successful_test,
     },
 };
 use crate::agent::{
@@ -74,11 +75,12 @@ impl AgentProvider for OpenAiCompatibleProvider {
         let started = Instant::now();
         match kind {
             ProviderTestKind::Connection => {
-                self.raw_models().await?;
+                self.run(connection_probe_request(), no_op_sink()).await?;
             }
             ProviderTestKind::StructuredOutput => {
                 self.run(probe_request(), no_op_sink()).await?;
             }
+            ProviderTestKind::AgentLoop => run_agent_loop_probe(self).await?,
         }
         Ok(successful_test(kind, started))
     }
@@ -95,9 +97,12 @@ impl AgentProvider for OpenAiCompatibleProvider {
         let mut body = json!({
             "model": self.core.config.model,
             "messages": messages,
-            "tools": chat_completion_tools(&request.tools, profile.strict_tools),
             "stream": false
         });
+        if !request.tools.is_empty() {
+            body["tools"] =
+                Value::Array(chat_completion_tools(&request.tools, profile.strict_tools));
+        }
         if profile.separate_reasoning {
             body["reasoning_split"] = Value::Bool(true);
         }
@@ -137,7 +142,7 @@ impl AgentProvider for OpenAiCompatibleProvider {
 fn compatibility_profile(kind: AgentProviderKind) -> CompatibilityProfile {
     match kind {
         AgentProviderKind::KimiCn => CompatibilityProfile {
-            strict_tools: true,
+            strict_tools: false,
             structured_output: StructuredOutputMode::JsonSchema,
             separate_reasoning: false,
         },

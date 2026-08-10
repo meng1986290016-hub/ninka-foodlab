@@ -93,6 +93,25 @@ fn normalization_trims_text_and_deduplicates_allergens_case_insensitively() {
 }
 
 #[test]
+fn normalization_accepts_common_agent_nutrition_basis_aliases() {
+    for (input, expected) in [
+        ("per100g", "per_100g"),
+        ("per-100-g", "per_100g"),
+        ("每100克", "per_100g"),
+        ("per100ml", "per_100ml"),
+        ("每100毫升", "per_100ml"),
+    ] {
+        let mut review = valid_review();
+        review.nutrition_basis = Some(input.into());
+
+        normalize_review(&mut review);
+
+        assert_eq!(review.nutrition_basis.as_deref(), Some(expected));
+        assert!(validate_review(&review).is_empty());
+    }
+}
+
+#[test]
 fn validation_rejects_cross_list_allergen_conflicts() {
     let mut review = valid_review();
     review.contains_allergens = vec!["Milk".into()];

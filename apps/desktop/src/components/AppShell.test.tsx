@@ -25,6 +25,13 @@ describe("AppShell", () => {
       screen.getByRole("img", { name: "Ninka FoodLab 品牌标志" }),
     ).toBeTruthy();
     expect(screen.getByText("Ninka FoodLab")).toBeTruthy();
+    expect(screen.getByText("食研工作台")).toBeTruthy();
+    expect(container.querySelector(".brand__identity strong")?.textContent).toBe(
+      "Ninka FoodLab",
+    );
+    expect(container.querySelector(".brand__identity small")?.textContent).toBe(
+      "食研工作台",
+    );
 
     await user.click(screen.getByRole("button", { name: "原料库" }));
     expect(onNavigate).toHaveBeenCalledWith("ingredients");

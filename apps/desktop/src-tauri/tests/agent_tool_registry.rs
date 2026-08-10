@@ -10,8 +10,8 @@ use food_rd_desktop::{
     ingest::{
         coordinator::IngredientIngestCoordinator,
         model::{
-            ImportFileReference, ImportFileReferenceKind, IngredientImportDraftStatus,
-            IngredientImportJobRequest, IngredientImportSourceKind,
+            ImportFileReference, ImportFileReferenceKind, IngredientImportJobRequest,
+            IngredientImportSourceKind,
         },
     },
     ingredients::{
@@ -127,10 +127,10 @@ fn review() -> serde_json::Value {
 fn registry_exposes_only_approved_review_scoped_tools() {
     let fixture = Fixture::new();
     let registry = AgentToolRegistry::new(fixture.coordinator());
-    let names = registry
-        .definitions()
-        .into_iter()
-        .map(|tool| tool.name)
+    let definitions = registry.definitions();
+    let names = definitions
+        .iter()
+        .map(|tool| tool.name.clone())
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -144,8 +144,6 @@ fn registry_exposes_only_approved_review_scoped_tools() {
             "read_task_attachments",
             "create_ingredient_import_draft",
             "update_ingredient_import_draft",
-            "merge_ingredient_import_drafts",
-            "split_ingredient_import_draft",
             "discard_ingredient_import_draft",
             "validate_ingredient_import_draft",
             "request_open_ingredient_review",
@@ -161,6 +159,19 @@ fn registry_exposes_only_approved_review_scoped_tools() {
     assert!(!names.contains(&"save_ingredient_variant".to_string()));
     assert!(!names.contains(&"accept_recipe_proposal".to_string()));
     assert!(!names.contains(&"create_recipe_version".to_string()));
+
+    let attachment_reader = definitions
+        .iter()
+        .find(|tool| tool.name == "read_task_attachments")
+        .unwrap();
+    assert_eq!(
+        attachment_reader.input_schema["properties"]["attachmentIds"]["type"],
+        json!(["array", "null"])
+    );
+    assert_eq!(
+        attachment_reader.input_schema["required"],
+        json!(["attachmentIds"])
+    );
 }
 
 #[test]
@@ -173,6 +184,8 @@ fn formal_writes_and_unrelated_reads_are_denied() {
         "set_setting",
         "read_recipe",
         "read_local_file",
+        "merge_ingredient_import_drafts",
+        "split_ingredient_import_draft",
     ] {
         let error = registry
             .execute(&context("job-1", []), name, json!({}))
@@ -429,71 +442,22 @@ fn attachment_reads_reject_ids_outside_the_current_task() {
 }
 
 #[test]
-fn merge_and_split_are_atomic_draft_only_operations() {
+fn attachment_reads_default_to_all_attachments_in_the_current_task() {
     let fixture = Fixture::new();
     let mut coordinator = fixture.coordinator();
     let (job_id, attachment_id) = fixture.agent_job(&mut coordinator);
     let mut registry = AgentToolRegistry::new(coordinator);
-    let scoped_context = context(&job_id, [attachment_id.clone()]);
-    let mut draft_ids = Vec::new();
-    for supplier in ["供应商 A", "供应商 B"] {
-        let mut draft_review = review();
-        draft_review["supplierName"] = json!(supplier);
-        let created = registry
-            .execute(
-                &scoped_context,
-                "create_ingredient_import_draft",
-                json!({
-                    "review": draft_review,
-                    "attachmentIds": [attachment_id]
-                }),
-            )
-            .unwrap();
-        draft_ids.push(created["draft"]["id"].as_str().unwrap().to_string());
-    }
-    let merged = registry
-        .execute(
-            &scoped_context,
-            "merge_ingredient_import_drafts",
-            json!({ "draftIds": draft_ids, "review": review() }),
-        )
-        .unwrap();
-    let merged_id = merged["draft"]["id"].as_str().unwrap().to_string();
-    for draft_id in merged["discardedDraftIds"].as_array().unwrap() {
-        assert_eq!(
-            registry
-                .coordinator()
-                .get_draft(draft_id.as_str().unwrap())
-                .unwrap()
-                .status,
-            IngredientImportDraftStatus::Discarded
-        );
-    }
 
-    let split = registry
+    let result = registry
         .execute(
-            &scoped_context,
-            "split_ingredient_import_draft",
-            json!({
-                "draftId": merged_id,
-                "reviews": [review(), review()]
-            }),
+            &context(&job_id, [attachment_id.clone()]),
+            "read_task_attachments",
+            json!({}),
         )
         .unwrap();
 
-    assert_eq!(split["drafts"].as_array().unwrap().len(), 2);
-    assert_eq!(
-        registry.coordinator().get_draft(&merged_id).unwrap().status,
-        IngredientImportDraftStatus::Discarded
-    );
-    assert!(
-        registry
-            .coordinator()
-            .ingredients()
-            .list_material_groups("")
-            .unwrap()
-            .is_empty()
-    );
+    assert_eq!(result["items"].as_array().unwrap().len(), 1);
+    assert_eq!(result["items"][0]["attachmentId"], attachment_id);
 }
 
 #[test]

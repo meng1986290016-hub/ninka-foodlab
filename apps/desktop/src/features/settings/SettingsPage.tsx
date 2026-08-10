@@ -23,7 +23,7 @@ const settingsSections: Array<{
   label: string;
 }> = [
   { id: "general", icon: "settings", label: "通用" },
-  { id: "models", icon: "message", label: "LLM 模型" },
+  { id: "models", icon: "ai-assistant", label: "LLM 模型" },
   { id: "data", icon: "database", label: "数据管理" },
 ];
 

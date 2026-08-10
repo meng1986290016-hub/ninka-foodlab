@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 
 import brandSymbolUrl from "../../../../assets/branding/source/ninka-symbol-color-dark.svg?url";
 import type { DatabaseStatus } from "../api/types";
-import { APP_NAME } from "../app-metadata";
+import { APP_NAME, APP_WORKSPACE_NAME } from "../app-metadata";
 import { Icon, type IconName } from "./Icon";
 
 interface AppShellProps {
@@ -44,7 +44,7 @@ export function AppShell({
   return (
     <div className={shellClassName}>
       <aside className="sidebar">
-        <div className="brand" title={`${APP_NAME} · Ninka FoodLab`}>
+        <div className="brand" title={`${APP_NAME} · ${APP_WORKSPACE_NAME}`}>
           <img
             alt="Ninka FoodLab 品牌标志"
             className="brand__mark"
@@ -52,7 +52,7 @@ export function AppShell({
           />
           <span className="brand__identity">
             <strong>{APP_NAME}</strong>
-            <small>Ninka FoodLab</small>
+            <small>{APP_WORKSPACE_NAME}</small>
           </span>
         </div>
         <nav aria-label="主导航" className="primary-nav">

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">AI Agent</title>
+  <metadata>Ninka FoodLab ai-agent r01; selected branded conversation direction; 24px grid; 1.75px rounded stroke; status: approved; Figma sync pending; not integrated.</metadata>
+  <defs>
+    <path id="ninka-agent-seed" d="M0-1.3c.2 0 .38.15.55.32l.35.35c.2.2.2.43.2.63s0 .43-.2.63l-.35.35c-.17.17-.35.32-.55.32s-.38-.15-.55-.32l-.35-.35c-.2-.2-.2-.43-.2-.63s0-.43.2-.63l.35-.35C-.38-1.15-.2-1.3 0-1.3Z"/>
+  </defs>
+  <path d="M5.25 3.25h13.5A2.75 2.75 0 0 1 21.5 6v8.1a2.75 2.75 0 0 1-2.75 2.75h-7.2L7.1 20.4v-3.55H5.25A2.75 2.75 0 0 1 2.5 14.1V6a2.75 2.75 0 0 1 2.75-2.75Z" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <use href="#ninka-agent-seed" fill="#153D36" transform="translate(12 7.25)"/>
+  <use href="#ninka-agent-seed" fill="#153D36" transform="translate(10.05 9.45)"/>
+  <use href="#ninka-agent-seed" fill="#153D36" transform="translate(13.95 9.45)"/>
+  <use href="#ninka-agent-seed" fill="#EFBD50" transform="translate(12 11.7)"/>
+</svg>

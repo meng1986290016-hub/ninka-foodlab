@@ -2,14 +2,9 @@ import type { IngredientImportDraft } from "../../api/import-types";
 
 interface IngredientImportDraftCardProps {
   draft: IngredientImportDraft;
-  mergeSource: boolean;
-  mergeTarget: boolean;
   busy: boolean;
   onOpen(): void;
   onRetry(): void;
-  onStartMerge(): void;
-  onMergeHere(): void;
-  onSplit(): void;
   onDiscard(): void;
   onOpenImported(): void;
 }
@@ -34,14 +29,9 @@ function missingFields(draft: IngredientImportDraft) {
 
 export function IngredientImportDraftCard({
   draft,
-  mergeSource,
-  mergeTarget,
   busy,
   onOpen,
   onRetry,
-  onStartMerge,
-  onMergeHere,
-  onSplit,
   onDiscard,
   onOpenImported,
 }: IngredientImportDraftCardProps) {
@@ -60,8 +50,6 @@ export function IngredientImportDraftCard({
       className={[
         "agent-draft-card",
         `is-${draft.status}`,
-        mergeSource ? "is-merge-source" : "",
-        mergeTarget ? "is-merge-target" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -108,18 +96,6 @@ export function IngredientImportDraftCard({
             </button>
             <button disabled={busy} onClick={onRetry} type="button">
               重新识别
-            </button>
-            {mergeTarget ? (
-              <button disabled={busy} onClick={onMergeHere} type="button">
-                合并到这里
-              </button>
-            ) : (
-              <button disabled={busy} onClick={onStartMerge} type="button">
-                合并
-              </button>
-            )}
-            <button disabled={busy} onClick={onSplit} type="button">
-              拆分
             </button>
             <button
               className="is-danger"

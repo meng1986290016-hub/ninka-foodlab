@@ -51,7 +51,7 @@ macOS 先由 Tauri 生成并 ad-hoc 签名 `.app`，再用不调用 Finder Apple
 
 1. 下载与 Mac 架构匹配的 DMG：Apple Silicon 选择 `arm64`，Intel Mac 选择 `x64`。
 2. 对照同一 Artifact 内的 `SHA256SUMS.txt` 验证文件完整性。
-3. 打开 DMG，把“食研工作台”拖入“应用程序”。
+3. 打开 DMG，把“Ninka FoodLab”拖入“应用程序”。
 4. 首次打开如果被 Gatekeeper 阻止，前往“系统设置 → 隐私与安全性”，确认文件来自本项目后点击“仍要打开”；也可以在 Finder 中按住 Control 点击应用并选择“打开”。
 
 不要为了绕过提示而对来源不明的应用批量删除隔离属性。当前最低系统版本配置为 macOS 10.15；真实兼容性仍以每个发布版本的试装结果为准。

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" rx="36" fill="#FFF7E7"/>
+  <text x="48" y="64" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="30" font-weight="700">Ninka FoodLab · Remaining Icons r01</text>
+  <text x="48" y="98" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="15">24px masters · 1.75px rounded stroke · Figma sync pending · not integrated</text>
+
+  <g>
+    <rect x="40" y="140" width="250" height="490" rx="22" fill="#FFFCF5" stroke="#D9E0DB"/>
+    <text x="62" y="180" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">营养标签</text>
+    <text x="62" y="208" fill="#8C6A18" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700">APPROVED</text>
+    <image href="nutrition-label-r01.svg" x="80" y="230" width="170" height="170"/>
+    <text x="62" y="438" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="13">结构化标签 + Grain 火焰</text>
+    <image href="nutrition-label-r01.svg" x="80" y="500" width="16" height="16"/><image href="nutrition-label-r01.svg" x="130" y="498" width="20" height="20"/><image href="nutrition-label-r01.svg" x="184" y="496" width="24" height="24"/>
+    <text x="76" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="126" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="180" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+  </g>
+
+  <g>
+    <rect x="330" y="140" width="250" height="490" rx="22" fill="#FFFCF5" stroke="#D9E0DB"/>
+    <text x="352" y="180" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">研发报告</text>
+    <text x="352" y="208" fill="#8C6A18" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700">APPROVED</text>
+    <image href="research-report-r01.svg" x="370" y="230" width="170" height="170"/>
+    <text x="352" y="438" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="13">折角文档 + 趋势数据点</text>
+    <image href="research-report-r01.svg" x="370" y="500" width="16" height="16"/><image href="research-report-r01.svg" x="420" y="498" width="20" height="20"/><image href="research-report-r01.svg" x="474" y="496" width="24" height="24"/>
+    <text x="366" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="416" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="470" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+  </g>
+
+  <g>
+    <rect x="620" y="140" width="250" height="490" rx="22" fill="#FFFCF5" stroke="#D9E0DB"/>
+    <text x="642" y="180" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">小试表</text>
+    <text x="642" y="208" fill="#8C6A18" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700">APPROVED</text>
+    <image href="sample-sheet-r01.svg" x="660" y="230" width="170" height="170"/>
+    <text x="642" y="438" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="13">夹板 + 2×2 试验格</text>
+    <image href="sample-sheet-r01.svg" x="660" y="500" width="16" height="16"/><image href="sample-sheet-r01.svg" x="710" y="498" width="20" height="20"/><image href="sample-sheet-r01.svg" x="764" y="496" width="24" height="24"/>
+    <text x="656" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="706" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="760" y="550" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+  </g>
+
+  <g>
+    <rect x="910" y="140" width="250" height="490" rx="22" fill="#153D36"/>
+    <text x="932" y="180" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">AI Agent · B</text>
+    <text x="932" y="208" fill="#EFBD50" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700">SELECTED · APPROVED</text>
+    <rect x="950" y="230" width="170" height="170" rx="20" fill="#FFFCF5"/><image href="ai-agent-r01.svg" x="950" y="230" width="170" height="170"/>
+    <text x="932" y="438" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="13">品牌对话 + 四籽签名</text>
+    <rect x="950" y="488" width="40" height="40" rx="8" fill="#FFFCF5"/><rect x="1000" y="488" width="40" height="40" rx="8" fill="#FFFCF5"/><rect x="1050" y="488" width="40" height="40" rx="8" fill="#FFFCF5"/>
+    <image href="ai-agent-r01.svg" x="962" y="500" width="16" height="16"/><image href="ai-agent-r01.svg" x="1010" y="498" width="20" height="20"/><image href="ai-agent-r01.svg" x="1058" y="496" width="24" height="24"/>
+    <text x="958" y="550" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="1006" y="550" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="1054" y="550" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+  </g>
+</svg>

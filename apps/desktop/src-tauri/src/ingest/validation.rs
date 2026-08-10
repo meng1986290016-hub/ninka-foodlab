@@ -15,7 +15,7 @@ pub fn normalize_review(review: &mut ReviewedIngredientImportDraft) {
     review.current_price = nullable_text(review.current_price.take());
     review.price_unit = nullable_text(review.price_unit.take());
     review.density_g_per_ml = nullable_text(review.density_g_per_ml.take());
-    review.nutrition_basis = nullable_text(review.nutrition_basis.take());
+    review.nutrition_basis = normalized_nutrition_basis(review.nutrition_basis.take());
     review.source = review.source.trim().to_string();
     review.research_notes = review.research_notes.trim().to_string();
 
@@ -128,6 +128,21 @@ fn nullable_text(value: Option<String>) -> Option<String> {
     value.and_then(|item| {
         let trimmed = item.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
+fn normalized_nutrition_basis(value: Option<String>) -> Option<String> {
+    nullable_text(value).map(|basis| {
+        let compact = basis
+            .chars()
+            .filter(|character| !matches!(character, '_' | '-' | ' '))
+            .collect::<String>()
+            .to_lowercase();
+        match compact.as_str() {
+            "per100g" | "100g" | "每100g" | "每100克" => "per_100g".into(),
+            "per100ml" | "100ml" | "每100ml" | "每100毫升" => "per_100ml".into(),
+            _ => basis,
+        }
     })
 }
 

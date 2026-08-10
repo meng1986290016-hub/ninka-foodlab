@@ -4,33 +4,32 @@ import { describe, expect, it } from "vitest";
 import { Icon } from "./Icon";
 
 describe("Icon", () => {
-  it("renders the shared 24px-grid icon language with the selected stroke", () => {
+  it("renders approved Ninka SVG masters for product semantics", () => {
     const { container } = render(<Icon name="recipe-workbench" size={24} />);
     const icon = container.querySelector('[data-icon="recipe-workbench"]');
-    const glyph = icon?.querySelector("svg");
+    const custom = icon?.querySelector("img.icon__custom");
 
     expect(icon?.getAttribute("style")).toContain("width: 24px");
-    expect(glyph?.getAttribute("stroke-width")).toBe("1.75");
+    expect(icon?.getAttribute("data-custom-icon")).toBe("true");
+    const source = custom?.getAttribute("src") ?? "";
+    expect(source).toContain("data:image/svg+xml");
+    expect(decodeURIComponent(source)).toContain(
+      "Ninka FoodLab recipe-workbench r02",
+    );
   });
 
-  it("adds the Ninka seed signature only to branded semantic icons", () => {
+  it("keeps utility actions in the shared 1.75px icon language", () => {
     const { container, rerender } = render(
       <Icon name="ingredient-library" size={20} />,
     );
 
-    expect(container.querySelector('[data-signature="true"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="icon-signature"]')).toBeTruthy();
+    expect(container.querySelector("img.icon__custom")).toBeTruthy();
 
     rerender(<Icon name="trash" size={20} />);
-    expect(container.querySelector('[data-signature="true"]')).toBeNull();
-  });
-
-  it("allows dense placements to suppress the brand signature", () => {
-    const { container } = render(
-      <Icon name="database" signature={false} size={16} />,
+    expect(container.querySelector("img.icon__custom")).toBeNull();
+    expect(container.querySelector("svg")?.getAttribute("stroke-width")).toBe(
+      "1.75",
     );
-
-    expect(container.querySelector('[data-testid="icon-signature"]')).toBeNull();
   });
 
   it("stays decorative and does not change a control's accessible name", () => {

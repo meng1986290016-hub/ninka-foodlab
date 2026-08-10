@@ -175,5 +175,5 @@ pub fn run() {
             restore_data_backup,
         ])
         .run(tauri::generate_context!())
-        .expect("食研工作台启动失败");
+        .expect("Ninka FoodLab 启动失败");
 }

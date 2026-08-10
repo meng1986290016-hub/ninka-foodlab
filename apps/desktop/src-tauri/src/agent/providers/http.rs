@@ -7,8 +7,9 @@ use reqwest::{
 use serde_json::{Value, json};
 
 use super::{
-    AgentEventSink, AgentModelOption, AgentProviderTestResult, AgentToolDefinition,
-    ProviderAttachment, ProviderEvent, ProviderTestKind, ProviderTurnRequest, ProviderTurnResult,
+    AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, AgentToolDefinition,
+    ProviderAttachment, ProviderEvent, ProviderTestKind, ProviderToolResult, ProviderToolRound,
+    ProviderTurnRequest, ProviderTurnResult,
 };
 use crate::agent::{
     AgentError,
@@ -90,17 +91,14 @@ pub(crate) fn emit(events: &mut Vec<ProviderEvent>, sink: &AgentEventSink, event
 pub(crate) fn message_values(messages: &[AgentMessage], model_role: &str) -> Vec<Value> {
     messages
         .iter()
-        .map(|message| {
+        .filter(|message| !message.content.trim().is_empty())
+        .filter_map(|message| {
             let role = match message.role {
                 AgentMessageRole::User => "user",
                 AgentMessageRole::Assistant => model_role,
-                AgentMessageRole::Tool => "user",
+                AgentMessageRole::Tool => return None,
             };
-            let content = match message.role {
-                AgentMessageRole::Tool => format!("工具结果：{}", message.content),
-                _ => message.content.clone(),
-            };
-            json!({ "role": role, "content": content })
+            Some(json!({ "role": role, "content": message.content }))
         })
         .collect()
 }
@@ -123,6 +121,23 @@ pub(crate) fn openai_response_messages(request: &ProviderTurnRequest) -> Vec<Val
             })
         }));
         messages.push(json!({ "role": "user", "content": content }));
+    }
+    for round in &request.tool_rounds {
+        for call in &round.calls {
+            messages.push(json!({
+                "type": "function_call",
+                "call_id": call.id,
+                "name": call.name,
+                "arguments": call.arguments.to_string()
+            }));
+        }
+        for result in &round.results {
+            messages.push(json!({
+                "type": "function_call_output",
+                "call_id": result.call_id,
+                "output": result.output.to_string()
+            }));
+        }
     }
     messages
 }
@@ -148,6 +163,27 @@ pub(crate) fn chat_completion_messages(request: &ProviderTurnRequest) -> Vec<Val
         }));
         messages.push(json!({ "role": "user", "content": content }));
     }
+    for round in &request.tool_rounds {
+        messages.push(json!({
+            "role": "assistant",
+            "content": Value::Null,
+            "tool_calls": round.calls.iter().map(|call| json!({
+                "id": call.id,
+                "type": "function",
+                "function": {
+                    "name": call.name,
+                    "arguments": call.arguments.to_string()
+                }
+            })).collect::<Vec<_>>()
+        }));
+        for result in &round.results {
+            messages.push(json!({
+                "role": "tool",
+                "tool_call_id": result.call_id,
+                "content": result.output.to_string()
+            }));
+        }
+    }
     messages
 }
 
@@ -169,6 +205,26 @@ pub(crate) fn anthropic_messages(request: &ProviderTurnRequest) -> Vec<Value> {
             })
         }));
         messages.push(json!({ "role": "user", "content": content }));
+    }
+    for round in &request.tool_rounds {
+        messages.push(json!({
+            "role": "assistant",
+            "content": round.calls.iter().map(|call| json!({
+                "type": "tool_use",
+                "id": call.id,
+                "name": call.name,
+                "input": call.arguments
+            })).collect::<Vec<_>>()
+        }));
+        messages.push(json!({
+            "role": "user",
+            "content": round.results.iter().map(|result| json!({
+                "type": "tool_result",
+                "tool_use_id": result.call_id,
+                "content": result.output.to_string(),
+                "is_error": result.is_error
+            })).collect::<Vec<_>>()
+        }));
     }
     messages
 }
@@ -334,7 +390,28 @@ pub(crate) fn successful_test(kind: ProviderTestKind, started: Instant) -> Agent
         message: match kind {
             ProviderTestKind::Connection => "模型服务连接成功".into(),
             ProviderTestKind::StructuredOutput => "模型结构化输出测试成功".into(),
+            ProviderTestKind::AgentLoop => "模型工具调用与结果回传测试成功".into(),
         },
+    }
+}
+
+pub(crate) fn connection_probe_request() -> ProviderTurnRequest {
+    ProviderTurnRequest {
+        messages: vec![AgentMessage {
+            id: "provider-connection-test".into(),
+            conversation_id: "provider-test".into(),
+            run_id: None,
+            role: AgentMessageRole::User,
+            content: "你好，请简短回复：连接成功".into(),
+            attachment_ids: vec![],
+            status: crate::agent::model::AgentMessageStatus::Complete,
+            created_at: String::new(),
+        }],
+        attachment_ids: vec![],
+        attachments: vec![],
+        tools: vec![],
+        tool_rounds: vec![],
+        output_schema: json!({}),
     }
 }
 
@@ -353,6 +430,7 @@ pub(crate) fn probe_request() -> ProviderTurnRequest {
         attachment_ids: vec![],
         attachments: vec![],
         tools: vec![],
+        tool_rounds: vec![],
         output_schema: json!({
             "type": "object",
             "properties": { "ok": { "type": "boolean" } },
@@ -360,6 +438,65 @@ pub(crate) fn probe_request() -> ProviderTurnRequest {
             "additionalProperties": false
         }),
     }
+}
+
+pub(crate) async fn run_agent_loop_probe<P: AgentProvider + ?Sized>(
+    provider: &P,
+) -> Result<(), AgentError> {
+    let tool = AgentToolDefinition {
+        name: "food_rd_test_echo".into(),
+        description: "仅用于模型配置诊断，返回由应用提供的安全测试结果".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": { "value": { "type": "string", "const": "ping" } },
+            "required": ["value"],
+            "additionalProperties": false
+        }),
+    };
+    let mut request = connection_probe_request();
+    request.messages[0].content =
+        "这是工具链路诊断。必须调用 food_rd_test_echo，参数为 {\"value\":\"ping\"}；不要直接回答。"
+            .into();
+    request.tools = vec![tool];
+    let first = provider.run(request.clone(), no_op_sink()).await?;
+    let call = first
+        .events
+        .iter()
+        .find_map(|event| match event {
+            ProviderEvent::ToolCall(call) if call.name == "food_rd_test_echo" => Some(call.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| AgentError::invalid_model_output("模型没有按要求发起测试工具调用"))?;
+    if call.arguments.get("value").and_then(Value::as_str) != Some("ping") {
+        return Err(AgentError::invalid_model_output(
+            "模型发起了测试工具调用，但参数不符合约定",
+        ));
+    }
+
+    request.tool_rounds = vec![ProviderToolRound {
+        calls: vec![call.clone()],
+        results: vec![ProviderToolResult {
+            call_id: call.id,
+            name: call.name,
+            output: json!({ "ok": true, "value": "pong" }),
+            is_error: false,
+        }],
+    }];
+    request.messages[0].content =
+        "完成 food_rd_test_echo 后，根据应用返回的工具结果简短回复：工具循环成功。不要再次调用工具。"
+            .into();
+    let second = provider.run(request, no_op_sink()).await?;
+    if second.final_text.trim().is_empty()
+        || second
+            .events
+            .iter()
+            .any(|event| matches!(event, ProviderEvent::ToolCall(_)))
+    {
+        return Err(AgentError::invalid_model_output(
+            "模型收到测试工具结果后没有结束工具循环",
+        ));
+    }
+    Ok(())
 }
 
 fn attachment_text_blocks(attachments: &[&ProviderAttachment], block_type: &str) -> Vec<Value> {
@@ -410,12 +547,14 @@ fn build_headers(values: Vec<(&'static str, String)>) -> Result<HeaderMap, Agent
 
 async fn parse_response(response: Response) -> Result<Value, AgentError> {
     let status = response.status();
-    if !status.is_success() {
-        return Err(status_error(status));
-    }
-    response
-        .json()
+    let bytes = response
+        .bytes()
         .await
+        .map_err(|_| AgentError::invalid_model_output("模型服务返回了无法读取的数据"))?;
+    if !status.is_success() {
+        return Err(status_error(status, safe_error_detail(&bytes)));
+    }
+    serde_json::from_slice(&bytes)
         .map_err(|_| AgentError::invalid_model_output("模型服务返回了无法读取的数据"))
 }
 
@@ -429,14 +568,74 @@ fn map_request_error(error: reqwest::Error) -> AgentError {
     }
 }
 
-fn status_error(status: StatusCode) -> AgentError {
+fn safe_error_detail(bytes: &[u8]) -> Option<String> {
+    let value: Value = serde_json::from_slice(bytes).ok()?;
+    ["/error/message", "/error/code", "/error/param", "/message"]
+        .into_iter()
+        .find_map(|pointer| value.pointer(pointer).and_then(error_value_text))
+        .and_then(sanitize_error_detail)
+}
+
+fn error_value_text(value: &Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    }
+}
+
+fn sanitize_error_detail(detail: String) -> Option<String> {
+    let detail = detail.split_whitespace().collect::<Vec<_>>().join(" ");
+    if detail.is_empty() {
+        return None;
+    }
+    let lower = detail.to_ascii_lowercase();
+    if ["bearer ", "authorization", "api key", "api_key", "sk-"]
+        .iter()
+        .any(|secret_marker| lower.contains(secret_marker))
+    {
+        return None;
+    }
+    Some(detail.chars().take(240).collect())
+}
+
+fn status_error(status: StatusCode, detail: Option<String>) -> AgentError {
     match status.as_u16() {
         401 | 403 => AgentError::provider_failure("API 密钥无效或没有访问该模型的权限"),
         408 => AgentError::provider_failure("模型服务请求超时，请稍后重试"),
         429 => AgentError::provider_failure("模型服务请求过于频繁，请稍后重试"),
         500..=599 => AgentError::provider_failure("模型服务暂时不可用，请稍后重试"),
-        _ => {
-            AgentError::provider_failure(format!("模型服务拒绝了请求（HTTP {}）", status.as_u16()))
-        }
+        _ => AgentError::provider_failure(match detail {
+            Some(detail) => format!("模型服务拒绝了请求（HTTP {}）：{detail}", status.as_u16()),
+            None => format!("模型服务拒绝了请求（HTTP {}）", status.as_u16()),
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_bounded_safe_provider_error_details() {
+        let detail = safe_error_detail(
+            br#"{"error":{"message":"tools[0].function.parameters is invalid"}}"#,
+        );
+        assert_eq!(
+            detail.as_deref(),
+            Some("tools[0].function.parameters is invalid")
+        );
+    }
+
+    #[test]
+    fn rejects_provider_error_details_that_may_contain_secrets() {
+        let detail = safe_error_detail(br#"{"error":{"message":"Bearer sk-sensitive"}}"#);
+        assert_eq!(detail, None);
+    }
+
+    #[test]
+    fn auth_errors_never_include_upstream_details() {
+        let error = status_error(StatusCode::UNAUTHORIZED, Some("secret detail".into()));
+        assert_eq!(error.message(), "API 密钥无效或没有访问该模型的权限");
     }
 }

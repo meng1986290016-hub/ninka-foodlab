@@ -16,7 +16,11 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    agent::{AgentError, runtime::AgentRuntimeControl},
+    agent::{
+        AgentError,
+        runtime::AgentRuntimeControl,
+        secrets::{KeyringSecretStore, SessionSecretStore},
+    },
     ingest::{IngestError, coordinator::IngredientIngestCoordinator},
     ingredients::repository::RepositoryError,
 };
@@ -117,6 +121,7 @@ pub struct AppState {
     pub(crate) database_path: PathBuf,
     pub(crate) attachment_root: PathBuf,
     pub(crate) active_agent_runs: Arc<Mutex<HashMap<String, AgentRuntimeControl>>>,
+    pub(crate) provider_secrets: SessionSecretStore<KeyringSecretStore>,
 }
 
 impl AppState {
@@ -130,6 +135,7 @@ impl AppState {
             database_path,
             attachment_root,
             active_agent_runs: Arc::new(Mutex::new(HashMap::new())),
+            provider_secrets: SessionSecretStore::new(KeyringSecretStore),
         }
     }
 }
@@ -164,13 +170,16 @@ impl From<RepositoryError> for CommandError {
 
 impl From<IngestError> for CommandError {
     fn from(error: IngestError) -> Self {
-        let field = error
+        let first_issue = error
             .issues()
-            .and_then(|issues| issues.first())
-            .and_then(|issue| issue.field_path.clone());
+            .and_then(|issues| issues.iter().find(|issue| !issue.message.trim().is_empty()));
+        let field = first_issue.and_then(|issue| issue.field_path.clone());
+        let message = first_issue
+            .map(|issue| format!("{}：{}", error.message(), issue.message))
+            .unwrap_or_else(|| error.message().to_string());
         Self {
             code: error.code().to_string(),
-            message: error.message().to_string(),
+            message,
             field,
         }
     }

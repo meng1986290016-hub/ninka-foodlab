@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">AI Agent 智能火花方向</title>
+  <metadata>Ninka FoodLab ai-agent concept c01; branded spark direction; 24px grid; 1.75px rounded stroke; status: draft; not integrated.</metadata>
+  <g stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3"/>
+    <path d="m5.45 5.45 1.8 1.8M16.75 16.75l1.8 1.8M18.55 5.45l-1.8 1.8M7.25 16.75l-1.8 1.8"/>
+  </g>
+  <path d="M0-2.15c.34 0 .63.25.92.54l.58.58c.33.33.33.7.33 1.03s0 .7-.33 1.03l-.58.58c-.29.29-.58.54-.92.54s-.63-.25-.92-.54l-.58-.58c-.33-.33-.33-.7-.33-1.03s0-.7.33-1.03l.58-.58c.29-.29.58-.54.92-.54Z" fill="#EFBD50" transform="translate(12 12)"/>
+</svg>

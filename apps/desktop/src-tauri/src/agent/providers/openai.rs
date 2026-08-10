@@ -7,9 +7,10 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        HttpProviderCore, add_structured_output_instruction, emit, ensure_attachment_support,
-        fallback_models, model_options, no_op_sink, openai_response_messages, openai_tools,
-        probe_request, result, schema_is_empty, successful_test,
+        HttpProviderCore, add_structured_output_instruction, connection_probe_request, emit,
+        ensure_attachment_support, fallback_models, model_options, no_op_sink,
+        openai_response_messages, openai_tools, probe_request, result, run_agent_loop_probe,
+        schema_is_empty, successful_test,
     },
 };
 use crate::agent::{
@@ -65,11 +66,12 @@ impl AgentProvider for OpenAiProvider {
         let started = Instant::now();
         match kind {
             ProviderTestKind::Connection => {
-                self.raw_models().await?;
+                self.run(connection_probe_request(), no_op_sink()).await?;
             }
             ProviderTestKind::StructuredOutput => {
                 self.run(probe_request(), no_op_sink()).await?;
             }
+            ProviderTestKind::AgentLoop => run_agent_loop_probe(self).await?,
         }
         Ok(successful_test(kind, started))
     }
@@ -88,10 +90,12 @@ impl AgentProvider for OpenAiProvider {
         let mut body = json!({
             "model": self.core.config.model,
             "input": input,
-            "tools": openai_tools(&request.tools, !is_ark),
             "parallel_tool_calls": false,
             "store": false
         });
+        if !request.tools.is_empty() {
+            body["tools"] = Value::Array(openai_tools(&request.tools, !is_ark));
+        }
         if !is_ark && !schema_is_empty(&request.output_schema) {
             body["text"] = json!({
                 "format": {

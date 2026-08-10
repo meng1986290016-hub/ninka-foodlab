@@ -259,7 +259,7 @@ impl McpServer {
                 },
                 "serverInfo": {
                     "name": "food-rd-agent-tools",
-                    "title": "食研工作台 Agent 工具",
+                    "title": "Ninka FoodLab Agent 工具",
                     "version": env!("CARGO_PKG_VERSION"),
                     "description": "仅提供当前食品研发任务范围内的读取与待复核草稿操作"
                 },

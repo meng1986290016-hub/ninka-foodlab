@@ -16,7 +16,6 @@ import {
   IconCurrencyYen,
   IconDatabase,
   IconDatabaseExport,
-  IconDiamondsFilled,
   IconDots,
   IconFileDescription,
   IconFileExport,
@@ -54,6 +53,18 @@ import {
   IconX,
   type TablerIcon,
 } from "@tabler/icons-react";
+
+import aiAgentIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ai-agent-r01.svg?url";
+import ingredientIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-r01.svg?url";
+import ingredientLibraryIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-library-r02.svg?url";
+import ingredientVersionIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-version-r01.svg?url";
+import nutritionLabelIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/nutrition-label-r01.svg?url";
+import recipeLibraryIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-library-r05.svg?url";
+import recipeVersionIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-version-r01.svg?url";
+import recipeWorkbenchIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-workbench-r02.svg?url";
+import researchReportIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/research-report-r01.svg?url";
+import sampleSheetIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/sample-sheet-r01.svg?url";
+import supplierIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/supplier-r01.svg?url";
 
 /**
  * Ninka FoodLab icon vocabulary.
@@ -173,55 +184,60 @@ const icons: Record<IconName, TablerIcon> = {
   warning: IconAlertTriangle,
 };
 
-const signedIcons = new Set<IconName>([
-  "ai-assistant",
-  "ai-suggestion",
-  "backup",
-  "database",
-  "ingredient-library",
-  "ingredient-version",
-  "nutrition-label",
-  "recipe-library",
-  "recipe-version",
-  "report",
-  "search",
-]);
+/**
+ * User-approved Ninka FoodLab product icons.
+ *
+ * Legacy semantic names intentionally point at the same approved master so
+ * older feature surfaces cannot silently fall back to generic geometry.
+ */
+const customIconUrls: Partial<Record<IconName, string>> = {
+  "ai-assistant": aiAgentIconUrl,
+  "ai-suggestion": aiAgentIconUrl,
+  flask: recipeWorkbenchIconUrl,
+  formula: recipeVersionIconUrl,
+  ingredient: ingredientIconUrl,
+  "ingredient-library": ingredientLibraryIconUrl,
+  "ingredient-version": ingredientVersionIconUrl,
+  ingredients: ingredientIconUrl,
+  nutrition: nutritionLabelIconUrl,
+  "nutrition-label": nutritionLabelIconUrl,
+  "recipe-library": recipeLibraryIconUrl,
+  "recipe-version": recipeVersionIconUrl,
+  "recipe-workbench": recipeWorkbenchIconUrl,
+  report: researchReportIconUrl,
+  "sample-sheet": sampleSheetIconUrl,
+  supplier: supplierIconUrl,
+};
 
 export interface IconProps {
   className?: string;
   name: IconName;
-  /** Override the brand seed signature for a particular placement. */
-  signature?: boolean;
   size?: number;
 }
 
-export function Icon({
-  className,
-  name,
-  signature = signedIcons.has(name),
-  size = 20,
-}: IconProps) {
+export function Icon({ className, name, size = 20 }: IconProps) {
+  const customIconUrl = customIconUrls[name];
   const Glyph = icons[name];
-  const signatureSize = Math.max(5, Math.round(size * 0.34));
   const classes = ["ninka-icon", className].filter(Boolean).join(" ");
 
   return (
     <span
       aria-hidden="true"
       className={classes}
+      data-custom-icon={customIconUrl ? "true" : undefined}
       data-icon={name}
-      data-signature={signature || undefined}
       style={{ height: size, width: size }}
     >
-      <Glyph className="icon__glyph" size={size} stroke={1.75} />
-      {signature ? (
-        <IconDiamondsFilled
-          className="icon__signature"
-          data-testid="icon-signature"
-          size={signatureSize}
-          stroke={0}
+      {customIconUrl ? (
+        <img
+          alt=""
+          className="icon__custom"
+          draggable={false}
+          src={customIconUrl}
         />
-      ) : null}
+      ) : (
+        <Glyph className="icon__glyph" size={size} stroke={1.75} />
+      )}
     </span>
   );
 }

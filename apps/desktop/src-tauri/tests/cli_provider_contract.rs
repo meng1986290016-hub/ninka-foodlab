@@ -13,9 +13,9 @@ use food_rd_desktop::agent::{
         AgentProviderConfig, AgentProviderKind, AgentProviderProtocol, ReasoningEffort,
     },
     providers::{
-        AgentEventSink, AgentProvider, AgentToolDefinition, ProviderAttachment, ProviderEvent,
-        ProviderTestKind, ProviderTurnRequest, ProviderTurnResult, claude_cli::ClaudeCliProvider,
-        cli::detect_cli, codex_cli::CodexCliProvider,
+        AgentEventSink, AgentModelOption, AgentProvider, AgentToolDefinition, ProviderAttachment,
+        ProviderEvent, ProviderTestKind, ProviderTurnRequest, ProviderTurnResult,
+        claude_cli::ClaudeCliProvider, cli::detect_cli, codex_cli::CodexCliProvider,
     },
     tools::AgentToolContext,
 };
@@ -76,6 +76,7 @@ fn request(content: &str) -> ProviderTurnRequest {
                 "additionalProperties": false
             }),
         }],
+        tool_rounds: vec![],
         output_schema: json!({
             "type": "object",
             "properties": { "items": { "type": "array" } },
@@ -105,12 +106,25 @@ fn request_with_selected_attachment() -> ProviderTurnRequest {
     request
 }
 
+fn request_with_image_attachment(content: &str) -> ProviderTurnRequest {
+    let mut request = request(content);
+    request.attachment_ids = vec!["selected-image".into()];
+    request.attachments = vec![ProviderAttachment {
+        id: "selected-image".into(),
+        media_type: "image/png".into(),
+        data_base64: Some("AQ==".into()),
+        extracted_text: None,
+    }];
+    request
+}
+
 fn sink() -> AgentEventSink {
     Arc::new(|_| {})
 }
 
 fn assert_normalized(result: &ProviderTurnResult) {
-    assert_eq!(result.structured_output, Some(json!({ "items": [] })));
+    assert_eq!(result.structured_output, None);
+    assert!(result.final_text.is_empty());
     assert!(result.events.iter().any(|event| {
         matches!(
             event,
@@ -150,6 +164,44 @@ async fn both_cli_adapters_emit_the_same_normalized_result() {
 }
 
 #[tokio::test]
+async fn codex_cli_rejects_failed_mcp_calls_instead_of_reporting_completion() {
+    let provider = CodexCliProvider::new(config(
+        AgentProviderKind::CodexCli,
+        AgentProviderProtocol::CodexCli,
+        fixture("fake-codex"),
+    ))
+    .unwrap();
+
+    let error = provider
+        .run(request("__FAILED_MCP__"), sink())
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "provider_failure");
+    assert!(error.message().contains("read_task_attachments"));
+    assert!(error.message().contains("user cancelled MCP tool call"));
+}
+
+#[tokio::test]
+async fn claude_cli_rejects_failed_mcp_results_instead_of_reporting_completion() {
+    let provider = ClaudeCliProvider::new(config(
+        AgentProviderKind::ClaudeCodeCli,
+        AgentProviderProtocol::ClaudeCodeCli,
+        fixture("fake-claude"),
+    ))
+    .unwrap();
+
+    let error = provider
+        .run(request("__FAILED_MCP__"), sink())
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), "provider_failure");
+    assert!(error.message().contains("read_task_attachments"));
+    assert!(error.message().contains("permission denied"));
+}
+
+#[tokio::test]
 async fn cli_task_only_receives_selected_attachment_content() {
     let provider = ClaudeCliProvider::new(config(
         AgentProviderKind::ClaudeCodeCli,
@@ -164,6 +216,44 @@ async fn cli_task_only_receives_selected_attachment_content() {
         .unwrap();
 
     assert_normalized(&result);
+}
+
+#[tokio::test]
+async fn codex_image_prompt_is_separated_from_variadic_image_arguments() {
+    let provider = CodexCliProvider::new(config(
+        AgentProviderKind::CodexCli,
+        AgentProviderProtocol::CodexCli,
+        fixture("fake-codex"),
+    ))
+    .unwrap();
+
+    let result = provider
+        .run(
+            request_with_image_attachment("__EXPECT_IMAGE_PROMPT_BOUNDARY__"),
+            sink(),
+        )
+        .await
+        .unwrap();
+
+    assert_normalized(&result);
+}
+
+#[tokio::test]
+async fn codex_cli_lists_visible_models_from_cli_catalog() {
+    let provider = CodexCliProvider::new(config(
+        AgentProviderKind::CodexCli,
+        AgentProviderProtocol::CodexCli,
+        fixture("fake-codex"),
+    ))
+    .unwrap();
+
+    assert_eq!(
+        provider.list_models().await.unwrap(),
+        vec![AgentModelOption {
+            id: "gpt-5.6-sol".into(),
+            label: "GPT-5.6-Sol".into(),
+        }]
+    );
 }
 
 #[tokio::test]

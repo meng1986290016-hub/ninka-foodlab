@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "食研工作台",
+  "productName": "Ninka FoodLab",
   "version": "0.1.0",
   "identifier": "com.foodrd.studio",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "食研工作台",
+        "title": "Ninka FoodLab",
         "width": 1280,
         "height": 800,
         "minWidth": 620,

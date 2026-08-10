@@ -36,8 +36,6 @@ const TOOL_NAMES: &[&str] = &[
     "read_task_attachments",
     "create_ingredient_import_draft",
     "update_ingredient_import_draft",
-    "merge_ingredient_import_drafts",
-    "split_ingredient_import_draft",
     "discard_ingredient_import_draft",
     "validate_ingredient_import_draft",
     "request_open_ingredient_review",
@@ -114,6 +112,15 @@ impl AgentToolRegistry {
             .collect::<Vec<_>>()
     }
 
+    pub fn definitions_for(&self, names: &[&str]) -> Vec<AgentToolDefinition> {
+        let selected = names.iter().copied().collect::<BTreeSet<_>>();
+        TOOL_NAMES
+            .iter()
+            .filter(|name| selected.contains(**name))
+            .map(|name| definition(name))
+            .collect()
+    }
+
     pub fn execute(
         &mut self,
         context: &AgentToolContext,
@@ -157,8 +164,6 @@ impl AgentToolRegistry {
             "read_task_attachments" => self.read_task_attachments(context, arguments),
             "create_ingredient_import_draft" => self.create_draft(context, arguments),
             "update_ingredient_import_draft" => self.update_draft(context, arguments),
-            "merge_ingredient_import_drafts" => self.merge_drafts(context, arguments),
-            "split_ingredient_import_draft" => self.split_draft(context, arguments),
             "discard_ingredient_import_draft" => self.discard_draft(context, arguments),
             "validate_ingredient_import_draft" => self.validate_draft(context, arguments),
             "request_open_ingredient_review" => self.request_open_review(context, arguments),
@@ -259,10 +264,18 @@ impl AgentToolRegistry {
         arguments: Value,
     ) -> Result<Value, AgentError> {
         let arguments: AttachmentArguments = parse_arguments(arguments)?;
-        require_allowed_attachments(context, &arguments.attachment_ids)?;
+        let attachment_ids = match arguments.attachment_ids {
+            Some(attachment_ids) if !attachment_ids.is_empty() => attachment_ids,
+            _ => context
+                .allowed_attachment_ids
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+        };
+        require_allowed_attachments(context, &attachment_ids)?;
         let documents = self
             .coordinator
-            .read_job_extractions(&context.import_job_id, &arguments.attachment_ids)
+            .read_job_extractions(&context.import_job_id, &attachment_ids)
             .map_err(map_ingest_error)?;
         Ok(json!({ "items": documents }))
     }
@@ -315,64 +328,6 @@ impl AgentToolRegistry {
             .update_draft(&arguments.draft_id, arguments.review)
             .map_err(map_ingest_error)?;
         Ok(json!({ "draft": draft }))
-    }
-
-    fn merge_drafts(
-        &mut self,
-        context: &AgentToolContext,
-        arguments: Value,
-    ) -> Result<Value, AgentError> {
-        let arguments: MergeDraftArguments = parse_arguments(arguments)?;
-        if arguments.draft_ids.len() < 2 {
-            return Err(AgentError::invalid_input("合并时至少选择两个草稿"));
-        }
-        for draft_id in &arguments.draft_ids {
-            let draft = self.require_draft(context, draft_id)?;
-            require_allowed_attachments(
-                context,
-                &draft
-                    .attachments
-                    .iter()
-                    .map(|attachment| attachment.id.clone())
-                    .collect::<Vec<_>>(),
-            )?;
-        }
-        let merged = self
-            .coordinator
-            .merge_agent_drafts(
-                &context.import_job_id,
-                &arguments.draft_ids,
-                arguments.review,
-            )
-            .map_err(map_ingest_error)?;
-        Ok(json!({ "draft": merged, "discardedDraftIds": arguments.draft_ids }))
-    }
-
-    fn split_draft(
-        &mut self,
-        context: &AgentToolContext,
-        arguments: Value,
-    ) -> Result<Value, AgentError> {
-        let arguments: SplitDraftArguments = parse_arguments(arguments)?;
-        if arguments.reviews.len() < 2 {
-            return Err(AgentError::invalid_input("拆分时至少提供两个草稿"));
-        }
-        let source = self.require_draft(context, &arguments.draft_id)?;
-        let attachment_ids = source
-            .attachments
-            .iter()
-            .map(|attachment| attachment.id.clone())
-            .collect::<Vec<_>>();
-        require_allowed_attachments(context, &attachment_ids)?;
-        let drafts = self
-            .coordinator
-            .split_agent_draft(
-                &context.import_job_id,
-                &arguments.draft_id,
-                arguments.reviews,
-            )
-            .map_err(map_ingest_error)?;
-        Ok(json!({ "drafts": drafts, "discardedDraftId": arguments.draft_id }))
     }
 
     fn discard_draft(
@@ -890,7 +845,8 @@ impl SearchArguments {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AttachmentArguments {
-    attachment_ids: Vec<String>,
+    #[serde(default)]
+    attachment_ids: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -908,20 +864,6 @@ struct CreateDraftArguments {
 struct UpdateDraftArguments {
     draft_id: String,
     review: ReviewedIngredientImportDraft,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct MergeDraftArguments {
-    draft_ids: Vec<String>,
-    review: ReviewedIngredientImportDraft,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SplitDraftArguments {
-    draft_id: String,
-    reviews: Vec<ReviewedIngredientImportDraft>,
 }
 
 #[derive(Deserialize)]
@@ -1190,12 +1132,12 @@ fn definition(name: &str) -> AgentToolDefinition {
         "search_categories" => ("搜索原料分类", search_schema()),
         "list_nutrient_definitions" => ("列出系统中的营养成分定义", empty_schema()),
         "read_task_attachments" => (
-            "读取本次任务已选择附件的提取内容",
+            "读取本次任务已选附件的提取内容；attachmentIds 传 null、空数组或省略时，仅读取本任务全部已选附件",
             json!({
                 "type": "object",
                 "properties": {
                     "attachmentIds": {
-                        "type": "array",
+                        "type": ["array", "null"],
                         "items": { "type": "string" }
                     }
                 },
@@ -1210,38 +1152,6 @@ fn definition(name: &str) -> AgentToolDefinition {
         "update_ingredient_import_draft" => (
             "更新当前任务内的待复核原料草稿",
             review_mutation_schema(true),
-        ),
-        "merge_ingredient_import_drafts" => (
-            "把当前任务内多个识别草稿合并为一个",
-            json!({
-                "type": "object",
-                "properties": {
-                    "draftIds": {
-                        "type": "array",
-                        "minItems": 2,
-                        "items": { "type": "string" }
-                    },
-                    "review": review_schema()
-                },
-                "required": ["draftIds", "review"],
-                "additionalProperties": false
-            }),
-        ),
-        "split_ingredient_import_draft" => (
-            "把一个识别草稿拆分为多个待复核草稿",
-            json!({
-                "type": "object",
-                "properties": {
-                    "draftId": { "type": "string" },
-                    "reviews": {
-                        "type": "array",
-                        "minItems": 2,
-                        "items": review_schema()
-                    }
-                },
-                "required": ["draftId", "reviews"],
-                "additionalProperties": false
-            }),
         ),
         "discard_ingredient_import_draft" => ("丢弃当前任务内不需要的识别草稿", draft_id_schema()),
         "validate_ingredient_import_draft" => {
@@ -1412,7 +1322,23 @@ fn recipe_proposal_schema() -> Value {
                     ]
                 }
             },
-            "requirements": { "type": "array", "items": { "type": "object" } },
+            "requirements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nutrientDefinitionId": { "type": ["string", "null"] },
+                        "name": { "type": "string" },
+                        "unit": { "type": "string" },
+                        "minimum": { "type": ["string", "null"] },
+                        "maximum": { "type": ["string", "null"] },
+                        "origin": { "type": "string" },
+                        "rationale": { "type": "string" }
+                    },
+                    "required": ["nutrientDefinitionId", "name", "unit", "minimum", "maximum", "origin", "rationale"],
+                    "additionalProperties": false
+                }
+            },
             "assumptions": { "type": "array", "items": { "type": "string" } },
             "warnings": { "type": "array", "items": { "type": "string" } },
             "markdownNotes": { "type": "string" }

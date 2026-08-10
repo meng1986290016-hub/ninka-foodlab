@@ -76,7 +76,7 @@ export interface AgentProviderSecretInput {
 
 export interface AgentProviderTestResult {
   ok: boolean;
-  kind: "connection" | "structured_output";
+  kind: "connection" | "structured_output" | "agent_loop";
   latencyMs: number | null;
   message: string;
 }

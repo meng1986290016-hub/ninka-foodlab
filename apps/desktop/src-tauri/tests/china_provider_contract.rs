@@ -66,6 +66,7 @@ fn request() -> ProviderTurnRequest {
                 "additionalProperties": false
             }),
         }],
+        tool_rounds: vec![],
         output_schema: json!({
             "type": "object",
             "properties": {
@@ -184,7 +185,7 @@ async fn deepseek_uses_json_object_without_beta_strict_tools() {
 }
 
 #[tokio::test]
-async fn kimi_keeps_native_json_schema_and_strict_tool_contract() {
+async fn kimi_keeps_native_json_schema_with_compatible_tool_contract() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/chat/completions"))
@@ -209,8 +210,60 @@ async fn kimi_keeps_native_json_schema_and_strict_tool_contract() {
     assert_normalized(&result);
     assert_eq!(body["response_format"]["type"], "json_schema");
     assert_eq!(body["response_format"]["json_schema"]["strict"], true);
-    assert_eq!(body["tools"][0]["function"]["strict"], true);
+    assert!(body["tools"][0]["function"].get("strict").is_none());
     assert_schema_prompt(&body, "messages");
+}
+
+#[tokio::test]
+async fn kimi_plain_conversation_omits_tools_and_structured_output_contracts() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(header("authorization", "Bearer sk-cn-test"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [{ "message": { "content": "你好，我在。" } }]
+        })))
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        config(
+            AgentProviderKind::KimiCn,
+            AgentProviderProtocol::OpenAiCompatible,
+            server.uri(),
+            "kimi-k2.6",
+        ),
+        Some("sk-cn-test".into()),
+    )
+    .unwrap();
+    let mut plain_request = request();
+    plain_request.messages.insert(
+        0,
+        AgentMessage {
+            id: "old-empty-message".into(),
+            conversation_id: "conversation-1".into(),
+            run_id: None,
+            role: AgentMessageRole::User,
+            content: String::new(),
+            attachment_ids: vec![],
+            status: AgentMessageStatus::Complete,
+            created_at: "2026-07-30T00:00:00Z".into(),
+        },
+    );
+    plain_request.messages[1].content = "你好".into();
+    plain_request.tools.clear();
+    plain_request.output_schema = json!({});
+
+    let result = provider.run(plain_request, sink()).await.unwrap();
+    let body = received_body(&server).await;
+
+    assert_eq!(result.final_text, "你好，我在。");
+    assert!(body.get("tools").is_none());
+    assert!(body.get("response_format").is_none());
+    assert!(body["messages"].as_array().unwrap().iter().all(|message| {
+        message["content"]
+            .as_str()
+            .is_some_and(|content| !content.trim().is_empty())
+    }));
 }
 
 #[tokio::test]

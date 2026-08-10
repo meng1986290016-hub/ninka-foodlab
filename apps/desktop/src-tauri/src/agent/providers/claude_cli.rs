@@ -1,16 +1,16 @@
-use std::time::Instant;
+use std::{collections::BTreeMap, time::Instant};
 
 use async_trait::async_trait;
 use serde_json::Value;
 
 use super::{
-    AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
-    ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
+    AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, AgentToolDefinition,
+    ProviderEvent, ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     cli::{
         CliDetectionResult, CliFlavor, CliRuntime, TaskDirectory, ensure_jsonl_line_size,
-        failure_from_output,
+        failure_from_output, normalize_cli_turn_output,
     },
-    http::{emit, no_op_sink, probe_request, structured_output, successful_test},
+    http::{emit, no_op_sink, probe_request, successful_test},
 };
 use crate::agent::{
     AgentError,
@@ -94,6 +94,9 @@ impl AgentProvider for ClaudeCliProvider {
             ProviderTestKind::StructuredOutput => {
                 self.run(probe_request(), no_op_sink()).await?;
             }
+            ProviderTestKind::AgentLoop => {
+                super::http::run_agent_loop_probe(self).await?;
+            }
         }
         Ok(successful_test(kind, started))
     }
@@ -115,7 +118,12 @@ impl AgentProvider for ClaudeCliProvider {
         if !output.status.success() {
             return Err(failure_from_output(&output));
         }
-        parse_claude_jsonl(&output.stdout_text(), &request.output_schema, sink)
+        parse_claude_jsonl(
+            &output.stdout_text(),
+            &request.output_schema,
+            &request.tools,
+            sink,
+        )
     }
 
     async fn list_models(&self) -> Result<Vec<AgentModelOption>, AgentError> {
@@ -134,12 +142,14 @@ impl AgentProvider for ClaudeCliProvider {
 fn parse_claude_jsonl(
     stdout: &str,
     output_schema: &Value,
+    tools: &[AgentToolDefinition],
     sink: AgentEventSink,
 ) -> Result<ProviderTurnResult, AgentError> {
     let mut events = vec![];
     let mut streamed_text = String::new();
     let mut final_text = String::new();
     let mut final_structured = None;
+    let mut pending_tool_calls = BTreeMap::new();
     for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
         ensure_jsonl_line_size(line)?;
         let value: Value = serde_json::from_str(line)
@@ -186,12 +196,51 @@ fn parse_claude_jsonl(
                                 .cloned()
                                 .unwrap_or_else(|| Value::Object(Default::default())),
                         };
-                        emit(&mut events, &sink, ProviderEvent::ToolCall(call));
+                        pending_tool_calls.insert(call.id.clone(), call);
+                    }
+                }
+            }
+            Some("user") => {
+                for block in value
+                    .pointer("/message/content")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    if block.get("type").and_then(Value::as_str) != Some("tool_result") {
+                        continue;
+                    }
+                    let call_id = block
+                        .get("tool_use_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("claude-tool-call");
+                    let call = pending_tool_calls.remove(call_id);
+                    if block
+                        .get("is_error")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    {
+                        let name = call
+                            .as_ref()
+                            .map(|call| call.name.as_str())
+                            .unwrap_or(call_id);
+                        return Err(AgentError::provider_failure(format!(
+                            "Claude Code 工具调用失败（{name}）：{}",
+                            claude_tool_result_text(block)
+                        )));
+                    }
+                    if let Some(call) = call {
+                        emit(&mut events, &sink, ProviderEvent::ToolObservation(call));
                     }
                 }
             }
             Some("result") => {
-                if value.get("subtype").and_then(Value::as_str) != Some("success") {
+                if value.get("subtype").and_then(Value::as_str) != Some("success")
+                    || value
+                        .get("is_error")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                {
                     return Err(AgentError::provider_failure(
                         value
                             .get("result")
@@ -232,18 +281,44 @@ fn parse_claude_jsonl(
             _ => {}
         }
     }
+    if let Some((_, call)) = pending_tool_calls.into_iter().next() {
+        return Err(AgentError::provider_failure(format!(
+            "Claude Code 工具调用未返回执行结果（{}）",
+            call.name
+        )));
+    }
     if final_text.is_empty() {
         final_text = streamed_text;
     }
-    let structured_output = match final_structured {
-        Some(value) => structured_output(&value.to_string(), output_schema)?,
-        None => structured_output(&final_text, output_schema)?,
-    };
-    Ok(ProviderTurnResult {
+    normalize_cli_turn_output(
         final_text,
-        structured_output,
+        final_structured,
+        output_schema,
+        tools,
         events,
-    })
+        &sink,
+    )
+}
+
+fn claude_tool_result_text(block: &Value) -> String {
+    let content = block.get("content").unwrap_or(&Value::Null);
+    let detail = match content {
+        Value::String(text) => text.trim().to_string(),
+        Value::Array(items) => items
+            .iter()
+            .filter_map(|item| item.get("text").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join(" "),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    };
+    if detail.is_empty() {
+        "工具没有返回成功结果".into()
+    } else {
+        detail.chars().take(240).collect()
+    }
 }
 
 fn claude_effort(effort: ReasoningEffort) -> Option<&'static str> {

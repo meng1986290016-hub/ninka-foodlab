@@ -15,15 +15,18 @@ use super::{
     model::{
         AgentMessage, AgentMessageInput, AgentMessageRole, AgentMessageStatus, AgentProviderConfig,
         AgentProviderProtocol, AgentRun, AgentRunInput, AgentRunRequest, AgentRunStatus,
+        AgentToolCallStatus,
     },
     providers::{
         AgentEventSink, AgentProvider, ProviderAttachment, ProviderEvent, ProviderToolCall,
-        ProviderTurnRequest, ProviderTurnResult,
+        ProviderToolResult, ProviderToolRound, ProviderTurnRequest, ProviderTurnResult,
     },
     repository::AgentRepository,
     tools::{AgentToolContext, AgentToolRegistry},
 };
-use crate::ingest::{IngestError, extractors::ExtractedDocument};
+use crate::ingest::{
+    IngestError, extractors::ExtractedDocument, model::IngredientImportDraftStatus,
+};
 
 const MAX_AGENT_TURNS: usize = 12;
 
@@ -129,6 +132,12 @@ pub struct PreparedAgentRun {
     attachment_ids: Vec<String>,
     attachments: Vec<ProviderAttachment>,
     context: AgentToolContext,
+    task_plan: AgentTaskPlan,
+}
+
+struct AgentTaskPlan {
+    tool_definitions: Vec<super::providers::AgentToolDefinition>,
+    requires_tool: bool,
 }
 
 impl AgentRuntime {
@@ -305,6 +314,18 @@ impl AgentRuntime {
                 .as_ref()
                 .map(|context| context.recipe_name.clone()),
         };
+        let task_kind = classify_task(
+            &content,
+            !attachment_ids.is_empty(),
+            recipe_context.is_some(),
+        );
+        let tool_definitions = self
+            .tools
+            .definitions_for(task_kind.tool_names(!attachment_ids.is_empty()));
+        let task_plan = AgentTaskPlan {
+            tool_definitions,
+            requires_tool: task_kind != AgentTaskKind::Conversation,
+        };
         let provider = match (self.provider_factory)(&self.provider_config, &context) {
             Ok(provider) => provider,
             Err(error) => {
@@ -320,6 +341,7 @@ impl AgentRuntime {
             attachment_ids,
             attachments,
             context,
+            task_plan,
         })
     }
 
@@ -334,6 +356,7 @@ impl AgentRuntime {
             attachment_ids,
             attachments,
             context,
+            task_plan,
         } = prepared;
         let result = self
             .run_turns(
@@ -342,6 +365,7 @@ impl AgentRuntime {
                 attachment_ids,
                 attachments,
                 &context,
+                task_plan,
             )
             .await;
 
@@ -377,12 +401,89 @@ impl AgentRuntime {
                 }
             }
             Err(error) => {
-                self.fail_run(&run.id, Some(&assistant.id), &error);
-                Err(error)
+                match self.complete_cli_draft_outcome(&run, &assistant, &context, &error) {
+                    Ok(Some(completed_run)) => {
+                        run = completed_run;
+                        Ok(run)
+                    }
+                    Ok(None) => {
+                        self.fail_run(&run.id, Some(&assistant.id), &error);
+                        Err(error)
+                    }
+                    Err(recovery_error) => {
+                        self.fail_run(&run.id, Some(&assistant.id), &recovery_error);
+                        Err(recovery_error)
+                    }
+                }
             }
         };
         self.control.set_provider(None);
         completed
+    }
+
+    fn complete_cli_draft_outcome(
+        &mut self,
+        run: &AgentRun,
+        assistant: &AgentMessage,
+        context: &AgentToolContext,
+        error: &AgentError,
+    ) -> Result<Option<AgentRun>, AgentError> {
+        if !is_cli_protocol(self.provider_config.protocol)
+            || !matches!(
+                error.code(),
+                "provider_timeout" | "provider_failure" | "invalid_model_output"
+            )
+        {
+            return Ok(None);
+        }
+        let completed_draft_write = self
+            .repository
+            .list_tool_calls(&run.id)?
+            .iter()
+            .any(|call| {
+                call.status == AgentToolCallStatus::Completed
+                    && matches!(
+                        call.tool_name.as_str(),
+                        "create_ingredient_import_draft" | "update_ingredient_import_draft"
+                    )
+            });
+        if !completed_draft_write {
+            return Ok(None);
+        }
+        let drafts = self
+            .tools
+            .coordinator()
+            .list_drafts(&context.import_job_id)
+            .map_err(map_ingest_error)?;
+        let reviewable_count = drafts
+            .iter()
+            .filter(|draft| {
+                !matches!(
+                    draft.status,
+                    IngredientImportDraftStatus::Imported | IngredientImportDraftStatus::Discarded
+                )
+            })
+            .count();
+        if reviewable_count == 0 {
+            return Ok(None);
+        }
+
+        let message = format!(
+            "已生成或更新 {reviewable_count} 张待人工复核原料草稿。模型在整理最终回复时未及时结束，但草稿已安全保留；请打开检查，确认后再保存。"
+        );
+        self.repository
+            .update_message(&assistant.id, &message, AgentMessageStatus::Complete)?;
+        let completed =
+            self.repository
+                .update_run(&run.id, AgentRunStatus::Completed, None, None)?;
+        (self.events)(AgentRuntimeEvent::DraftsChanged {
+            run_id: run.id.clone(),
+            import_job_id: context.import_job_id.clone(),
+        });
+        (self.events)(AgentRuntimeEvent::RunCompleted {
+            run_id: run.id.clone(),
+        });
+        Ok(Some(completed))
     }
 
     fn prepare_messages(
@@ -419,15 +520,26 @@ impl AgentRuntime {
         attachment_ids: Vec<String>,
         attachments: Vec<ProviderAttachment>,
         context: &AgentToolContext,
+        task_plan: AgentTaskPlan,
     ) -> Result<String, AgentError> {
+        let mut actual_tool_called = false;
+        let mut tool_rounds = Vec::new();
         for _ in 0..MAX_AGENT_TURNS {
             self.require_not_cancelled()?;
             let mut messages = self
                 .repository
                 .list_messages(conversation_id)?
                 .into_iter()
-                .filter(|message| message.id != assistant.id)
+                .filter(|message| {
+                    message.id != assistant.id && message.role != AgentMessageRole::Tool
+                })
                 .collect::<Vec<_>>();
+            append_attachment_scope(&mut messages, &attachment_ids, &attachments);
+            // Old failed runs may contain an empty user placeholder. Some providers
+            // (notably Kimi) reject the whole request when any historical message is
+            // empty, so remove empty history after the current attachment scope has
+            // had a chance to turn an attachment-only user message into real content.
+            messages.retain(|message| !message.content.trim().is_empty());
             if let (Some(recipe_id), Some(recipe_name)) = (
                 context.active_recipe_id.as_deref(),
                 context.active_recipe_name.as_deref(),
@@ -446,7 +558,8 @@ impl AgentRuntime {
                         messages,
                         attachment_ids: attachment_ids.clone(),
                         attachments: attachments.clone(),
-                        tools: self.tools.definitions(),
+                        tools: task_plan.tool_definitions.clone(),
+                        tool_rounds: tool_rounds.clone(),
                         output_schema: final_output_schema(self.provider_config.protocol),
                     },
                     &context.run_id,
@@ -460,34 +573,55 @@ impl AgentRuntime {
                     _ => None,
                 })
                 .collect::<Vec<_>>();
+            let tool_observations = turn
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    ProviderEvent::ToolObservation(call) => Some(call.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
 
             if is_cli_protocol(self.provider_config.protocol) {
-                self.emit_cli_tool_observations(&context.run_id, &tool_calls);
-                if let Some(final_text) = display_text(&turn, self.provider_config.protocol) {
-                    (self.events)(AgentRuntimeEvent::MessageDelta {
-                        run_id: context.run_id.clone(),
-                        text: final_text.clone(),
-                    });
-                    return Ok(final_text);
-                }
-                return Err(AgentError::invalid_model_output(
-                    "本机模型没有返回可显示的最终答复",
-                ));
+                self.emit_cli_tool_observations(&context.run_id, &tool_observations);
+                actual_tool_called |= !tool_observations.is_empty();
             }
 
-            if tool_calls.is_empty() {
-                if turn.final_text.trim().is_empty() {
+            if !tool_calls.is_empty() {
+                actual_tool_called = true;
+                let calls = tool_calls;
+                let mut results = Vec::with_capacity(calls.len());
+                for call in &calls {
+                    self.require_not_cancelled()?;
+                    results.push(self.execute_tool(conversation_id, context, call.clone())?);
+                }
+                tool_rounds.push(ProviderToolRound { calls, results });
+                continue;
+            }
+
+            let final_text = if is_cli_protocol(self.provider_config.protocol) {
+                display_text(&turn, self.provider_config.protocol).ok_or_else(|| {
+                    AgentError::invalid_model_output("本机模型没有返回可显示的最终答复")
+                })?
+            } else {
+                let text = turn.final_text.trim();
+                if text.is_empty() {
                     return Err(AgentError::invalid_model_output(
                         "模型没有返回可显示的最终答复",
                     ));
                 }
-                return Ok(turn.final_text.trim().into());
+                text.into()
+            };
+            if task_plan.requires_tool && !actual_tool_called {
+                return Err(AgentError::required_tool_not_called());
             }
-
-            for call in tool_calls {
-                self.require_not_cancelled()?;
-                self.execute_tool(conversation_id, context, call)?;
+            if is_cli_protocol(self.provider_config.protocol) {
+                (self.events)(AgentRuntimeEvent::MessageDelta {
+                    run_id: context.run_id.clone(),
+                    text: final_text.clone(),
+                });
             }
+            return Ok(final_text);
         }
         Err(AgentError::provider_failure(
             "Agent 连续调用工具次数过多，请缩小任务范围后重试",
@@ -540,23 +674,25 @@ impl AgentRuntime {
         conversation_id: &str,
         context: &AgentToolContext,
         call: ProviderToolCall,
-    ) -> Result<(), AgentError> {
+    ) -> Result<ProviderToolResult, AgentError> {
         (self.events)(AgentRuntimeEvent::ToolStarted {
             run_id: context.run_id.clone(),
             call_id: call.id.clone(),
             tool_name: call.name.clone(),
         });
-        let result = self.tools.execute(context, &call.name, call.arguments);
-        let (content, summary) = match result {
+        let result = self
+            .tools
+            .execute(context, &call.name, call.arguments.clone());
+        let (output, summary, is_error) = match result {
             Ok(value) => (
                 json!({
                     "ok": true,
                     "toolCallId": call.id,
                     "toolName": call.name,
                     "result": value
-                })
-                .to_string(),
+                }),
                 "已完成".to_string(),
+                false,
             ),
             Err(error) => (
                 json!({
@@ -567,22 +703,22 @@ impl AgentRuntime {
                         "code": error.code(),
                         "message": error.message()
                     }
-                })
-                .to_string(),
+                }),
                 error.message().to_string(),
+                true,
             ),
         };
         self.repository.append_message(AgentMessageInput {
             conversation_id: conversation_id.into(),
             run_id: Some(context.run_id.clone()),
             role: AgentMessageRole::Tool,
-            content,
+            content: output.to_string(),
             attachment_ids: vec![],
             status: AgentMessageStatus::Complete,
         })?;
         (self.events)(AgentRuntimeEvent::ToolCompleted {
             run_id: context.run_id.clone(),
-            call_id: call.id,
+            call_id: call.id.clone(),
             summary,
         });
         if mutates_drafts(&call.name) {
@@ -596,7 +732,12 @@ impl AgentRuntime {
                 run_id: context.run_id.clone(),
             });
         }
-        Ok(())
+        Ok(ProviderToolResult {
+            call_id: call.id,
+            name: call.name,
+            output,
+            is_error,
+        })
     }
 
     fn emit_cli_tool_observations(&self, run_id: &str, calls: &[ProviderToolCall]) {
@@ -739,13 +880,148 @@ fn is_cli_protocol(protocol: AgentProviderProtocol) -> bool {
 
 fn valid_turn_result(result: &ProviderTurnResult, protocol: AgentProviderProtocol) -> bool {
     if is_cli_protocol(protocol) {
-        return display_text(result, protocol).is_some();
+        return display_text(result, protocol).is_some()
+            || result.events.iter().any(|event| {
+                matches!(
+                    event,
+                    ProviderEvent::ToolCall(_) | ProviderEvent::ToolObservation(_)
+                )
+            });
     }
     !result.final_text.trim().is_empty()
         || result
             .events
             .iter()
             .any(|event| matches!(event, ProviderEvent::ToolCall(_)))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AgentTaskKind {
+    Conversation,
+    IngredientImport,
+    IngredientResearch,
+    RecipeDesign,
+    RecipeWorkspace,
+}
+
+impl AgentTaskKind {
+    fn tool_names(self, has_attachments: bool) -> &'static [&'static str] {
+        match (self, has_attachments) {
+            (Self::Conversation, _) => &[],
+            (Self::IngredientImport, _) => &[
+                "search_material_groups",
+                "search_supplier_variants",
+                "search_suppliers",
+                "search_categories",
+                "list_nutrient_definitions",
+                "read_task_attachments",
+                "create_ingredient_import_draft",
+                "update_ingredient_import_draft",
+                "discard_ingredient_import_draft",
+                "validate_ingredient_import_draft",
+                "request_open_ingredient_review",
+            ],
+            (Self::IngredientResearch, _) => &[
+                "search_material_groups",
+                "search_supplier_variants",
+                "search_suppliers",
+                "search_categories",
+                "list_nutrient_definitions",
+            ],
+            (Self::RecipeDesign, true) => &[
+                "search_material_groups",
+                "search_supplier_variants",
+                "search_suppliers",
+                "list_nutrient_definitions",
+                "read_task_attachments",
+                "evaluate_recipe_proposal",
+                "create_recipe_proposal",
+                "update_recipe_proposal",
+                "request_open_recipe_proposal_review",
+            ],
+            (Self::RecipeDesign, false) => &[
+                "search_material_groups",
+                "search_supplier_variants",
+                "search_suppliers",
+                "list_nutrient_definitions",
+                "evaluate_recipe_proposal",
+                "create_recipe_proposal",
+                "update_recipe_proposal",
+                "request_open_recipe_proposal_review",
+            ],
+            (Self::RecipeWorkspace, _) => &[
+                "search_supplier_variants",
+                "diagnose_recipe",
+                "review_recipe_development",
+                "compare_supplier_variant",
+            ],
+        }
+    }
+}
+
+fn classify_task(content: &str, has_attachments: bool, has_recipe_context: bool) -> AgentTaskKind {
+    let compact = content
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    if has_recipe_context
+        && [
+            "诊断", "复盘", "比较", "对比", "替代", "建议", "优化", "调整",
+        ]
+        .iter()
+        .any(|action| compact.contains(action))
+    {
+        return AgentTaskKind::RecipeWorkspace;
+    }
+
+    let recipe_tasks = [
+        "设计配方",
+        "创建配方",
+        "生成配方",
+        "开发配方",
+        "试算配方",
+        "优化配方",
+        "调整配方",
+        "逆向配方",
+        "配方逆向",
+        "逆向标签",
+    ];
+    let product_creation = [
+        "我想做",
+        "帮我做",
+        "帮我设计",
+        "帮我开发",
+        "设计一款",
+        "开发一款",
+    ];
+    if recipe_tasks.iter().any(|task| compact.contains(task))
+        || product_creation
+            .iter()
+            .any(|prefix| compact.contains(prefix))
+    {
+        return AgentTaskKind::RecipeDesign;
+    }
+
+    let import_tasks = [
+        "加入原料",
+        "添加原料",
+        "导入原料",
+        "新建原料",
+        "创建原料",
+        "识别原料",
+        "读取原料",
+        "原料草稿",
+    ];
+    if import_tasks.iter().any(|task| compact.contains(task)) || has_attachments {
+        return AgentTaskKind::IngredientImport;
+    }
+
+    let research_tasks = ["分析原料库", "检索原料", "搜索原料", "查找原料", "对比原料"];
+    if research_tasks.iter().any(|task| compact.contains(task)) {
+        return AgentTaskKind::IngredientResearch;
+    }
+    AgentTaskKind::Conversation
 }
 
 fn final_output_schema(protocol: AgentProviderProtocol) -> serde_json::Value {
@@ -797,14 +1073,45 @@ fn mutates_drafts(name: &str) -> bool {
         name,
         "create_ingredient_import_draft"
             | "update_ingredient_import_draft"
-            | "merge_ingredient_import_drafts"
-            | "split_ingredient_import_draft"
             | "discard_ingredient_import_draft"
     )
 }
 
 fn mutates_recipe_proposals(name: &str) -> bool {
     matches!(name, "create_recipe_proposal" | "update_recipe_proposal")
+}
+
+fn append_attachment_scope(
+    messages: &mut [AgentMessage],
+    attachment_ids: &[String],
+    attachments: &[ProviderAttachment],
+) {
+    if attachment_ids.is_empty() {
+        return;
+    }
+    let Some(message) = messages
+        .iter_mut()
+        .rev()
+        .find(|message| message.role == AgentMessageRole::User)
+    else {
+        return;
+    };
+
+    message.content.push_str(
+        "\n\n[系统生成的本次任务附件范围：调用 read_task_attachments 时将 attachmentIds 传 null 或空数组（兼容客户端也可省略），系统将只读取下列已选附件。创建草稿的 attachmentIds 和 sourceLinks.attachmentId 必须原样使用下列真实 ID，不得使用临时文件名、附件序号或历史任务 ID。\n",
+    );
+    for (index, attachment_id) in attachment_ids.iter().enumerate() {
+        let media_type = attachments
+            .iter()
+            .find(|attachment| attachment.id == *attachment_id)
+            .map(|attachment| attachment.media_type.as_str())
+            .unwrap_or("unknown");
+        message.content.push_str(&format!(
+            "- 附件 {}: attachmentId={attachment_id}; mediaType={media_type}\n",
+            index + 1
+        ));
+    }
+    message.content.push(']');
 }
 
 fn map_ingest_error(error: IngestError) -> AgentError {

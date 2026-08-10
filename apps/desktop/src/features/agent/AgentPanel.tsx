@@ -283,21 +283,11 @@ export function AgentPanel({
               busy={busy}
               drafts={workflow.drafts}
               onDiscard={(draft) => void discardDraft(draft)}
-              onMerge={(source, target) =>
-                void workflow.continueRun(
-                  `请将草稿 ${source.id} 合并到草稿 ${target.id}。仅在原料名称、供应商和型号规格一致时合并；如有字段冲突请保留为空并标记来源不一致。`,
-                )
-              }
               onOpen={(draft) => onReviewDraft(draft, reviewableDrafts)}
               onOpenImported={onOpenImported}
               onRetry={(draft) =>
                 void workflow.continueRun(
                   `请重新读取草稿 ${draft.id} 关联的原始资料并更新这张草稿。不要正式保存。`,
-                )
-              }
-              onSplit={(draft) =>
-                void workflow.continueRun(
-                  `请检查草稿 ${draft.id} 的来源资料；如果包含多个原料、供应商或型号规格，请拆分为独立草稿。不要正式保存。`,
                 )
               }
               unassignedAttachmentCount={unassignedAttachmentCount}

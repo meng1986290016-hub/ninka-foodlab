@@ -25,8 +25,6 @@ const toolStatus: Record<string, string> = {
   list_nutrient_definitions: "正在读取营养成分项目",
   create_ingredient_import_draft: "正在创建原料草稿",
   update_ingredient_import_draft: "正在更新原料草稿",
-  merge_ingredient_import_drafts: "正在合并原料草稿",
-  split_ingredient_import_draft: "正在拆分原料草稿",
   discard_ingredient_import_draft: "正在移除原料草稿",
   validate_ingredient_import_draft: "正在检查原料草稿",
   request_open_ingredient_review: "正在准备人工复核",
@@ -332,11 +330,18 @@ export function useAgentConversation(
 
   const continueRun = useCallback(
     async (content: string) => {
-      if (!lastRun || lastRun.status !== "completed") {
-        setError("当前没有可继续调整的已完成任务");
+      if (!lastRun) {
+        setError("当前没有可继续调整的任务");
         return null;
       }
-      return send(content, [], { continueRunId: lastRun.id });
+      if (lastRun.status === "completed") {
+        return send(content, [], { continueRunId: lastRun.id });
+      }
+      if (lastRun.status === "failed" || lastRun.status === "cancelled") {
+        return send(content, [], { retryRunId: lastRun.id });
+      }
+      setError("当前任务暂时不能继续调整");
+      return null;
     },
     [lastRun, send],
   );

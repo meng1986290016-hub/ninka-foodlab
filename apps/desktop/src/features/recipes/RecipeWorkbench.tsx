@@ -1147,7 +1147,7 @@ function RecipeResultsInspector({
       </header>
       {calculation === null ? (
         <div className="recipe-results-empty">
-          <Icon name="formula" size={27} />
+          <Icon name="recipe-workbench" size={27} />
           <strong>添加有效用量后显示结果</strong>
           <span>营养、成本和数据完整度会随配方实时更新。</span>
           {issues[0] ? <small>{issues[0].message}</small> : null}

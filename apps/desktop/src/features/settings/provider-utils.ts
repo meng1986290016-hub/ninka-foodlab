@@ -7,6 +7,9 @@ export function editableProvider(
   provider: AgentProviderConfig,
 ): AgentProviderConfigInput {
   const { hasSecret: _hasSecret, updatedAt: _updatedAt, ...input } = provider;
+  if (!input.model.trim() && provider.kind === "deepseek") {
+    return { ...input, model: "deepseek-v4-flash" };
+  }
   return input;
 }
 

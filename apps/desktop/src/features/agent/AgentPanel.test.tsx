@@ -94,6 +94,52 @@ class ControlledRunApi extends BrowserDemoApi {
   }
 }
 
+class FailedDraftRunApi extends BrowserDemoApi {
+  readonly requests: AgentRunRequest[] = [];
+  private visibleRun: AgentRun | null = null;
+
+  async seedFailedDraft() {
+    const conversation = await this.createAgentConversation("原料识别测试");
+    const completed = await super.startAgentRun({
+      conversationId: conversation.id,
+      content: "请识别这份原料资料",
+      files: [
+        {
+          kind: "browser_demo",
+          value: "乳粉标签.png",
+          mediaType: "image/png",
+        },
+      ],
+    });
+    this.visibleRun = {
+      ...completed,
+      status: "failed",
+      errorCode: "provider_timeout",
+      errorSummary: "模型在整理最终回复时超时",
+    };
+    return this.visibleRun;
+  }
+
+  override async startAgentRun(request: AgentRunRequest) {
+    this.requests.push(request);
+    if (request.retryRunId && this.visibleRun) {
+      this.visibleRun = {
+        ...this.visibleRun,
+        status: "completed",
+        errorCode: null,
+        errorSummary: null,
+      };
+      return this.visibleRun;
+    }
+    return super.startAgentRun(request);
+  }
+
+  override async getAgentRun(id: string) {
+    if (this.visibleRun?.id === id) return this.visibleRun;
+    return super.getAgentRun(id);
+  }
+}
+
 describe("AgentPanel", () => {
   it("shows the thinking orb while the browser demo response is pending", async () => {
     const events = new BrowserAgentEventSource();
@@ -319,6 +365,40 @@ describe("AgentPanel", () => {
       content: "重新检查这份原料",
       files: [],
       retryRunId: expect.any(String),
+    });
+  });
+
+  it("retries a draft from an older failed run instead of rejecting it", async () => {
+    const events = new BrowserAgentEventSource();
+    const api = new FailedDraftRunApi({
+      storage: new MemoryStorage(),
+      agentEvents: events,
+      now: () => "2026-08-09T12:00:00.000Z",
+    });
+    const failedRun = await api.seedFailedDraft();
+    const user = userEvent.setup();
+    render(
+      <AgentPanel
+        api={api}
+        events={events}
+        filePicker={picker()}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "重新识别" }),
+    );
+
+    await waitFor(() => expect(api.requests).toHaveLength(1));
+    expect(api.requests[0]).toMatchObject({
+      content: expect.stringContaining("请重新读取草稿"),
+      files: [],
+      retryRunId: failedRun.id,
     });
   });
 

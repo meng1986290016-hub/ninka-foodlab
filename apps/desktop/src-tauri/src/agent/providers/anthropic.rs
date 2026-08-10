@@ -7,9 +7,9 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, anthropic_messages, emit,
-        ensure_attachment_support, fallback_models, model_options, no_op_sink, probe_request,
-        result, schema_is_empty, successful_test,
+        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, anthropic_messages, connection_probe_request,
+        emit, ensure_attachment_support, fallback_models, model_options, no_op_sink, probe_request,
+        result, run_agent_loop_probe, schema_is_empty, successful_test,
     },
 };
 use crate::agent::{AgentError, model::AgentProviderCapabilities};
@@ -61,11 +61,12 @@ impl AgentProvider for AnthropicProvider {
         let started = Instant::now();
         match kind {
             ProviderTestKind::Connection => {
-                self.raw_models().await?;
+                self.run(connection_probe_request(), no_op_sink()).await?;
             }
             ProviderTestKind::StructuredOutput => {
                 self.run(probe_request(), no_op_sink()).await?;
             }
+            ProviderTestKind::AgentLoop => run_agent_loop_probe(self).await?,
         }
         Ok(successful_test(kind, started))
     }
@@ -92,9 +93,11 @@ impl AgentProvider for AnthropicProvider {
             "model": self.core.config.model,
             "max_tokens": 4096,
             "system": FOOD_RD_AGENT_INSTRUCTION,
-            "messages": anthropic_messages(&request),
-            "tools": tools
+            "messages": anthropic_messages(&request)
         });
+        if !tools.is_empty() {
+            body["tools"] = Value::Array(tools);
+        }
         if !schema_is_empty(&request.output_schema) {
             body["output_config"] = json!({
                 "format": {

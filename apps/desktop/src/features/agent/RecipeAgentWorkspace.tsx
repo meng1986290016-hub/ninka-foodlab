@@ -171,7 +171,7 @@ export function RecipeAgentWorkspace({
           诊断当前配方
         </button>
         <button disabled={busy || ingredientItems.length === 0} onClick={() => void openSubstitution()} type="button">
-          <Icon name="ingredients" size={15} />
+          <Icon name="ingredient" size={15} />
           替代原料分析
         </button>
         <button
@@ -181,7 +181,7 @@ export function RecipeAgentWorkspace({
           title={canUseModel ? undefined : "请先启用一个聊天模型"}
           type="button"
         >
-          <Icon name="flask" size={15} />
+          <Icon name="recipe-workbench" size={15} />
           复盘研发记录
         </button>
       </div>

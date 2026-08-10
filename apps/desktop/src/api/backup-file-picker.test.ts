@@ -29,14 +29,14 @@ describe("BackupFilePicker", () => {
     expect(save).toHaveBeenCalledWith({
       defaultPath: "食研备份.foodrd-backup",
       filters: [
-        { name: "食研工作台备份", extensions: ["foodrd-backup"] },
+        { name: "Ninka FoodLab 备份", extensions: ["foodrd-backup"] },
       ],
     });
     expect(open).toHaveBeenCalledWith({
       multiple: false,
       directory: false,
       filters: [
-        { name: "食研工作台备份", extensions: ["foodrd-backup"] },
+        { name: "Ninka FoodLab 备份", extensions: ["foodrd-backup"] },
       ],
     });
   });

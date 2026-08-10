@@ -128,4 +128,38 @@ describe("ImportedVariantReview", () => {
     expect(onSavedAndNext).toHaveBeenCalledWith(savedVariant);
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it("normalizes a legacy agent nutrition basis before saving", async () => {
+    const api = new BrowserDemoApi({ storage: window.localStorage });
+    const commit = vi
+      .spyOn(api, "commitReviewedIngredientImportDraft")
+      .mockResolvedValue(savedVariant);
+    const user = userEvent.setup();
+    const legacyDraft = {
+      ...draft,
+      review: {
+        ...draft.review,
+        nutritionBasis: "per100g" as typeof draft.review.nutritionBasis,
+      },
+    };
+    render(
+      <ImportedVariantReview
+        api={api}
+        draft={legacyDraft}
+        onCancel={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "保存供应商版本" }),
+    );
+
+    await waitFor(() =>
+      expect(commit).toHaveBeenCalledWith(
+        legacyDraft.id,
+        expect.objectContaining({ nutritionBasis: "per_100g" }),
+      ),
+    );
+  });
 });

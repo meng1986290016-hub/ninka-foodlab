@@ -312,95 +312,6 @@ impl IngredientIngestCoordinator {
         repository::get_draft(&self.ingredients.connection, &id)
     }
 
-    pub fn merge_agent_drafts(
-        &mut self,
-        job_id: &str,
-        draft_ids: &[String],
-        review: ReviewedIngredientImportDraft,
-    ) -> Result<IngredientImportDraft, IngestError> {
-        if draft_ids.len() < 2 {
-            return Err(IngestError::domain(
-                "invalid_input",
-                "合并时至少选择两个草稿",
-            ));
-        }
-        let timestamp = (self.ingredients.clock)();
-        let create_id = Arc::clone(&self.ingredients.create_id);
-        let transaction = self.ingredients.connection.transaction()?;
-        let mut attachment_ids = BTreeSet::new();
-        for draft_id in draft_ids {
-            let draft = repository::get_draft(&transaction, draft_id)?;
-            require_agent_draft_scope(&draft, job_id)?;
-            attachment_ids.extend(
-                draft
-                    .attachments
-                    .into_iter()
-                    .map(|attachment| attachment.id),
-            );
-        }
-        let id = repository::insert_draft(
-            &transaction,
-            job_id,
-            NewImportDraft {
-                attachment_ids: attachment_ids.into_iter().collect(),
-                source_links: Vec::new(),
-                issues: validate_review(&review),
-                review,
-            },
-            &timestamp,
-            create_id.as_ref(),
-        )?;
-        for draft_id in draft_ids {
-            repository::discard_draft(&transaction, draft_id, &timestamp)?;
-        }
-        transaction.commit()?;
-        repository::get_draft(&self.ingredients.connection, &id)
-    }
-
-    pub fn split_agent_draft(
-        &mut self,
-        job_id: &str,
-        draft_id: &str,
-        reviews: Vec<ReviewedIngredientImportDraft>,
-    ) -> Result<Vec<IngredientImportDraft>, IngestError> {
-        if reviews.len() < 2 {
-            return Err(IngestError::domain(
-                "invalid_input",
-                "拆分时至少提供两个草稿",
-            ));
-        }
-        let timestamp = (self.ingredients.clock)();
-        let create_id = Arc::clone(&self.ingredients.create_id);
-        let transaction = self.ingredients.connection.transaction()?;
-        let source = repository::get_draft(&transaction, draft_id)?;
-        require_agent_draft_scope(&source, job_id)?;
-        let attachment_ids = source
-            .attachments
-            .into_iter()
-            .map(|attachment| attachment.id)
-            .collect::<Vec<_>>();
-        let mut ids = Vec::with_capacity(reviews.len());
-        for review in reviews {
-            ids.push(repository::insert_draft(
-                &transaction,
-                job_id,
-                NewImportDraft {
-                    attachment_ids: attachment_ids.clone(),
-                    source_links: Vec::new(),
-                    issues: validate_review(&review),
-                    review,
-                },
-                &timestamp,
-                create_id.as_ref(),
-            )?);
-        }
-        repository::discard_draft(&transaction, draft_id, &timestamp)?;
-        transaction.commit()?;
-        ids.into_iter()
-            .map(|id| repository::get_draft(&self.ingredients.connection, &id))
-            .collect()
-    }
-
     pub fn update_draft(
         &mut self,
         id: &str,
@@ -761,25 +672,6 @@ impl IngredientIngestCoordinator {
         }
         Ok(())
     }
-}
-
-fn require_agent_draft_scope(
-    draft: &IngredientImportDraft,
-    job_id: &str,
-) -> Result<(), IngestError> {
-    if draft.job_id != job_id {
-        return Err(IngestError::domain(
-            "scope_violation",
-            "草稿不属于当前 Agent 导入任务",
-        ));
-    }
-    if matches!(
-        draft.status,
-        IngredientImportDraftStatus::Imported | IngredientImportDraftStatus::Discarded
-    ) {
-        return Err(IngestError::domain("invalid_state", "该草稿不能再修改"));
-    }
-    Ok(())
 }
 
 fn materialize_review(

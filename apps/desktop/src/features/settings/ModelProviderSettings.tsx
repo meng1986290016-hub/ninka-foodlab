@@ -210,11 +210,19 @@ function ProviderEditor({
     }
   }
 
-  async function runTest(kind: "connection" | "structured_output") {
+  async function runTest(
+    kind: "connection" | "structured_output" | "agent_loop",
+  ) {
+    const next = normalized(form);
+    const validation = validateForActivation(next);
+    if (validation) {
+      setMessage(validation);
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
-      await persist(form);
+      await persist(next);
       const result = await api.testAgentProvider(provider.id, kind);
       setMessage(result.message);
     } catch (reason) {
@@ -421,6 +429,14 @@ function ProviderEditor({
           type="button"
         >
           测试功能
+        </button>
+        <button
+          className="button button--secondary"
+          disabled={busy}
+          onClick={() => void runTest("agent_loop")}
+          type="button"
+        >
+          测试工具循环
         </button>
         {message ? <span className="provider-message">{message}</span> : null}
       </div>

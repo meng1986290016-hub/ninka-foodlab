@@ -97,6 +97,13 @@ impl AgentError {
         }
     }
 
+    pub fn required_tool_not_called() -> Self {
+        Self::Domain {
+            code: "required_tool_not_called",
+            message: "本次任务需要读取或写入食品研发数据，但模型没有发起任何真实工具调用。系统已阻止把它标记为完成；请重试，或切换其他模型。".into(),
+        }
+    }
+
     pub fn provider_failure(message: impl Into<String>) -> Self {
         Self::Provider {
             code: "provider_failure",

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" rx="36" fill="#FFF7E7"/>
+  <text x="60" y="70" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="32" font-weight="700">AI Agent · Design Directions</text>
+  <text x="60" y="104" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="15">24px system · 1.75px rounded stroke · designed for the 18px Agent panel trigger</text>
+
+  <rect x="60" y="150" width="320" height="500" rx="24" fill="#FFFCF5" stroke="#D9E0DB"/>
+  <text x="88" y="194" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">A · 智能火花</text>
+  <image href="ai-agent-c01.svg" x="110" y="220" width="220" height="220"/>
+  <text x="88" y="474" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="14">最简洁，延续当前 Sparkles 语义</text>
+  <image href="ai-agent-c01.svg" x="112" y="530" width="16" height="16"/><image href="ai-agent-c01.svg" x="170" y="528" width="20" height="20"/><image href="ai-agent-c01.svg" x="232" y="526" width="24" height="24"/>
+  <text x="102" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="164" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="226" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+
+  <rect x="440" y="130" width="320" height="540" rx="24" fill="#153D36"/>
+  <rect x="466" y="150" width="106" height="30" rx="15" fill="#EFBD50"/><text x="488" y="171" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700">SELECTED</text>
+  <text x="468" y="214" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">B · 品牌对话</text>
+  <rect x="490" y="230" width="220" height="220" rx="22" fill="#FFFCF5"/>
+  <image href="ai-agent-r01.svg" x="490" y="230" width="220" height="220"/>
+  <text x="468" y="494" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="14">Agent 面板语义最明确，带 Ninka 四籽签名</text>
+  <rect x="480" y="538" width="40" height="40" rx="8" fill="#FFFCF5"/><rect x="540" y="538" width="40" height="40" rx="8" fill="#FFFCF5"/><rect x="600" y="538" width="40" height="40" rx="8" fill="#FFFCF5"/>
+  <image href="ai-agent-r01.svg" x="492" y="550" width="16" height="16"/><image href="ai-agent-r01.svg" x="550" y="548" width="20" height="20"/><image href="ai-agent-r01.svg" x="608" y="546" width="24" height="24"/>
+  <text x="482" y="600" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="544" y="600" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="606" y="600" fill="#FFF7E7" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+
+  <rect x="820" y="150" width="320" height="500" rx="24" fill="#FFFCF5" stroke="#D9E0DB"/>
+  <text x="848" y="194" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">C · 任务编排</text>
+  <image href="ai-agent-c03.svg" x="870" y="220" width="220" height="220"/>
+  <text x="848" y="474" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="14">强调 Agent 调用工具、协调多个任务</text>
+  <image href="ai-agent-c03.svg" x="872" y="530" width="16" height="16"/><image href="ai-agent-c03.svg" x="930" y="528" width="20" height="20"/><image href="ai-agent-c03.svg" x="992" y="526" width="24" height="24"/>
+  <text x="862" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">16</text><text x="924" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">20</text><text x="986" y="580" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="12">24</text>
+
+  <rect x="60" y="710" width="1080" height="110" rx="18" fill="#EAF0EC"/>
+  <text x="88" y="752" fill="#153D36" font-family="Manrope, Arial, sans-serif" font-size="15" font-weight="700">已选择 B · 品牌对话</text>
+  <text x="88" y="784" fill="#5D746F" font-family="Manrope, Arial, sans-serif" font-size="14">已于 2026-08-08 明确通过；A 与 C 保留为未采用的设计记录。</text>
+</svg>

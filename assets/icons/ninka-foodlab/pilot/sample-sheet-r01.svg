@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title">
+  <title id="title">小试表</title>
+  <metadata>Ninka FoodLab sample-sheet r01; traced from locked clipboard-and-trial-grid reference; 24px grid; 1.75px rounded stroke; status: approved; Figma sync pending.</metadata>
+  <rect x="4.2" y="4.15" width="15.6" height="18" rx="2.15" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <path fill="#153D36" fill-rule="evenodd" d="M7.35 2.75h2.55a2.2 2.2 0 0 1 4.2 0h2.55a.85.85 0 0 1 .85.85v2.1a.85.85 0 0 1-.85.85h-9.3a.85.85 0 0 1-.85-.85V3.6a.85.85 0 0 1 .85-.85ZM12 1.7a.72.72 0 1 0 0 1.44 0 .72.72 0 0 0 0-1.44Z"/>
+  <rect x="6.65" y="13.9" width="5.25" height="5.1" fill="#EFBD50"/>
+  <rect x="6.55" y="8.65" width="10.9" height="10.45" rx=".55" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 8.65V19.1M6.55 13.8h10.9" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8.15 11.25h2.25M13.6 11.25h2.25" stroke="#153D36" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

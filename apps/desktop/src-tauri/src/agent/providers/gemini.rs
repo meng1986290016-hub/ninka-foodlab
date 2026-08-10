@@ -7,9 +7,9 @@ use super::{
     AgentEventSink, AgentModelOption, AgentProvider, AgentProviderTestResult, ProviderEvent,
     ProviderTestKind, ProviderToolCall, ProviderTurnRequest, ProviderTurnResult,
     http::{
-        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, emit, ensure_attachment_support,
-        fallback_models, no_op_sink, probe_request, result, schema_is_empty, selected_attachments,
-        successful_test,
+        FOOD_RD_AGENT_INSTRUCTION, HttpProviderCore, connection_probe_request, emit,
+        ensure_attachment_support, fallback_models, no_op_sink, probe_request, result,
+        run_agent_loop_probe, schema_is_empty, selected_attachments, successful_test,
     },
 };
 use crate::agent::{
@@ -73,11 +73,12 @@ impl AgentProvider for GeminiProvider {
         let started = Instant::now();
         match kind {
             ProviderTestKind::Connection => {
-                self.raw_models().await?;
+                self.run(connection_probe_request(), no_op_sink()).await?;
             }
             ProviderTestKind::StructuredOutput => {
                 self.run(probe_request(), no_op_sink()).await?;
             }
+            ProviderTestKind::AgentLoop => run_agent_loop_probe(self).await?,
         }
         Ok(successful_test(kind, started))
     }
@@ -91,16 +92,14 @@ impl AgentProvider for GeminiProvider {
         let mut contents = request
             .messages
             .iter()
-            .map(|message| {
+            .filter(|message| !message.content.trim().is_empty())
+            .filter_map(|message| {
                 let role = match message.role {
                     AgentMessageRole::Assistant => "model",
-                    AgentMessageRole::User | AgentMessageRole::Tool => "user",
+                    AgentMessageRole::User => "user",
+                    AgentMessageRole::Tool => return None,
                 };
-                let text = match message.role {
-                    AgentMessageRole::Tool => format!("工具结果：{}", message.content),
-                    _ => message.content.clone(),
-                };
-                json!({ "role": role, "parts": [{ "text": text }] })
+                Some(json!({ "role": role, "parts": [{ "text": message.content }] }))
             })
             .collect::<Vec<_>>();
         let selected = selected_attachments(&request);
@@ -123,6 +122,26 @@ impl AgentProvider for GeminiProvider {
             }));
             contents.push(json!({ "role": "user", "parts": parts }));
         }
+        for round in &request.tool_rounds {
+            contents.push(json!({
+                "role": "model",
+                "parts": round.calls.iter().map(|call| json!({
+                    "functionCall": {
+                        "name": call.name,
+                        "args": call.arguments
+                    }
+                })).collect::<Vec<_>>()
+            }));
+            contents.push(json!({
+                "role": "user",
+                "parts": round.results.iter().map(|result| json!({
+                    "functionResponse": {
+                        "name": result.name,
+                        "response": result.output
+                    }
+                })).collect::<Vec<_>>()
+            }));
+        }
         let declarations = request
             .tools
             .iter()
@@ -138,9 +157,11 @@ impl AgentProvider for GeminiProvider {
             "systemInstruction": {
                 "parts": [{ "text": FOOD_RD_AGENT_INSTRUCTION }]
             },
-            "contents": contents,
-            "tools": [{ "functionDeclarations": declarations }]
+            "contents": contents
         });
+        if !declarations.is_empty() {
+            body["tools"] = json!([{ "functionDeclarations": declarations }]);
+        }
         if !schema_is_empty(&request.output_schema) {
             body["generationConfig"] = json!({
                 "responseMimeType": "application/json",

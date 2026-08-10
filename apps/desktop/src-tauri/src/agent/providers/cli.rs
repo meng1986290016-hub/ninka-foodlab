@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     env, fs,
     io::Read as _,
     path::{Path, PathBuf},
@@ -20,7 +21,11 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use super::ProviderTurnRequest;
+use super::{
+    AgentEventSink, AgentToolDefinition, ProviderEvent, ProviderToolCall, ProviderTurnRequest,
+    ProviderTurnResult,
+    http::{emit, schema_is_empty, structured_output},
+};
 use crate::agent::{
     AgentError,
     model::{AgentMessageRole, AgentProviderConfig, AgentProviderKind},
@@ -287,7 +292,7 @@ impl TaskDirectory {
                 .map_err(|_| AgentError::provider_failure("无法限制 CLI 临时任务目录权限"))?;
         }
 
-        let schema_json = serde_json::to_string_pretty(&request.output_schema)
+        let schema_json = serde_json::to_string_pretty(&cli_turn_output_schema(request))
             .map_err(|_| AgentError::invalid_input("结构化输出规则无法序列化"))?;
         let schema_path = directory.join("output-schema.json");
         let result_path = directory.join("result.json");
@@ -593,6 +598,15 @@ fn first_non_empty_line(bytes: &[u8]) -> Option<String> {
         .map(str::to_owned)
 }
 
+fn last_non_empty_line(bytes: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .rev()
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
+}
+
 pub(crate) fn failure_from_output(output: &ProcessOutput) -> AgentError {
     AgentError::provider_failure(diagnostic_message("本机模型 CLI 执行失败", &output.stderr))
 }
@@ -625,7 +639,7 @@ pub(crate) fn ensure_jsonl_line_size(line: &str) -> Result<(), AgentError> {
 }
 
 fn diagnostic_message(prefix: &str, bytes: &[u8]) -> String {
-    let detail = first_non_empty_line(bytes)
+    let detail = last_non_empty_line(bytes)
         .map(|line| line.chars().take(240).collect::<String>())
         .unwrap_or_default();
     if detail.is_empty() {
@@ -641,6 +655,9 @@ fn build_prompt(request: &ProviderTurnRequest, task_files: &[String]) -> String 
         super::http::FOOD_RD_AGENT_INSTRUCTION
     );
     for message in &request.messages {
+        if message.content.trim().is_empty() {
+            continue;
+        }
         let role = match message.role {
             AgentMessageRole::User => "用户",
             AgentMessageRole::Assistant => "助手",
@@ -650,6 +667,25 @@ fn build_prompt(request: &ProviderTurnRequest, task_files: &[String]) -> String 
         prompt.push('：');
         prompt.push_str(&message.content);
         prompt.push('\n');
+    }
+    for round in &request.tool_rounds {
+        for call in &round.calls {
+            prompt.push_str("助手工具请求：");
+            prompt.push_str(
+                &json!({
+                    "id": call.id,
+                    "name": call.name,
+                    "arguments": call.arguments
+                })
+                .to_string(),
+            );
+            prompt.push('\n');
+        }
+        for result in &round.results {
+            prompt.push_str("工具结果：");
+            prompt.push_str(&result.output.to_string());
+            prompt.push('\n');
+        }
     }
     let mut extracted_characters = 0_usize;
     for attachment in request
@@ -679,8 +715,154 @@ fn build_prompt(request: &ProviderTurnRequest, task_files: &[String]) -> String 
     }
     prompt.push_str("\n本次任务文件：");
     prompt.push_str(&task_files.join("、"));
-    prompt.push_str("\n请严格按 output-schema.json 返回最终 JSON。");
+    prompt.push_str(
+        "\n\n工具调用协议：tool-schemas.json 中列出的食品研发工具由 Ninka FoodLab 应用运行时执行，即使它们没有出现在 CLI 的原生工具列表中，也不代表工具不可用。不得回复“只看到工具定义”“工具未开放”或自行伪造工具结果。需要读取资料、检索数据、计算、创建待复核草稿或配方提案时，请在 toolCalls 中填写一个或多个真实工具请求；每个 arguments 字段必须是严格匹配对应 inputSchema 的 JSON 对象字符串，应用会解析、校验并执行，然后在下一轮以“工具”消息返回结果。此时 finalResponse 只需填写符合 schema 的占位内容，应用不会展示它。不需要工具、或已经根据工具结果完成任务时，toolCalls 必须为空，并在 finalResponse 中给出最终答复。不要用 shell 或直接读写数据库代替食品研发工具。\n请严格按 output-schema.json 返回最终 JSON。",
+    );
     prompt
+}
+
+fn cli_turn_output_schema(request: &ProviderTurnRequest) -> Value {
+    let tool_names = request
+        .tools
+        .iter()
+        .map(|tool| Value::String(tool.name.clone()))
+        .collect::<Vec<_>>();
+    let tool_name_schema = if tool_names.is_empty() {
+        json!({ "type": "string" })
+    } else {
+        json!({ "type": "string", "enum": tool_names })
+    };
+    let final_response_schema = if schema_is_empty(&request.output_schema) {
+        json!({ "type": "object" })
+    } else {
+        request.output_schema.clone()
+    };
+
+    json!({
+        "type": "object",
+        "properties": {
+            "finalResponse": final_response_schema,
+            "toolCalls": {
+                "type": "array",
+                "description": "需要应用执行的食品研发工具请求；最终答复时必须为空数组",
+                "maxItems": if request.tools.is_empty() { 0 } else { 8 },
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string" },
+                        "name": tool_name_schema,
+                        "arguments": {
+                            "type": "string",
+                            "description": "严格匹配对应 inputSchema 的 JSON 对象字符串"
+                        }
+                    },
+                    "required": ["id", "name", "arguments"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["finalResponse", "toolCalls"],
+        "additionalProperties": false
+    })
+}
+
+pub(crate) fn normalize_cli_turn_output(
+    final_text: String,
+    final_structured: Option<Value>,
+    output_schema: &Value,
+    tools: &[AgentToolDefinition],
+    mut events: Vec<ProviderEvent>,
+    sink: &AgentEventSink,
+) -> Result<ProviderTurnResult, AgentError> {
+    let value = match final_structured {
+        Some(value) => value,
+        None => serde_json::from_str(&final_text).map_err(|_| {
+            AgentError::invalid_model_output("本机模型返回的结构化结果无法读取，将自动重试一次")
+        })?,
+    };
+
+    let Some(tool_calls) = value.get("toolCalls") else {
+        // Backward compatibility for older CLI fixtures and already-running
+        // tasks that returned the original final schema directly.
+        let normalized = value.to_string();
+        return Ok(ProviderTurnResult {
+            final_text: normalized,
+            structured_output: structured_output(&value.to_string(), output_schema)?,
+            events,
+        });
+    };
+    let final_response = value
+        .get("finalResponse")
+        .ok_or_else(|| AgentError::invalid_model_output("本机模型结果缺少 finalResponse"))?;
+    let calls = tool_calls
+        .as_array()
+        .ok_or_else(|| AgentError::invalid_model_output("本机模型结果中的 toolCalls 格式无效"))?;
+    let allowed_names = tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut call_ids = BTreeSet::new();
+
+    for (index, call) in calls.iter().enumerate() {
+        let id = call
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| AgentError::invalid_model_output("本机模型工具请求缺少调用 ID"))?;
+        if !call_ids.insert(id.to_string()) {
+            return Err(AgentError::invalid_model_output(
+                "本机模型返回了重复的工具调用 ID",
+            ));
+        }
+        let name = call
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| AgentError::invalid_model_output("本机模型工具请求缺少名称"))?;
+        if !allowed_names.contains(name) {
+            return Err(AgentError::tool_denied(name));
+        }
+        let arguments = match call.get("arguments") {
+            Some(Value::String(arguments)) => serde_json::from_str::<Value>(arguments)
+                .ok()
+                .filter(Value::is_object),
+            // Accept the object form from older app builds and test fixtures.
+            Some(arguments @ Value::Object(_)) => Some(arguments.clone()),
+            _ => None,
+        }
+        .ok_or_else(|| {
+            AgentError::invalid_model_output(format!(
+                "本机模型第 {} 个工具请求参数不是有效的 JSON 对象",
+                index + 1
+            ))
+        })?;
+        emit(
+            &mut events,
+            sink,
+            ProviderEvent::ToolCall(ProviderToolCall {
+                id: id.into(),
+                name: name.into(),
+                arguments,
+            }),
+        );
+    }
+
+    if !calls.is_empty() {
+        return Ok(ProviderTurnResult {
+            final_text: String::new(),
+            structured_output: None,
+            events,
+        });
+    }
+
+    let final_text = final_response.to_string();
+    Ok(ProviderTurnResult {
+        structured_output: structured_output(&final_text, output_schema)?,
+        final_text,
+        events,
+    })
 }
 
 fn image_extension(media_type: &str) -> &'static str {
@@ -689,5 +871,23 @@ fn image_extension(media_type: &str) -> &'static str {
         "image/webp" => "webp",
         "image/gif" => "gif",
         _ => "png",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::diagnostic_message;
+
+    #[test]
+    fn diagnostic_message_prefers_the_actionable_final_line() {
+        let message = diagnostic_message(
+            "本机模型 CLI 执行失败",
+            b"Reading prompt from stdin...\nNo prompt provided via stdin.\n",
+        );
+
+        assert_eq!(
+            message,
+            "本机模型 CLI 执行失败：No prompt provided via stdin."
+        );
     }
 }

@@ -23,7 +23,7 @@ use crate::{
         },
         repository::AgentRepository,
         runtime::{AgentProviderFactory, AgentRuntime, AgentRuntimeEvent},
-        secrets::KeyringSecretStore,
+        secrets::{KeyringSecretStore, SessionSecretStore},
         tools::AgentToolRegistry,
     },
     agent_recipe::repository::AgentRecipeRepository,
@@ -40,10 +40,10 @@ fn repository(state: &State<'_, AppState>) -> Result<AgentRepository, CommandErr
 
 fn provider_registry(
     state: &State<'_, AppState>,
-) -> Result<ProviderRegistry<KeyringSecretStore>, CommandError> {
+) -> Result<ProviderRegistry<SessionSecretStore<KeyringSecretStore>>, CommandError> {
     Ok(ProviderRegistry::new(
         repository(state)?,
-        KeyringSecretStore,
+        state.provider_secrets.clone(),
     ))
 }
 
@@ -117,6 +117,30 @@ pub async fn list_agent_provider_models(
         .map_err(Into::into)
 }
 
+fn validate_provider_test_config(
+    config: &AgentProviderConfig,
+    secret: Option<&str>,
+) -> Result<(), AgentError> {
+    if matches!(
+        config.kind,
+        AgentProviderKind::CodexCli | AgentProviderKind::ClaudeCodeCli
+    ) {
+        return Ok(());
+    }
+    if config.endpoint.trim().is_empty() {
+        return Err(AgentError::provider_not_configured("请先填写 Endpoint"));
+    }
+    if config.model.trim().is_empty() {
+        return Err(AgentError::provider_not_configured("请先填写模型名称"));
+    }
+    if config.kind != AgentProviderKind::Ollama
+        && !secret.is_some_and(|secret| !secret.trim().is_empty())
+    {
+        return Err(AgentError::provider_not_configured("请先填写 API 密钥"));
+    }
+    Ok(())
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn get_agent_custom_provider_subconfig(
     protocol: AgentProviderProtocol,
@@ -136,6 +160,7 @@ pub async fn test_agent_provider(
     let registry = provider_registry(&state)?;
     let config = registry.get_config(&provider_id)?;
     let secret = registry.resolved_secret(&provider_id)?;
+    validate_provider_test_config(&config, secret.as_deref())?;
     build_provider(config, secret, None)?
         .test(kind)
         .await
@@ -342,4 +367,45 @@ fn mcp_server_binary() -> Result<PathBuf, AgentError> {
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::model::{AgentProviderCapabilities, ReasoningEffort};
+
+    #[test]
+    fn provider_test_rejects_an_empty_model_before_network_access() {
+        let mut config = deepseek_config();
+        config.model.clear();
+
+        let error = validate_provider_test_config(&config, Some("test-key")).unwrap_err();
+
+        assert_eq!(error.code(), "provider_not_configured");
+        assert_eq!(error.message(), "请先填写模型名称");
+    }
+
+    #[test]
+    fn provider_test_accepts_a_complete_deepseek_configuration() {
+        validate_provider_test_config(&deepseek_config(), Some("test-key")).unwrap();
+    }
+
+    fn deepseek_config() -> AgentProviderConfig {
+        AgentProviderConfig {
+            id: "deepseek".into(),
+            kind: AgentProviderKind::DeepSeek,
+            display_name: "DeepSeek".into(),
+            protocol: AgentProviderProtocol::OpenAiCompatible,
+            endpoint: "https://api.deepseek.com".into(),
+            model: "deepseek-v4-flash".into(),
+            context_window: 1_000_000,
+            reasoning_effort: ReasoningEffort::Auto,
+            timeout_seconds: 120,
+            executable_path: None,
+            enabled: false,
+            has_secret: true,
+            capabilities: AgentProviderCapabilities::all(),
+            updated_at: String::new(),
+        }
+    }
 }

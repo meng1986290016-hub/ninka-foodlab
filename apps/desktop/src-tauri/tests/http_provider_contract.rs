@@ -7,8 +7,9 @@ use food_rd_desktop::agent::{
     },
     providers::{
         AgentEventSink, AgentProvider, AgentToolDefinition, ProviderAttachment, ProviderEvent,
-        ProviderTurnRequest, anthropic::AnthropicProvider, gemini::GeminiProvider,
-        openai::OpenAiProvider, openai_compatible::OpenAiCompatibleProvider,
+        ProviderToolCall, ProviderToolResult, ProviderToolRound, ProviderTurnRequest,
+        anthropic::AnthropicProvider, gemini::GeminiProvider, openai::OpenAiProvider,
+        openai_compatible::OpenAiCompatibleProvider,
     },
 };
 use serde_json::{Value, json};
@@ -66,6 +67,7 @@ fn request() -> ProviderTurnRequest {
                 "additionalProperties": false
             }),
         }],
+        tool_rounds: vec![],
         output_schema: json!({
             "type": "object",
             "properties": {
@@ -93,6 +95,24 @@ fn request_with_selected_image() -> ProviderTurnRequest {
             extracted_text: Some("不应发送的附件内容".into()),
         },
     ];
+    request
+}
+
+fn request_with_tool_round() -> ProviderTurnRequest {
+    let mut request = request();
+    request.tool_rounds = vec![ProviderToolRound {
+        calls: vec![ProviderToolCall {
+            id: "call-prior".into(),
+            name: "create_ingredient_import_draft".into(),
+            arguments: json!({ "materialName": "脱脂乳粉" }),
+        }],
+        results: vec![ProviderToolResult {
+            call_id: "call-prior".into(),
+            name: "create_ingredient_import_draft".into(),
+            output: json!({ "ok": true, "result": { "draftId": "draft-test" } }),
+            is_error: false,
+        }],
+    }];
     request
 }
 
@@ -171,9 +191,26 @@ async fn openai_responses_emits_normalized_text_tools_and_usage() {
     )
     .unwrap();
 
-    let result = provider.run(request(), sink()).await.unwrap();
+    let result = provider
+        .run(request_with_tool_round(), sink())
+        .await
+        .unwrap();
 
     assert_normalized(&result);
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(
+        body["input"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| { item["type"] == "function_call" && item["call_id"] == "call-prior" })
+    );
+    assert!(
+        body["input"].as_array().unwrap().iter().any(|item| {
+            item["type"] == "function_call_output" && item["call_id"] == "call-prior"
+        })
+    );
     assert_minimized_request(&server).await;
 }
 
@@ -244,9 +281,22 @@ async fn openai_compatible_chat_completions_normalizes_tool_arguments() {
     )
     .unwrap();
 
-    let result = provider.run(request(), sink()).await.unwrap();
+    let result = provider
+        .run(request_with_tool_round(), sink())
+        .await
+        .unwrap();
 
     assert_normalized(&result);
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(body["messages"].as_array().unwrap().iter().any(|message| {
+        message["role"] == "assistant" && message["tool_calls"][0]["id"] == "call-prior"
+    }));
+    assert!(
+        body["messages"].as_array().unwrap().iter().any(|message| {
+            message["role"] == "tool" && message["tool_call_id"] == "call-prior"
+        })
+    );
     assert_minimized_request(&server).await;
 }
 
@@ -303,9 +353,20 @@ async fn anthropic_messages_normalizes_content_blocks() {
     )
     .unwrap();
 
-    let result = provider.run(request(), sink()).await.unwrap();
+    let result = provider
+        .run(request_with_tool_round(), sink())
+        .await
+        .unwrap();
 
     assert_normalized(&result);
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(body["messages"].as_array().unwrap().iter().any(|message| {
+        message["role"] == "assistant" && message["content"][0]["type"] == "tool_use"
+    }));
+    assert!(body["messages"].as_array().unwrap().iter().any(|message| {
+        message["role"] == "user" && message["content"][0]["type"] == "tool_result"
+    }));
     assert_minimized_request(&server).await;
 }
 
@@ -346,9 +407,20 @@ async fn gemini_generate_content_normalizes_function_calls() {
     )
     .unwrap();
 
-    let result = provider.run(request(), sink()).await.unwrap();
+    let result = provider
+        .run(request_with_tool_round(), sink())
+        .await
+        .unwrap();
 
     assert_normalized(&result);
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(body["contents"].as_array().unwrap().iter().any(|content| {
+        content["role"] == "model" && content["parts"][0].get("functionCall").is_some()
+    }));
+    assert!(body["contents"].as_array().unwrap().iter().any(|content| {
+        content["role"] == "user" && content["parts"][0].get("functionResponse").is_some()
+    }));
     assert_minimized_request(&server).await;
 }
 
@@ -410,6 +482,37 @@ async fn authentication_and_rate_limit_errors_are_sanitized() {
         assert!(!error.message().contains("sk-response-secret"));
         assert!(!error.message().contains("sk-test-secret"));
     }
+}
+
+#[tokio::test]
+async fn safe_upstream_validation_detail_is_preserved_for_bad_requests() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "error": { "message": "tools[0].function.parameters is invalid" }
+        })))
+        .mount(&server)
+        .await;
+    let provider = OpenAiCompatibleProvider::new(
+        config(
+            AgentProviderKind::KimiCn,
+            AgentProviderProtocol::OpenAiCompatible,
+            server.uri(),
+        ),
+        Some("sk-test-secret".into()),
+    )
+    .unwrap();
+
+    let error = provider.run(request(), sink()).await.unwrap_err();
+
+    assert_eq!(error.code(), "provider_failure");
+    assert!(
+        error
+            .message()
+            .contains("tools[0].function.parameters is invalid")
+    );
+    assert!(!error.message().contains("sk-test-secret"));
 }
 
 #[tokio::test]

@@ -170,6 +170,51 @@ final result: passed
 
 ---
 
+# Ninka FoodLab 自定义图标与品牌层级 QA
+
+- source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-e9ff6aad-1b07-4436-a112-acc8de960260.png`
+- approved icon masters: `/Users/andrew/Documents/食品研发工具/assets/icons/ninka-foodlab/pilot/*.svg`
+- implementation screenshot path: `/Users/andrew/Documents/食品研发工具/docs/testing/screenshots/icon-system-qa-integrated.jpg`
+- focused comparison path: `/Users/andrew/Documents/食品研发工具/docs/testing/screenshots/icon-system-qa-brand-comparison.jpg`
+- viewport: `1396 × 949` CSS px，device scale factor `1`
+- source dimensions: `319 × 126` px
+- implementation dimensions: `1396 × 949` px；品牌区原始裁切为 `168 × 66` px，在对照图中等比归一到源图尺寸
+- state: 浏览器演示模式、原料库、侧栏展开
+
+## Full-view comparison evidence
+
+- 左上品牌区继续直接使用正式 Ninka 标志，没有重绘、拉伸或替代。
+- 文字层级按用户要求互换：`Ninka FoodLab` 为主标题，`食研工作台` 为辅助说明。
+- 原料库、配方库和 Agent 主入口均使用用户批准的自定义 SVG；业务语义图标通过统一映射覆盖原料、供应商、版本、工作台、营养标签、报告和小试表。
+- 页面布局、导航交互和原料库双栏结构未因图标替换发生位移或溢出。
+
+## Focused region comparison evidence
+
+- 对照图左侧为用户参考，右侧为实现后的品牌区；图形位置、双行结构、主次字重和颜色关系一致，文字内容按要求对调。
+- 首次实现中主标题 `Ninka FoodLab` 因侧栏横向内边距过大被截断；将品牌区内边距从 12 px 收至 8 px 后，实测主标题 `clientWidth = scrollWidth = 96 px`，不再截断。
+- 品牌标志实测为 `36 × 36` px，品牌区为 `168 × 66` px，英文主标题 14 px / 720，中文说明 10 px / 600。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 延续现有系统 UI 字体；英文品牌名成为第一视觉层级，中文产品说明退居第二层级，无换行、截断或异常字距。
+- Spacing and layout rhythm: 标志、双行文字和侧栏边界保持原有 66 px 节奏；新图标在 16–32 px 使用场景中不改变控件尺寸。
+- Colors and visual tokens: 标志与 SVG 母版保留 Forest、Grain、Tomato 和 Cream 原始色值；工具类图标继续继承既有状态色。
+- Image quality and asset fidelity: 所有食品研发业务图标直接引用批准的 SVG 母版；未使用 CSS 图形、手绘近似或通用图标代替。
+- Copy and content: 浏览器标题、侧栏品牌、Tauri `productName`、窗口标题、应用包元数据均改为 `Ninka FoodLab`；`食研工作台` 保留为中文功能说明。
+
+## Verification
+
+- 11 个批准 SVG 均通过本地 SVG 校验。
+- Vitest：67 个测试文件、254 项测试全部通过。
+- TypeScript 与 Vite 生产构建通过；仅保留既有的大分块提示。
+- 浏览器控制台无 error 或 warning。
+- Tauri 生成 `Ninka FoodLab.app`；严格代码签名校验通过。
+- DMG 完整性校验通过；只读挂载后卷名和应用名均为 `Ninka FoodLab`，许可证文件与源码一致。
+
+final result: passed
+
+---
+
 # Ninka FoodLab 图标 Batch 01 SVG 母版 QA
 
 - source visual truth path: `/Users/andrew/.codex/generated_images/019f789f-aaf8-7aa2-a3c1-c3c440b9dc9e/exec-7539c9c5-8aa2-40d1-99ad-aaa4eca80217.png`

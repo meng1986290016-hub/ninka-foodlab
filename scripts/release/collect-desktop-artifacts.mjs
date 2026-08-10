@@ -9,6 +9,7 @@ const distributionFiles = [
   resolve("LICENSE"),
   resolve("NOTICE"),
   resolve("THIRD_PARTY_LICENSES.md"),
+  resolve("docs/testing/README.md"),
 ];
 
 async function walk(directory) {

@@ -22,7 +22,7 @@ const quickTasks: QuickTask[] = [
   {
     label: "逆向产品标签",
     description: "根据配料表与营养标签估算配方",
-    icon: "search",
+    icon: "nutrition-label",
     prompt:
       "请根据我接下来上传的同一款产品配料表和营养标签，逆向估算一套可编辑配方，并标出可信度、关键假设和无法判断项。",
   },

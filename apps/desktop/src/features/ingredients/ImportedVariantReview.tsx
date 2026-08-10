@@ -9,6 +9,7 @@ import type {
   Category,
   IngredientVariant,
   IngredientVariantInput,
+  NutritionBasis,
   NutrientDefinition,
   Supplier,
   VariantNutrition,
@@ -34,8 +35,17 @@ interface ImportedVariantReviewProps {
 function cloneReview(
   review: ReviewedIngredientImportDraft,
 ): ReviewedIngredientImportDraft {
+  const rawBasis = review.nutritionBasis as string | null;
+  const compactBasis = rawBasis?.replace(/[_\s-]/g, "").toLowerCase();
+  const nutritionBasis: NutritionBasis | null =
+    compactBasis === "per100g" || compactBasis === "100g"
+      ? "per_100g"
+      : compactBasis === "per100ml" || compactBasis === "100ml"
+        ? "per_100ml"
+        : review.nutritionBasis;
   return {
     ...review,
+    nutritionBasis,
     nutrients: review.nutrients.map((nutrient) => ({ ...nutrient })),
     containsAllergens: [...review.containsAllergens],
     mayContainAllergens: [...review.mayContainAllergens],

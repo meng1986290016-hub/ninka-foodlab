@@ -910,7 +910,7 @@ export function RecipeLibrary({
             role="dialog"
           >
             <div className="recipe-library-dialog__icon">
-              <Icon name="formula" size={22} />
+              <Icon name="recipe-workbench" size={22} />
             </div>
             <h2 id="create-recipe-title">新建配方</h2>
             <label className="recipe-library-dialog__field">
@@ -1132,7 +1132,7 @@ function RecipeVersionInspector({
           }
           type="button"
         >
-          <Icon name="formula" size={16} />
+          <Icon name="recipe-version" size={16} />
           比较版本
         </button>
         <button
@@ -1141,7 +1141,7 @@ function RecipeVersionInspector({
           onClick={onOpenNutritionLabel}
           type="button"
         >
-          <Icon name="formula" size={16} />
+          <Icon name="nutrition-label" size={16} />
           生成营养标签
         </button>
         <button

@@ -30,7 +30,10 @@ pub const CREDENTIAL_SERVICE: &str = "com.foodrd.studio";
 #[derive(Clone, Debug, PartialEq)]
 pub enum ProviderEvent {
     TextDelta(String),
+    /// A tool request that still needs to be validated and executed by the app runtime.
     ToolCall(ProviderToolCall),
+    /// A successful tool call already executed by a CLI provider through native MCP.
+    ToolObservation(ProviderToolCall),
     Usage {
         input_tokens: u64,
         output_tokens: u64,
@@ -42,6 +45,20 @@ pub struct ProviderToolCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderToolResult {
+    pub call_id: String,
+    pub name: String,
+    pub output: Value,
+    pub is_error: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderToolRound {
+    pub calls: Vec<ProviderToolCall>,
+    pub results: Vec<ProviderToolResult>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +82,9 @@ pub struct ProviderTurnRequest {
     pub attachment_ids: Vec<String>,
     pub attachments: Vec<ProviderAttachment>,
     pub tools: Vec<AgentToolDefinition>,
+    /// Provider-neutral tool history for the current run. Each adapter serializes
+    /// this into its native assistant-call/tool-result protocol.
+    pub tool_rounds: Vec<ProviderToolRound>,
     pub output_schema: Value,
 }
 
@@ -80,6 +100,7 @@ pub struct ProviderTurnResult {
 pub enum ProviderTestKind {
     Connection,
     StructuredOutput,
+    AgentLoop,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

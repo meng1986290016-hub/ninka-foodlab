@@ -2,6 +2,10 @@ use std::path::PathBuf;
 
 use food_rd_desktop::{
     commands::{CommandError, REGISTERED_COMMANDS},
+    ingest::{
+        IngestError,
+        model::{ImportIssue, ImportIssueCode, ImportIssueSeverity},
+    },
     ingredients::{
         model::{VariantNutrition, VariantNutritionValue},
         repository::RepositoryError,
@@ -54,6 +58,28 @@ fn storage_errors_never_serialize_sql_or_local_paths() {
     );
     assert!(!serialized.to_string().contains("secret.sqlite"));
     assert!(!serialized.to_string().contains("SELECT"));
+}
+
+#[test]
+fn validation_errors_name_the_first_field_that_needs_correction() {
+    let error = IngestError::validation(vec![ImportIssue {
+        code: ImportIssueCode::InvalidBasis,
+        severity: ImportIssueSeverity::Error,
+        message: "请选择每100g或每100mL".into(),
+        field_path: Some("nutritionBasis".into()),
+        source_name: None,
+        row: None,
+        column: None,
+    }]);
+
+    assert_eq!(
+        serde_json::to_value(CommandError::from(error)).unwrap(),
+        json!({
+            "code": "import_failure",
+            "message": "导入草稿中有需要修正的数据：请选择每100g或每100mL",
+            "field": "nutritionBasis"
+        })
+    );
 }
 
 #[test]

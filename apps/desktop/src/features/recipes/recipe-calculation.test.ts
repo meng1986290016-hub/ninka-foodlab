@@ -19,6 +19,8 @@ const nutrients: NutrientDefinition[] = [
     unit: "g",
     builtIn: true,
     sortOrder: 0,
+    category: "nutrition",
+    archivedAt: null,
   },
   {
     id: "sugars",
@@ -27,6 +29,28 @@ const nutrients: NutrientDefinition[] = [
     unit: "g",
     builtIn: true,
     sortOrder: 1,
+    category: "nutrition",
+    archivedAt: null,
+  },
+  {
+    id: "lactose",
+    code: "custom:lactose",
+    name: "乳糖",
+    unit: "g",
+    builtIn: false,
+    sortOrder: 2,
+    category: "nutrition",
+    archivedAt: null,
+  },
+  {
+    id: "polyphenol",
+    code: "custom:polyphenol",
+    name: "总多酚",
+    unit: "mg",
+    builtIn: false,
+    sortOrder: 3,
+    category: "research",
+    archivedAt: null,
   },
 ];
 
@@ -240,6 +264,116 @@ describe("recipe calculation adapter", () => {
     expect(result.value.calculation.cost.rawMaterialTotal).toBe("1.2");
   });
 
+  it("only aggregates selected custom items and keeps category, unknown and zero distinct", () => {
+    const selected = variant({
+      id: "variant-selected-custom",
+      nutrition: {
+        basis: "per_100g",
+        values: [
+          { nutrientDefinitionId: "protein", value: "34" },
+          { nutrientDefinitionId: "sugars", value: "0" },
+          { nutrientDefinitionId: "lactose", value: null },
+          { nutrientDefinitionId: "polyphenol", value: "0" },
+        ],
+      },
+    });
+    const unselected = variant({
+      id: "variant-unselected-custom",
+      supplierId: "supplier-b",
+      supplierName: "供应商B",
+    });
+    const result = calculate(draft([
+      ingredientItem(selected, { id: "item-selected", amount: "50" }),
+      ingredientItem(unselected, {
+        id: "item-unselected",
+        position: 1,
+        amount: "50",
+      }),
+    ]));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.calculation.nutrients).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nutrientDefinitionId: "lactose",
+          category: "nutrition",
+          status: "unknown",
+          missingItemIds: ["item-selected"],
+        }),
+        expect.objectContaining({
+          nutrientDefinitionId: "polyphenol",
+          category: "research",
+          status: "complete",
+          per100gKnownAmount: "0",
+          missingItemIds: [],
+        }),
+      ]),
+    );
+  });
+
+  it("uses total input or finished mass for theoretical sweetness and reports partial data", () => {
+    const sucrose = variant({
+      id: "variant-sucrose",
+      sweetness: {
+        basis: "w_w_percent",
+        content: "10",
+        relativeFactor: "1",
+      },
+    });
+    const filler = variant({
+      id: "variant-filler",
+      supplierId: "supplier-b",
+      supplierName: "供应商B",
+      sweetness: null,
+    });
+    const inputBasis = calculate(draft([
+      ingredientItem(sucrose, { id: "item-sucrose", amount: "100" }),
+      ingredientItem(filler, {
+        id: "item-filler",
+        position: 1,
+        amount: "100",
+      }),
+    ]));
+    expect(inputBasis.ok).toBe(true);
+    if (inputBasis.ok) {
+      expect(inputBasis.value.calculation.sweetness).toMatchObject({
+        totalSucroseEquivalentGrams: "10",
+        per100gSucroseEquivalent: "5",
+        status: "complete",
+      });
+    }
+
+    const missingDensity = variant({
+      id: "variant-high-intensity",
+      supplierId: "supplier-c",
+      supplierName: "供应商C",
+      densityGPerMl: null,
+      sweetness: {
+        basis: "w_v_per_100ml",
+        content: "1",
+        relativeFactor: "200",
+      },
+    });
+    const finishedBasis = calculate(draft([
+      ingredientItem(sucrose, { id: "item-sucrose", amount: "100" }),
+      ingredientItem(missingDensity, {
+        id: "item-high-intensity",
+        position: 1,
+        amount: "10",
+      }),
+    ], { finishedMassGrams: "100" }));
+    expect(finishedBasis.ok).toBe(true);
+    if (finishedBasis.ok) {
+      expect(finishedBasis.value.calculation.sweetness).toMatchObject({
+        totalSucroseEquivalentGrams: "10",
+        per100gSucroseEquivalent: "10",
+        status: "partial",
+        missingItemIds: ["item-high-intensity"],
+      });
+    }
+  });
+
   it("blocks volume conversion when density is missing", () => {
     const result = calculate(
       draft([
@@ -279,7 +413,7 @@ describe("recipe calculation adapter", () => {
           kind: "semi_finished",
         },
         targetBatchGrams: "100",
-        finishedMassGrams: null,
+        finishedMassGrams: "100",
         servingMassGrams: null,
         packageCount: null,
         items: [
@@ -302,6 +436,11 @@ describe("recipe calculation adapter", () => {
               densityGPerMl: null,
               nutrientsPer100g: { sugars: "100" },
               nutrientUnits: { sugars: "g" },
+              sweetness: {
+                basis: "w_w_percent",
+                content: "100",
+                relativeFactor: "1",
+              },
               pricePerKg: "8",
               allergens: {
                 contains: [],
@@ -389,6 +528,65 @@ describe("recipe calculation adapter", () => {
         per100gKnownAmount: "20",
       });
       expect(expanded.value.calculation.cost.rawMaterialTotal).toBe("0.8");
+      expect(expanded.value.calculation.sweetness).toMatchObject({
+        totalSucroseEquivalentGrams: "100",
+        per100gSucroseEquivalent: "20",
+        status: "complete",
+      });
+    }
+
+    const noMeasuredOutput = structuredClone(syrup);
+    noMeasuredOutput.id = "powder-premix-v1";
+    noMeasuredOutput.recipeId = "recipe-powder-premix";
+    noMeasuredOutput.snapshot.recipe = {
+      id: "recipe-powder-premix",
+      name: "糖粉预混料",
+      code: null,
+      tags: [],
+      kind: "semi_finished",
+    };
+    noMeasuredOutput.snapshot.targetBatchGrams = "1000";
+    noMeasuredOutput.snapshot.finishedMassGrams = null;
+    const premixIngredient = noMeasuredOutput.snapshot.items[0];
+    if (!premixIngredient || premixIngredient.kind !== "ingredient") {
+      throw new Error("missing premix ingredient fixture");
+    }
+    noMeasuredOutput.snapshot.items[0] = {
+      ...premixIngredient,
+      amount: "100",
+      unit: "kg",
+      massGrams: "100000",
+    };
+    noMeasuredOutput.snapshot.calculation.inputMassGrams = "100000";
+    noMeasuredOutput.snapshot.calculation.basisMassGrams = "100000";
+    const noMeasuredOutputRoot = structuredClone(root);
+    noMeasuredOutputRoot.targetBatchGrams = "290";
+    noMeasuredOutputRoot.finishedMassGrams = "290";
+    const noMeasuredOutputReference = noMeasuredOutputRoot.items[0];
+    if (noMeasuredOutputReference?.kind === "recipe_version") {
+      noMeasuredOutputReference.recipeVersionId = noMeasuredOutput.id;
+      noMeasuredOutputReference.recipeVersion = {
+        id: noMeasuredOutput.id,
+        recipeId: noMeasuredOutput.recipeId,
+        recipeName: "糖粉预混料",
+        versionNumber: 1,
+        outputMassGrams: "100000",
+        createdAt: noMeasuredOutput.createdAt,
+      };
+      noMeasuredOutputReference.amount = "290";
+    }
+    const conserved = calculate(noMeasuredOutputRoot, [noMeasuredOutput]);
+    expect(conserved.ok).toBe(true);
+    if (conserved.ok) {
+      expect(
+        conserved.value.calculation.nutrients.find(
+          (nutrient) => nutrient.nutrientDefinitionId === "sugars",
+        ),
+      ).toMatchObject({
+        totalKnownAmount: "290",
+        per100gKnownAmount: "100",
+      });
+      expect(conserved.value.calculation.cost.rawMaterialTotal).toBe("2.32");
     }
 
     const glaze: RecipeVersion = {
@@ -451,6 +649,10 @@ describe("recipe calculation adapter", () => {
         per100gKnownAmount: "10",
       });
       expect(nested.value.calculation.cost.rawMaterialTotal).toBe("0.4");
+      expect(nested.value.calculation.sweetness).toMatchObject({
+        totalSucroseEquivalentGrams: "50",
+        per100gSucroseEquivalent: "10",
+      });
     }
 
     const cyclic = structuredClone(syrup);

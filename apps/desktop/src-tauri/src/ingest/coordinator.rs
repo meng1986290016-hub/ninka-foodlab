@@ -469,7 +469,8 @@ impl IngredientIngestCoordinator {
         destination: &Path,
         format: IngredientExchangeFormat,
     ) -> Result<(), IngestError> {
-        write_template(destination, format)
+        let definitions = self.ingredients.list_nutrient_definitions()?;
+        write_template(destination, format, &definitions)
     }
 
     pub fn export_library(
@@ -518,9 +519,11 @@ impl IngredientIngestCoordinator {
                                         name: definition.name.clone(),
                                         unit: definition.unit.clone(),
                                         value: value.value,
+                                        category: Some(definition.category.clone()),
                                     })
                             })
                             .collect(),
+                        sweetness: variant.sweetness,
                         contains_allergens: variant.allergens.contains,
                         may_contain_allergens: variant.allergens.may_contain,
                         source: variant.source,
@@ -709,6 +712,7 @@ fn materialize_review(
                 .ok_or_else(|| IngestError::domain("invalid_input", "缺少营养基准"))?,
             values: nutrition_values,
         },
+        sweetness: review.sweetness.clone(),
         allergens: IngredientVariantAllergens {
             contains: review.contains_allergens.clone(),
             may_contain: review.may_contain_allergens.clone(),
@@ -825,6 +829,9 @@ fn resolve_nutrients(
         {
             id
         } else {
+            let category = nutrient.category.as_deref().ok_or_else(|| {
+                IngestError::domain("invalid_input", "新建自定义含量项前请选择分类")
+            })?;
             let id = create_id();
             let sort_order = transaction.query_row(
                 "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM nutrient_definitions",
@@ -833,14 +840,15 @@ fn resolve_nutrients(
             )?;
             transaction.execute(
                 "INSERT INTO nutrient_definitions
-                 (id, code, name, unit, built_in, sort_order)
-                 VALUES (?1, ?2, ?3, ?4, 0, ?5)",
+                 (id, code, name, unit, built_in, sort_order, category, archived_at)
+                 VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, NULL)",
                 params![
                     id,
                     format!("custom:{id}"),
                     nutrient.name,
                     nutrient.unit,
                     sort_order,
+                    category,
                 ],
             )?;
             id
@@ -940,6 +948,12 @@ fn merge_grouped_reviews(
         "nutritionBasis",
         conflicts,
     );
+    if existing.sweetness.is_none() {
+        existing.sweetness = incoming.sweetness.clone();
+    } else if incoming.sweetness.is_some() && existing.sweetness != incoming.sweetness {
+        existing.sweetness = None;
+        record_conflict(conflicts, "sweetness");
+    }
 
     append_distinct_text(&mut existing.source, &incoming.source);
     append_distinct_text(&mut existing.research_notes, &incoming.research_notes);
@@ -960,6 +974,9 @@ fn merge_grouped_reviews(
         {
             if current.definition_id.is_none() {
                 current.definition_id = nutrient.definition_id;
+            }
+            if current.category.is_none() {
+                current.category = nutrient.category;
             }
             let conflict_path = format!("nutrients.{}.value", current.name);
             if has_conflict(conflicts, &conflict_path) {

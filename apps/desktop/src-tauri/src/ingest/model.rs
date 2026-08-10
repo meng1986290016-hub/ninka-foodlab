@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ingredients::model::IngredientVariant;
+use crate::ingredients::model::{IngredientSweetness, IngredientVariant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -110,6 +110,8 @@ pub struct ImportedNutrientValue {
     pub name: String,
     pub unit: String,
     pub value: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,6 +129,8 @@ pub struct ReviewedIngredientImportDraft {
     pub density_g_per_ml: Option<String>,
     pub nutrition_basis: Option<String>,
     pub nutrients: Vec<ImportedNutrientValue>,
+    #[serde(default)]
+    pub sweetness: Option<IngredientSweetness>,
     pub contains_allergens: Vec<String>,
     pub may_contain_allergens: Vec<String>,
     pub source: String,

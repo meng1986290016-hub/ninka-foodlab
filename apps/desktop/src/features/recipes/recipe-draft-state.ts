@@ -24,7 +24,6 @@ export type RecipeDraftEditablePatch = Partial<
     RecipeDraft,
     | "basedOnVersionId"
     | "source"
-    | "targetBatchGrams"
     | "finishedMassGrams"
     | "servingMassGrams"
     | "packageCount"
@@ -92,7 +91,7 @@ export function createEmptyRecipeDraft(
     recipeId,
     basedOnVersionId: null,
     source: "manual",
-    targetBatchGrams: "1000",
+    targetBatchGrams: "0",
     finishedMassGrams: null,
     servingMassGrams: null,
     packageCount: null,
@@ -225,6 +224,7 @@ export function settleRecipeDraft(
     return {
       draft: {
         ...draft,
+        targetBatchGrams: result.value.calculation.inputMassGrams,
         calculation: result.value.calculation,
         calculationIssues: result.warnings,
       },
@@ -253,13 +253,6 @@ export function validateRecipeDraftNumbers(
   draft: RecipeDraft,
 ): RecipeCalculationIssue[] {
   const issues: RecipeCalculationIssue[] = [];
-  validateNumber(
-    draft.targetBatchGrams,
-    "targetBatchGrams",
-    null,
-    "positive",
-    issues,
-  );
   validateOptionalPositive(
     draft.finishedMassGrams,
     "finishedMassGrams",
@@ -334,7 +327,8 @@ export function toRecipeDraftSaveInput(
     recipeId: draft.recipeId,
     basedOnVersionId: draft.basedOnVersionId,
     source: draft.source,
-    targetBatchGrams: draft.targetBatchGrams,
+    targetBatchGrams:
+      draft.calculation?.inputMassGrams ?? draft.targetBatchGrams,
     finishedMassGrams: draft.finishedMassGrams,
     servingMassGrams: draft.servingMassGrams,
     packageCount: draft.packageCount,
@@ -347,8 +341,8 @@ export function toRecipeDraftSaveInput(
             ingredientVariantId: item.ingredientVariantId,
             amount: item.amount,
             unit: item.unit,
-            locked: item.locked,
-            autoFill: item.autoFill,
+            locked: false,
+            autoFill: false,
           };
       }
       if (item.kind === "material_need") {
@@ -359,8 +353,8 @@ export function toRecipeDraftSaveInput(
           materialNeedId: item.materialNeedId,
           amount: item.amount,
           unit: item.unit,
-          locked: item.locked,
-          autoFill: item.autoFill,
+          locked: false,
+          autoFill: false,
         };
       }
       return {
@@ -370,8 +364,8 @@ export function toRecipeDraftSaveInput(
             recipeVersionId: item.recipeVersionId,
             amount: item.amount,
             unit: item.unit,
-            locked: item.locked,
-            autoFill: item.autoFill,
+            locked: false,
+            autoFill: false,
           };
     }),
     packagingCosts: draft.packagingCosts.map((item) => ({ ...item })),

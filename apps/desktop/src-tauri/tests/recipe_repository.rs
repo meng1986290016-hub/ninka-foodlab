@@ -113,7 +113,7 @@ fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 11);
+    assert_eq!(version, 12);
     for object in [
         "recipes",
         "recipe_drafts",
@@ -216,6 +216,29 @@ fn version_save_is_atomic_and_does_not_consume_a_number_on_failure() {
     assert_eq!(saved.version_number, 1);
     assert_eq!(saved.snapshot["calculation"]["nutrients"]["protein"], "0");
     assert!(saved.snapshot["calculation"]["nutrients"]["sodium"].is_null());
+}
+
+#[test]
+fn version_reference_uses_actual_input_when_finished_mass_is_missing() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("糖粉预混料", RecipeKind::SemiFinished))
+        .unwrap();
+    let draft = repository.save_draft(draft_input(&recipe.id)).unwrap();
+    let mut input = version_input(&recipe.id, &draft.id, Vec::new());
+    input.snapshot["finishedMassGrams"] = json!(null);
+    input.snapshot["targetBatchGrams"] = json!("1000");
+    input.snapshot["calculation"]["inputMassGrams"] = json!("100000");
+    repository.create_version(input).unwrap();
+
+    let summary = repository
+        .list_recipe_summaries()
+        .unwrap()
+        .into_iter()
+        .find(|item| item.recipe.id == recipe.id)
+        .unwrap();
+
+    assert_eq!(summary.latest_version.unwrap().output_mass_grams, "100000");
 }
 
 #[test]

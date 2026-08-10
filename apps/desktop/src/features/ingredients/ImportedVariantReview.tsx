@@ -20,6 +20,7 @@ import { ImportIssueList } from "../imports/ImportIssueList";
 import { DraftSourceEvidence } from "../imports/DraftSourceEvidence";
 import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { NutritionEditor } from "./NutritionEditor";
+import { SweetnessEditor } from "./SweetnessEditor";
 import { VariantBasicFields } from "./VariantBasicFields";
 
 interface ImportedVariantReviewProps {
@@ -47,6 +48,7 @@ function cloneReview(
     ...review,
     nutritionBasis,
     nutrients: review.nutrients.map((nutrient) => ({ ...nutrient })),
+    sweetness: review.sweetness ? { ...review.sweetness } : null,
     containsAllergens: [...review.containsAllergens],
     mayContainAllergens: [...review.mayContainAllergens],
   };
@@ -61,7 +63,7 @@ export function ImportedVariantReview({
   onSaved,
   onSavedAndNext,
 }: ImportedVariantReviewProps) {
-  const [tab, setTab] = useState<"basic" | "nutrition">("basic");
+  const [tab, setTab] = useState<"basic" | "nutrition" | "research">("basic");
   const [review, setReview] = useState(() => cloneReview(draft.review));
   const [definitions, setDefinitions] = useState<NutrientDefinition[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -118,11 +120,14 @@ export function ImportedVariantReview({
       researchNotes: review.researchNotes,
       nutrition: {
         basis: review.nutritionBasis ?? "per_100g",
-        values: definitions.map((definition) => ({
-          nutrientDefinitionId: definition.id,
-          value: values.get(definition.id) ?? null,
-        })),
+        values: definitions
+          .filter((definition) => definition.builtIn || values.has(definition.id))
+          .map((definition) => ({
+            nutrientDefinitionId: definition.id,
+            value: values.get(definition.id) ?? null,
+          })),
       },
+      sweetness: review.sweetness ?? null,
       allergens: {
         contains: [...review.containsAllergens],
         mayContain: [...review.mayContainAllergens],
@@ -154,40 +159,28 @@ export function ImportedVariantReview({
   }
 
   function updateNutrition(nutrition: VariantNutrition) {
-    const nextValues = new Map(
-      nutrition.values.map((value) => [
-        value.nutrientDefinitionId,
-        value.value,
-      ]),
-    );
     setReview((current) => {
-      const existingIds = new Set(
-        current.nutrients
-          .map((nutrient) => nutrient.definitionId)
-          .filter((id): id is string => id !== null),
+      const unmatched = current.nutrients.filter(
+        (nutrient) => nutrient.definitionId === null,
       );
-      const updated = current.nutrients.map((nutrient) =>
-        nutrient.definitionId
-          ? {
-              ...nutrient,
-              value: nextValues.get(nutrient.definitionId) ?? null,
-            }
-          : nutrient,
-      );
-      for (const definition of definitions) {
-        if (!existingIds.has(definition.id)) {
-          updated.push({
-            definitionId: definition.id,
-            name: definition.name,
-            unit: definition.unit,
-            value: nextValues.get(definition.id) ?? null,
-          });
-        }
-      }
+      const updated = nutrition.values.flatMap((value) => {
+        const definition = definitions.find(
+          (candidate) => candidate.id === value.nutrientDefinitionId,
+        );
+        return definition
+          ? [{
+              definitionId: definition.id,
+              name: definition.name,
+              unit: definition.unit,
+              value: value.value,
+              category: definition.category,
+            }]
+          : [];
+      });
       return {
         ...current,
         nutritionBasis: nutrition.basis,
-        nutrients: updated,
+        nutrients: [...updated, ...unmatched],
       };
     });
   }
@@ -277,6 +270,15 @@ export function ImportedVariantReview({
           >
             营养与过敏原
           </button>
+          <button
+            aria-selected={tab === "research"}
+            className={tab === "research" ? "is-active" : undefined}
+            onClick={() => setTab("research")}
+            role="tab"
+            type="button"
+          >
+            研发指标
+          </button>
         </div>
 
         <div className="variant-panel" hidden={tab !== "basic"} role="tabpanel">
@@ -351,29 +353,50 @@ export function ImportedVariantReview({
             <div className="import-nutrient-grid field--full">
               <h4>资料中的自定义成分</h4>
               {customNutrients.map((nutrient, index) => (
-                <label
-                  className="field"
+                <div
+                  className="import-custom-nutrient"
                   key={`${nutrient.name}-${nutrient.unit}-${index}`}
                 >
-                  <span>
-                    {nutrient.name}（{nutrient.unit}）
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    onChange={(event) => {
-                      const nutrients = review.nutrients.map((candidate) =>
-                        candidate === nutrient
-                          ? {
-                              ...candidate,
-                              value: event.target.value || null,
-                            }
-                          : candidate,
-                      );
-                      update("nutrients", nutrients);
-                    }}
-                    value={nutrient.value ?? ""}
-                  />
-                </label>
+                  <label className="field">
+                    <span>{nutrient.name}（{nutrient.unit}）</span>
+                    <input
+                      inputMode="decimal"
+                      onChange={(event) => {
+                        const nutrients = review.nutrients.map((candidate) =>
+                          candidate === nutrient
+                            ? { ...candidate, value: event.target.value || null }
+                            : candidate,
+                        );
+                        update("nutrients", nutrients);
+                      }}
+                      value={nutrient.value ?? ""}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>分类</span>
+                    <select
+                      aria-label={`${nutrient.name}分类`}
+                      onChange={(event) => {
+                        const nutrients = review.nutrients.map((candidate) =>
+                          candidate === nutrient
+                            ? {
+                                ...candidate,
+                                category: event.target.value === ""
+                                  ? null
+                                  : event.target.value as "nutrition" | "research",
+                              }
+                            : candidate,
+                        );
+                        update("nutrients", nutrients);
+                      }}
+                      value={nutrient.category ?? ""}
+                    >
+                      <option value="">请选择</option>
+                      <option value="nutrition">营养相关</option>
+                      <option value="research">研发指标</option>
+                    </select>
+                  </label>
+                </div>
               ))}
               <p className="data-helper">
                 保存时会一并创建这些营养成分定义，请确认名称和单位。
@@ -392,6 +415,25 @@ export function ImportedVariantReview({
               contains: review.containsAllergens,
               mayContain: review.mayContainAllergens,
             }}
+          />
+        </div>
+
+        <div className="variant-panel" hidden={tab !== "research"} role="tabpanel">
+          <NutritionEditor
+            allowCustomDefinition={false}
+            api={api}
+            category="research"
+            definitions={definitions}
+            densityGPerMl={review.densityGPerMl}
+            nutrition={variantInput.nutrition}
+            onChange={updateNutrition}
+            onDefinitionCreated={() => {}}
+            showBasis={false}
+          />
+          <SweetnessEditor
+            densityGPerMl={review.densityGPerMl}
+            onChange={(sweetness) => update("sweetness", sweetness)}
+            sweetness={review.sweetness ?? null}
           />
         </div>
 

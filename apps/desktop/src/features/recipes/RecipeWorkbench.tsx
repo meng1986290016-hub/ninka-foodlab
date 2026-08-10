@@ -18,6 +18,7 @@ import type {
   RecipeVersion,
 } from "../../api/recipe-types";
 import { recipeSchemeStatus } from "../../api/recipe-types";
+import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 import type {
   IngredientVariant,
   MaterialGroup,
@@ -29,7 +30,6 @@ import { RecipeCostEditor } from "./RecipeCostEditor";
 import { RecipeHeader } from "./RecipeHeader";
 import { RecipeIngredientPicker } from "./RecipeIngredientPicker";
 import { RecipeItemTable } from "./RecipeItemTable";
-import { rebalanceDraftItems } from "./recipe-rebalance";
 import { RecipeVersionDialog } from "./RecipeVersionDialog";
 import {
   prepareRecipeVersion,
@@ -271,7 +271,7 @@ function RecipeEditor({
     useState(initialVersions);
   const [recipeName, setRecipeName] = useState(recipe.name);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [rebalanceError, setRebalanceError] =
+  const [editorError, setEditorError] =
     useState<string | null>(null);
   const [narrowView, setNarrowView] =
     useState<NarrowView>("formula");
@@ -464,14 +464,14 @@ function RecipeEditor({
           : "已设为成品配方",
       );
     } catch (cause) {
-      setRebalanceError(
+      setEditorError(
         cause instanceof Error ? cause.message : "配方类型更新失败",
       );
     }
   }
 
   async function returnToLibrary() {
-    setRebalanceError(null);
+    setEditorError(null);
     try {
       await commitRecipeName();
       if (recipeSchemeStatus(recipe) !== "inactive") {
@@ -479,7 +479,7 @@ function RecipeEditor({
       }
       onBack?.();
     } catch (cause) {
-      setRebalanceError(
+      setEditorError(
         cause instanceof Error ? cause.message : "草稿保存失败，暂未返回配方库",
       );
     }
@@ -519,9 +519,7 @@ function RecipeEditor({
       setReferencedVersions((current) =>
         mergeRecipeVersions(current, closure),
       );
-      const outputMass =
-        version.snapshot.finishedMassGrams ??
-        version.snapshot.targetBatchGrams;
+      const outputMass = recipeVersionOutputMass(version.snapshot);
       setItems([
         ...draft.items,
         {
@@ -544,7 +542,7 @@ function RecipeEditor({
         },
       ]);
     } catch (cause) {
-      setRebalanceError(
+      setEditorError(
         cause instanceof Error
           ? cause.message
           : "半成品版本无法读取",
@@ -561,9 +559,7 @@ function RecipeEditor({
       setReferencedVersions((current) =>
         mergeRecipeVersions(current, closure),
       );
-      const outputMass =
-        version.snapshot.finishedMassGrams ??
-        version.snapshot.targetBatchGrams;
+      const outputMass = recipeVersionOutputMass(version.snapshot);
       setItems(
         draft.items.map((item) =>
           item.id === itemId && item.kind === "recipe_version"
@@ -586,7 +582,7 @@ function RecipeEditor({
         `${version.snapshot.recipe.name} 已升级到 V${version.versionNumber}`,
       );
     } catch (cause) {
-      setRebalanceError(
+      setEditorError(
         cause instanceof Error
           ? cause.message
           : "半成品版本升级失败",
@@ -628,15 +624,15 @@ function RecipeEditor({
                 ingredientVariant: selected.variant,
                 amount: candidate.amount,
                 unit: candidate.unit,
-                locked: candidate.locked,
-                autoFill: candidate.autoFill,
+                locked: false,
+                autoFill: false,
               }
             : candidate,
         ),
       );
       setVersionNotice(`${item.materialNeed.materialName} 已替换为真实供应商原料版本`);
     } catch (cause) {
-      setRebalanceError(
+      setEditorError(
         cause instanceof Error ? cause.message : "待补充原料替换失败",
       );
     }
@@ -653,59 +649,6 @@ function RecipeEditor({
     items[index] = adjacent;
     items[target] = current;
     setItems(items);
-  }
-
-  function updateWithAutoFill(
-    items: RecipeDraftItem[],
-    editedItemId: string | null = null,
-  ) {
-    const filler = items.find((item) => item.autoFill);
-    if (filler === undefined || filler.id === editedItemId) {
-      setRebalanceError(null);
-      setItems(items);
-      return;
-    }
-    const result = rebalanceDraftItems(
-      items,
-      draft.targetBatchGrams,
-      { type: "auto-fill", itemId: filler.id },
-    );
-    if (!result.ok) {
-      setRebalanceError(result.message);
-      setItems(items);
-      return;
-    }
-    setRebalanceError(null);
-    setItems(result.items);
-  }
-
-  function toggleAutoFill(id: string) {
-    const selected = draft.items.find((item) => item.id === id);
-    if (selected === undefined) return;
-    if (selected.autoFill) {
-      setRebalanceError(null);
-      setItems(
-        draft.items.map((item) =>
-          item.id === id ? { ...item, autoFill: false } : item,
-        ),
-      );
-      return;
-    }
-    const prepared = draft.items.map((item) => ({
-      ...item,
-      autoFill: item.id === id,
-    }));
-    const result = rebalanceDraftItems(
-      prepared,
-      draft.targetBatchGrams,
-      { type: "auto-fill", itemId: id },
-    );
-    if (!result.ok) {
-      setRebalanceError(result.message);
-      return;
-    }
-    setRebalanceError(null);
-    setItems(result.items);
   }
 
   function openVersionDialog() {
@@ -864,24 +807,6 @@ function RecipeEditor({
             </p>
           ) : null}
           <div className="recipe-batch-bar">
-            <label>
-              <span>计划投料总量</span>
-              <input
-                aria-label="计划投料总量"
-                inputMode="decimal"
-                onChange={(event) => {
-                  setRebalanceError(null);
-                  dispatch({
-                    type: "patch",
-                    patch: {
-                      targetBatchGrams: event.target.value,
-                    },
-                  });
-                }}
-                value={draft.targetBatchGrams}
-              />
-              <small>g</small>
-            </label>
             <output
               aria-label="当前投料合计"
               className="recipe-batch-value recipe-batch-value--computed"
@@ -921,10 +846,10 @@ function RecipeEditor({
             </p>
           </div>
 
-          {rebalanceError ? (
-            <p className="recipe-rebalance-error" role="alert">
+          {editorError ? (
+            <p className="recipe-editor-error" role="alert">
               <Icon name="warning" size={16} />
-              {rebalanceError}
+              {editorError}
             </p>
           ) : null}
 
@@ -943,40 +868,22 @@ function RecipeEditor({
               const items = draft.items.map((item) =>
                 item.id === id ? { ...item, amount } : item,
               );
-              updateWithAutoFill(items, id);
-            }}
-            onAutoFillChange={toggleAutoFill}
-            onLockChange={(id) => {
-              const items = draft.items.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      locked: !item.locked,
-                      autoFill: !item.locked
-                        ? false
-                        : item.autoFill,
-                    }
-                  : item,
-              );
-              updateWithAutoFill(items);
+              setItems(items);
             }}
             onMove={moveItem}
             onRemove={(id) =>
-              updateWithAutoFill(
-                draft.items.filter((item) => item.id !== id),
-              )
+              setItems(draft.items.filter((item) => item.id !== id))
             }
             onReplaceMaterialNeed={(id) => void replaceMaterialNeed(id)}
             onUnitChange={(id, unit) => {
               const items = draft.items.map((item) =>
                 item.id === id ? { ...item, unit } : item,
               );
-              updateWithAutoFill(items);
+              setItems(items);
             }}
             onUpgradeVersion={(id, version) =>
               void upgradeVersion(id, version)
             }
-            targetBatchGrams={draft.targetBatchGrams}
             versionUpgrades={versionUpgrades}
           />
 
@@ -1020,6 +927,16 @@ function RecipeEditor({
           activeView={narrowView}
           calculation={calculation}
           issues={visibleIssues}
+          itemNames={Object.fromEntries(
+            draft.items.map((item) => [
+              item.id,
+              item.kind === "ingredient"
+                ? item.materialName
+                : item.kind === "recipe_version"
+                  ? item.recipeVersion.recipeName
+                  : item.materialNeed.materialName,
+            ]),
+          )}
         />
       </div>
 
@@ -1121,12 +1038,14 @@ interface RecipeResultsInspectorProps {
   activeView: NarrowView;
   calculation: ReturnType<typeof useRecipeDraft>["draft"]["calculation"];
   issues: ReturnType<typeof useRecipeDraft>["draft"]["calculationIssues"];
+  itemNames: Record<string, string>;
 }
 
 function RecipeResultsInspector({
   activeView,
   calculation,
   issues,
+  itemNames,
 }: RecipeResultsInspectorProps) {
   const visibleClass =
     activeView === "formula"
@@ -1156,21 +1075,47 @@ function RecipeResultsInspector({
         <ResultAllergens calculation={calculation} />
       ) : (
         <>
-          <section className="recipe-result-section">
-            <h3>营养</h3>
-            <div className="recipe-nutrition-head">
-              <span>项目</span>
-              <span>每100g</span>
-              <span>整批</span>
-            </div>
-            {calculation.nutrients.slice(0, 8).map((nutrient) => (
-              <div className="recipe-nutrition-row" key={nutrient.nutrientDefinitionId}>
-                <span>{nutrient.name}</span>
-                <span>{nutrientValue(nutrient, "per100g")}</span>
-                <span>{nutrientValue(nutrient, "batch")}</span>
-              </div>
-            ))}
-          </section>
+          <ResultNutrients
+            nutrients={calculation.nutrients.filter(
+              (nutrient) => (nutrient.category ?? "nutrition") === "nutrition",
+            )}
+            title="营养"
+          />
+          {calculation.nutrients.some(
+            (nutrient) => nutrient.category === "research",
+          ) || calculation.sweetness ? (
+            <section className="recipe-result-section">
+              <h3>研发指标</h3>
+              {calculation.nutrients.some(
+                (nutrient) => nutrient.category === "research",
+              ) ? (
+                <ResultNutrientRows
+                  nutrients={calculation.nutrients.filter(
+                    (nutrient) => nutrient.category === "research",
+                  )}
+                />
+              ) : null}
+              {calculation.sweetness ? (
+                <div className="recipe-sweetness-result">
+                  <span>理论甜度</span>
+                  <strong>
+                    {calculation.sweetness.status === "unknown"
+                      ? "—"
+                      : `${calculation.sweetness.status === "partial" ? "≈" : ""}${displayNumber(calculation.sweetness.per100gSucroseEquivalent)} g/100g`}
+                  </strong>
+                  <small>蔗糖当量，理论研发估算</small>
+                  {calculation.sweetness.missingItemIds.length > 0 ? (
+                    <small className="is-warning">
+                      待补充：
+                      {calculation.sweetness.missingItemIds
+                        .map((id) => itemNames[id] ?? id)
+                        .join("、")}
+                    </small>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           <section className="recipe-result-section recipe-cost-preview">
             <h3>成本</h3>
             <dl>
@@ -1204,6 +1149,44 @@ function RecipeResultsInspector({
         </>
       )}
     </aside>
+  );
+}
+
+function ResultNutrients({
+  nutrients,
+  title,
+}: {
+  nutrients: RecipeCalculation["nutrients"];
+  title: string;
+}) {
+  return (
+    <section className="recipe-result-section">
+      <h3>{title}</h3>
+      <ResultNutrientRows nutrients={nutrients} />
+    </section>
+  );
+}
+
+function ResultNutrientRows({
+  nutrients,
+}: {
+  nutrients: RecipeCalculation["nutrients"];
+}) {
+  return (
+    <>
+      <div className="recipe-nutrition-head">
+        <span>项目</span>
+        <span>每100g</span>
+        <span>整批</span>
+      </div>
+      {nutrients.map((nutrient) => (
+        <div className="recipe-nutrition-row" key={nutrient.nutrientDefinitionId}>
+          <span>{nutrient.name}</span>
+          <span>{nutrientValue(nutrient, "per100g")}</span>
+          <span>{nutrientValue(nutrient, "batch")}</span>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -1266,7 +1249,12 @@ function mergeRecipeVersions(
 }
 
 function normalizePositions(items: RecipeDraftItem[]) {
-  return items.map((item, position) => ({ ...item, position }));
+  return items.map((item, position) => ({
+    ...item,
+    position,
+    locked: false,
+    autoFill: false,
+  }));
 }
 
 function createItemId() {

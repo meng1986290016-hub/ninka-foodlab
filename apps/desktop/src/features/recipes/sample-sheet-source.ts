@@ -3,12 +3,14 @@ import {
   type SamplingItem,
   type SamplingRecipeNode,
 } from "@food-rd/core";
+import Decimal from "decimal.js";
 
 import type {
   Recipe,
   RecipeDraft,
   RecipeVersion,
 } from "../../api/recipe-types";
+import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 
 export type SampleSheetLaunch =
   | {
@@ -100,7 +102,7 @@ export function buildSamplingSourceFromDraft(
       versionLabel: "当前工作台草稿",
       finishedMassGrams: draft.finishedMassGrams,
       outputMassGrams:
-        draft.finishedMassGrams ?? draft.targetBatchGrams,
+        draft.finishedMassGrams ?? sumItemMasses(items),
       items,
     },
     referencedRecipes: nodesById(referencedVersions),
@@ -130,9 +132,7 @@ function versionNode(version: RecipeVersion): SamplingRecipeNode {
     name: version.snapshot.recipe.name,
     versionLabel: `V${version.versionNumber} 正式版本`,
     finishedMassGrams: version.snapshot.finishedMassGrams,
-    outputMassGrams:
-      version.snapshot.finishedMassGrams ??
-      version.snapshot.targetBatchGrams,
+    outputMassGrams: recipeVersionOutputMass(version.snapshot),
     items: version.snapshot.items.map((item) =>
       item.kind === "ingredient"
         ? {
@@ -163,4 +163,13 @@ function versionNode(version: RecipeVersion): SamplingRecipeNode {
           },
     ),
   };
+}
+
+function sumItemMasses(items: SamplingItem[]) {
+  return items
+    .reduce(
+      (total, item) => total.add(item.massGrams),
+      new Decimal(0),
+    )
+    .toString();
 }

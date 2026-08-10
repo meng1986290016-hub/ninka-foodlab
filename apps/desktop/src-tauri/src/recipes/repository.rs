@@ -856,7 +856,7 @@ pub fn version_reference(version: &RecipeVersion) -> RecipeVersionReference {
         .or_else(|| {
             version
                 .snapshot
-                .get("targetBatchGrams")
+                .pointer("/calculation/inputMassGrams")
                 .and_then(Value::as_str)
         })
         .unwrap_or("0")

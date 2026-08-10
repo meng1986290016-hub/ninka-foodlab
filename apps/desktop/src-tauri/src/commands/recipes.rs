@@ -239,7 +239,12 @@ fn draft_payload_from_version(
         "recipeId": target_recipe_id,
         "basedOnVersionId": based_on_version_id,
         "source": "manual",
-        "targetBatchGrams": snapshot.get("targetBatchGrams").cloned().unwrap_or(Value::String("0".into())),
+        "targetBatchGrams": snapshot
+            .get("calculation")
+            .and_then(Value::as_object)
+            .and_then(|calculation| calculation.get("inputMassGrams"))
+            .cloned()
+            .unwrap_or(Value::String("0".into())),
         "finishedMassGrams": snapshot.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
         "servingMassGrams": snapshot.get("servingMassGrams").cloned().unwrap_or(Value::Null),
         "packageCount": snapshot.get("packageCount").cloned().unwrap_or(Value::Null),
@@ -403,9 +408,7 @@ fn draft_item_from_snapshot(item: &Value) -> Result<Value, CommandError> {
         .as_object()
         .ok_or_else(|| command_error("storage_failure", "配方版本原料无法读取"))?;
     let mut draft = Map::new();
-    for field in [
-        "id", "position", "kind", "amount", "unit", "locked", "autoFill",
-    ] {
+    for field in ["id", "position", "kind", "amount", "unit"] {
         draft.insert(
             field.into(),
             source
@@ -414,6 +417,8 @@ fn draft_item_from_snapshot(item: &Value) -> Result<Value, CommandError> {
                 .ok_or_else(|| command_error("storage_failure", "配方版本原料无法读取"))?,
         );
     }
+    draft.insert("locked".into(), Value::Bool(false));
+    draft.insert("autoFill".into(), Value::Bool(false));
     match source.get("kind").and_then(Value::as_str) {
         Some("ingredient") => {
             let id = source
@@ -516,7 +521,15 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         }
     }
 
-    let nutrition_changes = comparison_rows(nutrient_cells(before), nutrient_cells(after));
+    let nutrition_changes = comparison_rows(
+        nutrient_cells(before, "nutrition"),
+        nutrient_cells(after, "nutrition"),
+    );
+    let research_changes = comparison_rows(
+        nutrient_cells(before, "research"),
+        nutrient_cells(after, "research"),
+    );
+    let sweetness_changes = comparison_rows(sweetness_cells(before), sweetness_cells(after));
     let cost_changes = comparison_rows(cost_cells(before), cost_cells(after));
     let target_changes = comparison_rows(target_cells(before), target_cells(after));
     let allergen_changes = comparison_rows(allergen_cells(before), allergen_cells(after));
@@ -525,6 +538,8 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         "after": version_reference(after),
         "itemChanges": item_changes,
         "nutritionChanges": nutrition_changes,
+        "researchChanges": research_changes,
+        "sweetnessChanges": sweetness_changes,
         "costChanges": cost_changes,
         "targetChanges": target_changes,
         "allergenChanges": allergen_changes,
@@ -564,7 +579,10 @@ fn comparison_rows(
         .collect()
 }
 
-fn nutrient_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
+fn nutrient_cells(
+    version: &RecipeVersion,
+    category: &str,
+) -> (Vec<String>, HashMap<String, ComparisonCell>) {
     let nutrients = version
         .snapshot
         .pointer("/calculation/nutrients")
@@ -574,6 +592,13 @@ fn nutrient_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, Comp
     let mut keys = Vec::new();
     let mut cells = HashMap::new();
     for nutrient in nutrients {
+        let nutrient_category = nutrient
+            .get("category")
+            .and_then(Value::as_str)
+            .unwrap_or("nutrition");
+        if nutrient_category != category {
+            continue;
+        }
         let Some(key) = nutrient
             .get("nutrientDefinitionId")
             .and_then(Value::as_str)
@@ -597,13 +622,46 @@ fn nutrient_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, Comp
                 value: nutrient
                     .get("status")
                     .and_then(Value::as_str)
-                    .filter(|status| *status != "unknown")
-                    .and_then(|_| nutrient.get("per100gKnownAmount").and_then(Value::as_str))
-                    .map(str::to_string),
+                    .and_then(|status| {
+                        if status == "unknown" {
+                            Some("已选择，未知".to_string())
+                        } else {
+                            nutrient
+                                .get("per100gKnownAmount")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        }
+                    }),
             },
         );
     }
     (keys, cells)
+}
+
+fn sweetness_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
+    let estimate = version.snapshot.pointer("/calculation/sweetness");
+    let value = estimate.and_then(|value| {
+        if value.get("status").and_then(Value::as_str) == Some("unknown") {
+            Some("已配置，未知".to_string())
+        } else {
+            value
+                .get("per100gSucroseEquivalent")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        }
+    });
+    let key = "theoreticalSweetness".to_string();
+    (
+        vec![key.clone()],
+        HashMap::from([(
+            key,
+            ComparisonCell {
+                label: "理论甜度（蔗糖当量）".into(),
+                unit: Some("g/100g".into()),
+                value,
+            },
+        )]),
+    )
 }
 
 fn cost_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
@@ -949,7 +1007,7 @@ mod tests {
                 "key": "protein",
                 "label": "蛋白质",
                 "unit": "g",
-                "before": null,
+                "before": "已选择，未知",
                 "after": "0"
             }])
         );

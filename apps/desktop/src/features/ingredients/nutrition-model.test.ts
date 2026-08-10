@@ -27,6 +27,8 @@ const definitions: NutrientDefinition[] = ([
   unit,
   builtIn: true,
   sortOrder: index,
+  category: "nutrition" as const,
+  archivedAt: null,
 }));
 
 function inputWith(

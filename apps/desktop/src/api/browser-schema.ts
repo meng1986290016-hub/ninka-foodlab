@@ -148,6 +148,8 @@ export function builtInNutrients(): NutrientDefinition[] {
     unit,
     builtIn: true,
     sortOrder: index,
+    category: "nutrition",
+    archivedAt: null,
   }));
 }
 
@@ -332,7 +334,13 @@ export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
       variants: group.variants.map((variant) => ({
         ...variant,
         allergens: variant.allergens ?? { contains: [], mayContain: [] },
+        sweetness: variant.sweetness ?? null,
       })),
+    })),
+    nutrientDefinitions: state.nutrientDefinitions.map((definition) => ({
+      ...definition,
+      category: definition.category ?? "nutrition",
+      archivedAt: definition.archivedAt ?? null,
     })),
     agentRecipeProposals: extended.agentRecipeProposals ?? {},
     materialNeeds: extended.materialNeeds ?? {},

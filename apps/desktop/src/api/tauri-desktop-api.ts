@@ -612,11 +612,34 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<NutrientDefinition[]>("list_nutrient_definitions");
   }
 
-  createNutrientDefinition(name: string, unit: string) {
+  createNutrientDefinition(
+    name: string,
+    unit: string,
+    category: NutrientDefinition["category"],
+  ) {
     return this.invoke<NutrientDefinition>("create_nutrient_definition", {
       name,
       unit,
+      category,
     });
+  }
+
+  updateNutrientDefinition(
+    id: string,
+    name: string,
+    unit: string,
+    category: NutrientDefinition["category"],
+  ) {
+    return this.invoke<NutrientDefinition>("update_nutrient_definition", {
+      id,
+      name,
+      unit,
+      category,
+    });
+  }
+
+  archiveNutrientDefinition(id: string) {
+    return this.invoke<void>("archive_nutrient_definition", { id });
   }
 
   compareIngredientVariants(materialGroupId: string, variantIds: string[]) {

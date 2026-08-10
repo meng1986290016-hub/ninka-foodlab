@@ -169,7 +169,6 @@ function reportInput(
       versionId: recipeVersionId,
       versionNumber: 1,
       versionCreatedAt: "2026-07-31T07:00:00.000Z",
-      targetBatchGrams: "1000",
       finishedMassGrams: null,
       yieldPercent: null,
       completenessPercent: 100,

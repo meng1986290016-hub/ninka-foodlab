@@ -144,7 +144,6 @@ export function AgentRecipeProposalReview({
           <div className="agent-proposal-review__fields">
             <label><span>产品名称</span><input onChange={(event) => patch({ productName: event.target.value })} value={payload.productName} /></label>
             <label><span>配方类型</span><select onChange={(event) => patch({ recipeKind: event.target.value as AgentRecipeProposalPayload["recipeKind"] })} value={payload.recipeKind}><option value="formula">成品配方</option><option value="semi_finished">半成品</option></select></label>
-            <label><span>计划投料总量（g）</span><input inputMode="decimal" onChange={(event) => patch({ plannedInputGrams: event.target.value })} value={payload.plannedInputGrams} /></label>
             <label><span>出成重量（g）</span><input inputMode="decimal" onChange={(event) => patch({ finishedMassGrams: event.target.value || null, yieldAssumption: event.target.value ? "provided" : "assumed_100_percent" })} placeholder="未知" value={payload.finishedMassGrams ?? ""} /></label>
           </div>
 

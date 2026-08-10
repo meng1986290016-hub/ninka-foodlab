@@ -74,6 +74,8 @@ export function RecipeVersionComparisonPanel({
         ? 0
         : comparison.itemChanges.length +
           comparison.nutritionChanges.length +
+          (comparison.researchChanges?.length ?? 0) +
+          (comparison.sweetnessChanges?.length ?? 0) +
           comparison.costChanges.length +
           comparison.targetChanges.length +
           comparison.allergenChanges.length +
@@ -224,6 +226,22 @@ export function RecipeVersionComparisonPanel({
                 emptyLabel="营养估算没有变化"
                 rows={comparison.nutritionChanges}
                 title="营养成分（每 100g）"
+                tone="nutrition"
+              />
+              <ComparisonSection
+                afterVersion={comparison.after.versionNumber}
+                beforeVersion={comparison.before.versionNumber}
+                emptyLabel="研发指标没有变化"
+                rows={comparison.researchChanges ?? []}
+                title="研发指标（每 100g）"
+                tone="nutrition"
+              />
+              <ComparisonSection
+                afterVersion={comparison.after.versionNumber}
+                beforeVersion={comparison.before.versionNumber}
+                emptyLabel="理论甜度没有变化"
+                rows={comparison.sweetnessChanges ?? []}
+                title="理论甜度（研发估算）"
                 tone="nutrition"
               />
               <ComparisonSection

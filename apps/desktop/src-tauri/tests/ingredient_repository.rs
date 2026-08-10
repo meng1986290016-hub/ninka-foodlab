@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use food_rd_desktop::ingredients::{
     model::{
-        IngredientVariantAllergens, IngredientVariantInput, MaterialGroupInput, VariantNutrition,
-        VariantNutritionValue,
+        IngredientSweetness, IngredientVariantAllergens, IngredientVariantInput,
+        MaterialGroupInput, VariantNutrition, VariantNutritionValue,
     },
     repository::IngredientRepository,
 };
@@ -75,6 +75,7 @@ impl Fixture {
                     },
                 ],
             },
+            sweetness: None,
             allergens: IngredientVariantAllergens::default(),
             duplicate_confirmed: false,
         }
@@ -161,6 +162,99 @@ fn unknown_and_confirmed_zero_round_trip_distinctly() {
         .unwrap();
     assert_eq!(protein.value, None);
     assert_eq!(fat.value.as_deref(), Some("0"));
+}
+
+#[test]
+fn custom_templates_are_selected_per_variant_and_sweetness_round_trips() {
+    let mut fixture = Fixture::new();
+    let lactose = fixture
+        .repo
+        .create_nutrient_definition("乳糖", "g", "nutrition")
+        .unwrap();
+    let research = fixture
+        .repo
+        .create_nutrient_definition("总多酚", "mg", "research")
+        .unwrap();
+    let renamed = fixture
+        .repo
+        .update_nutrient_definition(&research.id, "总酚", "mg", "research")
+        .unwrap();
+    assert_eq!(renamed.name, "总酚");
+
+    let first = fixture.repo.save_variant(fixture.valid_input()).unwrap();
+    assert!(
+        first
+            .nutrition
+            .values
+            .iter()
+            .all(|value| value.nutrient_definition_id != lactose.id)
+    );
+    let completeness_before = first.completeness.clone();
+
+    let mut selected = fixture.valid_input();
+    selected.id = Some(first.id.clone());
+    selected.nutrition.values.extend([
+        VariantNutritionValue {
+            nutrient_definition_id: lactose.id.clone(),
+            value: Some("0".into()),
+        },
+        VariantNutritionValue {
+            nutrient_definition_id: research.id.clone(),
+            value: None,
+        },
+    ]);
+    selected.sweetness = Some(IngredientSweetness {
+        basis: "w_v_per_100ml".into(),
+        content: Some("10".into()),
+        relative_factor: Some("0.8".into()),
+    });
+    let saved = fixture.repo.save_variant(selected).unwrap();
+    assert_eq!(saved.completeness, completeness_before);
+    assert_eq!(
+        saved.sweetness.as_ref().unwrap().content.as_deref(),
+        Some("10")
+    );
+    assert_eq!(
+        saved
+            .nutrition
+            .values
+            .iter()
+            .find(|value| value.nutrient_definition_id == research.id)
+            .unwrap()
+            .value,
+        None
+    );
+
+    let locked = fixture
+        .repo
+        .update_nutrient_definition(&research.id, "多酚", "mg", "research")
+        .unwrap_err();
+    assert_eq!(locked.code(), "reference_conflict");
+    fixture
+        .repo
+        .archive_nutrient_definition(&research.id)
+        .unwrap();
+    assert!(
+        fixture
+            .repo
+            .list_nutrient_definitions()
+            .unwrap()
+            .iter()
+            .find(|definition| definition.id == research.id)
+            .unwrap()
+            .archived_at
+            .is_some()
+    );
+    assert!(
+        fixture
+            .repo
+            .get_variant(&saved.id)
+            .unwrap()
+            .nutrition
+            .values
+            .iter()
+            .any(|value| value.nutrient_definition_id == research.id)
+    );
 }
 
 #[test]
@@ -344,7 +438,7 @@ fn settings_drafts_and_database_status_round_trip_json() {
 
     let status = fixture.repo.database_status().unwrap();
     assert_eq!(status.mode, "sqlite");
-    assert_eq!(status.schema_version, 11);
+    assert_eq!(status.schema_version, 12);
     assert!(status.healthy);
 }
 

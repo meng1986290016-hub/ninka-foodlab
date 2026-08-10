@@ -23,7 +23,6 @@ export function evaluateBrowserAgentRecipe(
   if (!payload.productName.trim()) {
     throw new DesktopApiError("invalid_input", "请填写产品名称");
   }
-  positive(payload.plannedInputGrams);
   if (payload.finishedMassGrams !== null) positive(payload.finishedMassGrams);
   if (payload.items.length === 0) {
     throw new DesktopApiError("invalid_input", "配方提案至少需要一项原料");
@@ -48,14 +47,26 @@ export function evaluateBrowserAgentRecipe(
 
   const nutrientTotals = new Map<string, Decimal>();
   const nutrientKnownMass = new Map<string, Decimal>();
+  const nutrientTrackedMass = new Map<string, Decimal>();
   const nutrientMissing = new Map<string, string[]>();
+  const trackedNutrientIds = new Set(
+    definitions.filter((definition) => definition.builtIn).map((definition) => definition.id),
+  );
+  let sweetnessTotal = new Decimal(0);
+  let sweetnessConfigured = 0;
+  let sweetnessKnown = 0;
+  const sweetnessMissing: string[] = [];
 
   for (const item of payload.items) {
     const itemMass = mass(item.amount, item.unit);
     if (item.kind === "material_need") {
       missingCostIds.push(item.id);
-      for (const definition of definitions) {
+      for (const definition of definitions.filter((value) => value.builtIn)) {
         pushMap(nutrientMissing, definition.id, item.id);
+        nutrientTrackedMass.set(
+          definition.id,
+          (nutrientTrackedMass.get(definition.id) ?? new Decimal(0)).add(itemMass),
+        );
       }
       continue;
     }
@@ -78,7 +89,14 @@ export function evaluateBrowserAgentRecipe(
         value.value,
       ]),
     );
-    for (const definition of definitions) {
+    for (const definition of definitions.filter(
+      (value) => value.builtIn || provided.has(value.id),
+    )) {
+      trackedNutrientIds.add(definition.id);
+      nutrientTrackedMass.set(
+        definition.id,
+        (nutrientTrackedMass.get(definition.id) ?? new Decimal(0)).add(itemMass),
+      );
       const source = provided.get(definition.id) ?? null;
       const value = source === null
         ? null
@@ -129,9 +147,36 @@ export function evaluateBrowserAgentRecipe(
         itemId: item.id,
       });
     }
+    if (variant.sweetness) {
+      sweetnessConfigured += 1;
+      const content = variant.sweetness.content === null
+        ? null
+        : new Decimal(variant.sweetness.content);
+      const factor = variant.sweetness.relativeFactor === null
+        ? null
+        : new Decimal(variant.sweetness.relativeFactor);
+      const contentPer100g =
+        content === null || factor === null
+          ? null
+          : variant.sweetness.basis === "w_w_percent"
+            ? content
+            : density === null
+              ? null
+              : content.div(density);
+      if (contentPer100g === null || factor === null) {
+        sweetnessMissing.push(item.id);
+      } else {
+        sweetnessTotal = sweetnessTotal.add(
+          contentPer100g.mul(factor).mul(itemMass).div(100),
+        );
+        sweetnessKnown += 1;
+      }
+    }
   }
 
-  const nutrients = definitions.map((definition) => {
+  const nutrients = definitions
+    .filter((definition) => trackedNutrientIds.has(definition.id))
+    .map((definition) => {
     const total = nutrientTotals.get(definition.id) ?? new Decimal(0);
     const knownMass = nutrientKnownMass.get(definition.id) ?? new Decimal(0);
     const missingItemIds = nutrientMissing.get(definition.id) ?? [];
@@ -149,9 +194,12 @@ export function evaluateBrowserAgentRecipe(
           ? "complete"
           : "partial") as "unknown" | "complete" | "partial",
       completenessRatio: decimal(
-        totalMass.isZero() ? new Decimal(0) : knownMass.div(totalMass),
+        (nutrientTrackedMass.get(definition.id) ?? new Decimal(0)).isZero()
+          ? new Decimal(0)
+          : knownMass.div(nutrientTrackedMass.get(definition.id)!),
       ),
       missingItemIds,
+      category: definition.category,
     };
   });
   for (const itemId of missingCostIds) {
@@ -163,7 +211,12 @@ export function evaluateBrowserAgentRecipe(
       itemId,
     });
   }
-  const ratios = nutrients.map((item) => new Decimal(item.completenessRatio));
+  const builtInIds = new Set(
+    definitions.filter((definition) => definition.builtIn).map((definition) => definition.id),
+  );
+  const ratios = nutrients
+    .filter((item) => builtInIds.has(item.nutrientDefinitionId))
+    .map((item) => new Decimal(item.completenessRatio));
   const completeness = ratios.length === 0
     ? 0
     : new Decimal(ratios.reduce((sum, value) => sum.add(value), new Decimal(0)))
@@ -179,6 +232,24 @@ export function evaluateBrowserAgentRecipe(
       ? null
       : decimal(basis.mul(100).div(totalMass)),
     nutrients,
+    sweetness:
+      sweetnessConfigured === 0
+        ? null
+        : {
+            totalSucroseEquivalentGrams: decimal(sweetnessTotal),
+            per100gSucroseEquivalent: decimal(
+              basis.isZero()
+                ? new Decimal(0)
+                : sweetnessTotal.mul(100).div(basis),
+            ),
+            status:
+              sweetnessMissing.length === 0
+                ? ("complete" as const)
+                : sweetnessKnown === 0
+                  ? ("unknown" as const)
+                  : ("partial" as const),
+            missingItemIds: sweetnessMissing,
+          },
     cost: {
       rawMaterialTotal: decimal(knownCost),
       packagingTotal: "0",

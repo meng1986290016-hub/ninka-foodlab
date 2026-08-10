@@ -7,6 +7,7 @@ import type {
 import type {
   RecipeVersion,
 } from "../../api/recipe-types";
+import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 
 export interface RecipeCurrentPriceResult {
   frozenBatchTotal: string;
@@ -187,10 +188,7 @@ function currentPricePerKg(variant: IngredientVariant) {
 }
 
 function versionOutputMass(version: RecipeVersion) {
-  return safeDecimal(
-    version.snapshot.finishedMassGrams ??
-      version.snapshot.targetBatchGrams,
-  );
+  return safeDecimal(recipeVersionOutputMass(version.snapshot));
 }
 
 function safeDecimal(value: string | null) {

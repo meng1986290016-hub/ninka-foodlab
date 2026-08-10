@@ -3,6 +3,8 @@ use std::{collections::HashMap, path::Path};
 use rust_xlsxwriter::{DataValidation, Workbook};
 use thiserror::Error;
 
+use crate::ingredients::model::{IngredientSweetness, NutrientDefinition};
+
 use super::{
     IngestError,
     extractors::ExtractedTable,
@@ -13,7 +15,7 @@ use super::{
     validation::normalize_review,
 };
 
-pub const TEMPLATE_HEADERS: [&str; 21] = [
+pub const TEMPLATE_HEADERS: [&str; 24] = [
     "通用原料名称",
     "分类",
     "供应商名称",
@@ -30,12 +32,26 @@ pub const TEMPLATE_HEADERS: [&str; 21] = [
     "糖(g)",
     "膳食纤维(g)",
     "钠(mg)",
+    "甜度含量基准",
+    "甜味物质含量",
+    "相对甜度倍数(蔗糖=1)",
     "含有过敏原",
     "可能含有过敏原",
     "数据来源",
     "研发备注",
     "来源文件",
 ];
+
+const CUSTOM_COLUMN_INSERT_INDEX: usize = 16;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CustomColumn {
+    definition_id: Option<String>,
+    category: Option<String>,
+    name: String,
+    unit: String,
+    header: String,
+}
 
 const NUTRIENT_COLUMNS: [NutrientColumn; 8] = [
     NutrientColumn::new("能量(kJ)", "energy", "能量", "kJ"),
@@ -136,6 +152,10 @@ pub fn parse_ingredient_table(
     if !issues.is_empty() {
         return Err(SpreadsheetImportError { issues });
     }
+    let custom_columns = header_row
+        .iter()
+        .filter_map(|header| parse_custom_header(header.trim().trim_start_matches('\u{feff}')))
+        .collect::<Vec<_>>();
 
     let mut drafts = Vec::new();
     for (row_index, row) in table.rows.iter().enumerate().skip(1) {
@@ -217,7 +237,7 @@ pub fn parse_ingredient_table(
             }
         };
 
-        let nutrients = NUTRIENT_COLUMNS
+        let mut nutrients = NUTRIENT_COLUMNS
             .iter()
             .filter(|nutrient| headers.contains_key(nutrient.header))
             .map(|nutrient| ImportedNutrientValue {
@@ -232,8 +252,69 @@ pub fn parse_ingredient_table(
                     human_row,
                     &mut row_issues,
                 ),
+                category: Some("nutrition".into()),
             })
             .collect::<Vec<_>>();
+        for custom in &custom_columns {
+            let raw = cell(row, &headers, &custom.header).trim();
+            if raw.is_empty() {
+                continue;
+            }
+            let value = if raw == "未知" {
+                None
+            } else if is_unsigned_decimal(raw) {
+                Some(raw.to_string())
+            } else {
+                row_issues.push(cell_issue(
+                    ImportIssueCode::InvalidDecimal,
+                    human_row,
+                    &custom.header,
+                    &format!("nutrients.{}.value", custom.name),
+                    "请输入不带单位的非负数字，或填写“未知”",
+                ));
+                None
+            };
+            nutrients.push(ImportedNutrientValue {
+                definition_id: custom.definition_id.clone(),
+                name: custom.name.clone(),
+                unit: custom.unit.clone(),
+                value,
+                category: custom.category.clone(),
+            });
+        }
+
+        let sweetness_basis_raw = cell(row, &headers, "甜度含量基准").trim();
+        let sweetness_content_raw = cell(row, &headers, "甜味物质含量").trim();
+        let sweetness_factor_raw = cell(row, &headers, "相对甜度倍数(蔗糖=1)").trim();
+        let sweetness = if sweetness_basis_raw.is_empty()
+            && sweetness_content_raw.is_empty()
+            && sweetness_factor_raw.is_empty()
+        {
+            None
+        } else {
+            let basis = match sweetness_basis_raw {
+                "w/w" | "w_w_percent" => "w_w_percent",
+                "w/v" | "w_v_per_100ml" => "w_v_per_100ml",
+                value => value,
+            };
+            Some(IngredientSweetness {
+                basis: basis.to_string(),
+                content: decimal_or_unknown_cell(
+                    sweetness_content_raw,
+                    "甜味物质含量",
+                    "sweetness.content",
+                    human_row,
+                    &mut row_issues,
+                ),
+                relative_factor: decimal_or_unknown_cell(
+                    sweetness_factor_raw,
+                    "相对甜度倍数(蔗糖=1)",
+                    "sweetness.relativeFactor",
+                    human_row,
+                    &mut row_issues,
+                ),
+            })
+        };
         let contains_allergens = split_allergens(cell(row, &headers, "含有过敏原"));
         let may_contain_allergens = split_allergens(cell(row, &headers, "可能含有过敏原"));
         let normalized_contains = contains_allergens
@@ -270,6 +351,7 @@ pub fn parse_ingredient_table(
             density_g_per_ml,
             nutrition_basis,
             nutrients,
+            sweetness,
             contains_allergens,
             may_contain_allergens,
             source: cell(row, &headers, "数据来源").trim().to_string(),
@@ -287,36 +369,43 @@ pub fn parse_ingredient_table(
     }
 }
 
-pub fn write_template(path: &Path, format: IngredientExchangeFormat) -> Result<(), IngestError> {
-    let rows = vec![
-        TEMPLATE_HEADERS.iter().map(ToString::to_string).collect(),
-        vec![
-            "脱脂乳粉",
-            "乳制品",
-            "供应商A",
-            "MD-300",
-            "31.50",
-            "kg",
-            "0.52",
-            "每100g",
-            "1510",
-            "34.0",
-            "0.8",
-            "0.5",
-            "52.0",
-            "52.0",
-            "",
-            "420",
-            "乳及乳制品",
-            "",
-            "供应商规格书",
-            "示例：每个供应商填写一行",
-            "",
-        ]
-        .into_iter()
+pub fn write_template(
+    path: &Path,
+    format: IngredientExchangeFormat,
+    definitions: &[NutrientDefinition],
+) -> Result<(), IngestError> {
+    let custom_columns = definitions
+        .iter()
+        .filter(|definition| !definition.built_in && definition.archived_at.is_none())
+        .map(custom_column_from_definition)
+        .collect::<Vec<_>>();
+    let headers = headers_with_custom(&custom_columns);
+    let sample = headers
+        .iter()
+        .map(|header| match header.as_str() {
+            "通用原料名称" => "脱脂乳粉",
+            "分类" => "乳制品",
+            "供应商名称" => "供应商A",
+            "型号/规格" => "MD-300",
+            "当前含税价" => "31.50",
+            "价格单位" => "kg",
+            "密度(g/mL)" => "0.52",
+            "营养基准" => "每100g",
+            "能量(kJ)" => "1510",
+            "蛋白质(g)" => "34.0",
+            "脂肪(g)" => "0.8",
+            "饱和脂肪(g)" => "0.5",
+            "碳水化合物(g)" => "52.0",
+            "糖(g)" => "52.0",
+            "钠(mg)" => "420",
+            "含有过敏原" => "乳及乳制品",
+            "数据来源" => "供应商规格书",
+            "研发备注" => "示例：每个供应商填写一行",
+            _ => "",
+        })
         .map(str::to_string)
-        .collect(),
-    ];
+        .collect();
+    let rows = vec![headers, sample];
     write_rows(path, format, &rows, true)
 }
 
@@ -325,12 +414,20 @@ pub fn write_library_export(
     format: IngredientExchangeFormat,
     reviews: &[ReviewedIngredientImportDraft],
 ) -> Result<(), IngestError> {
-    let mut rows = vec![TEMPLATE_HEADERS.iter().map(ToString::to_string).collect()];
-    rows.extend(reviews.iter().map(review_to_row));
+    let custom_columns = custom_columns_from_reviews(reviews);
+    let mut rows = vec![headers_with_custom(&custom_columns)];
+    rows.extend(
+        reviews
+            .iter()
+            .map(|review| review_to_row(review, &custom_columns)),
+    );
     write_rows(path, format, &rows, false)
 }
 
-fn review_to_row(review: &ReviewedIngredientImportDraft) -> Vec<String> {
+fn review_to_row(
+    review: &ReviewedIngredientImportDraft,
+    custom_columns: &[CustomColumn],
+) -> Vec<String> {
     let nutrient = |definition_id: &str| {
         review
             .nutrients
@@ -339,7 +436,7 @@ fn review_to_row(review: &ReviewedIngredientImportDraft) -> Vec<String> {
             .and_then(|value| value.value.clone())
             .unwrap_or_default()
     };
-    vec![
+    let mut row = vec![
         review.material_name.clone(),
         review.category_name.clone().unwrap_or_default(),
         review.supplier_name.clone(),
@@ -360,12 +457,42 @@ fn review_to_row(review: &ReviewedIngredientImportDraft) -> Vec<String> {
         nutrient("sugars"),
         nutrient("dietary_fiber"),
         nutrient("sodium"),
+    ];
+    row.extend(custom_columns.iter().map(|column| {
+        review
+            .nutrients
+            .iter()
+            .find(|value| custom_value_matches(value, column))
+            .map(|value| value.value.clone().unwrap_or_else(|| "未知".into()))
+            .unwrap_or_default()
+    }));
+    row.extend([
+        review
+            .sweetness
+            .as_ref()
+            .map(|sweetness| match sweetness.basis.as_str() {
+                "w_w_percent" => "w/w".into(),
+                "w_v_per_100ml" => "w/v".into(),
+                value => value.into(),
+            })
+            .unwrap_or_default(),
+        review
+            .sweetness
+            .as_ref()
+            .and_then(|sweetness| sweetness.content.clone())
+            .unwrap_or_default(),
+        review
+            .sweetness
+            .as_ref()
+            .and_then(|sweetness| sweetness.relative_factor.clone())
+            .unwrap_or_default(),
         review.contains_allergens.join("、"),
         review.may_contain_allergens.join("、"),
         review.source.clone(),
         review.research_notes.clone(),
         String::new(),
-    ]
+    ]);
+    row
 }
 
 fn write_rows(
@@ -417,6 +544,23 @@ fn write_xlsx(path: &Path, rows: &[Vec<String>], add_validations: bool) -> Resul
         worksheet
             .add_data_validation(1, 7, 10_000, 7, &bases)
             .map_err(|_| export_error())?;
+        if let Some(sweetness_column) = rows
+            .first()
+            .and_then(|headers| headers.iter().position(|header| header == "甜度含量基准"))
+        {
+            let sweetness_bases = DataValidation::new()
+                .allow_list_strings(&["w/w", "w/v"])
+                .map_err(|_| export_error())?;
+            worksheet
+                .add_data_validation(
+                    1,
+                    sweetness_column as u16,
+                    10_000,
+                    sweetness_column as u16,
+                    &sweetness_bases,
+                )
+                .map_err(|_| export_error())?;
+        }
     }
     workbook.save(path).map_err(|_| export_error())
 }
@@ -465,6 +609,141 @@ fn decimal_cell(
         None
     } else {
         Some(value.to_string())
+    }
+}
+
+fn decimal_or_unknown_cell(
+    value: &str,
+    column: &str,
+    field: &str,
+    human_row: u64,
+    issues: &mut Vec<ImportIssue>,
+) -> Option<String> {
+    if value.is_empty() || value == "未知" {
+        return None;
+    }
+    if !is_unsigned_decimal(value) {
+        issues.push(cell_issue(
+            ImportIssueCode::InvalidDecimal,
+            human_row,
+            column,
+            field,
+            "请输入不带单位的非负数字，或填写“未知”",
+        ));
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn parse_custom_header(header: &str) -> Option<CustomColumn> {
+    let (category, remainder) = if let Some(value) = header.strip_prefix("自定义含量[营养相关]:")
+    {
+        (Some("nutrition".to_string()), value)
+    } else if let Some(value) = header.strip_prefix("自定义含量[研发指标]:") {
+        (Some("research".to_string()), value)
+    } else if let Some(value) = header.strip_prefix("自定义含量:") {
+        (None, value)
+    } else {
+        return None;
+    };
+    let unit_start = remainder.rfind('(')?;
+    let name = remainder[..unit_start].trim();
+    let unit = remainder[unit_start + 1..].strip_suffix(')')?.trim();
+    if name.is_empty() || unit.is_empty() {
+        return None;
+    }
+    Some(CustomColumn {
+        definition_id: None,
+        category,
+        name: name.into(),
+        unit: unit.into(),
+        header: header.into(),
+    })
+}
+
+fn custom_column_from_definition(definition: &NutrientDefinition) -> CustomColumn {
+    let category = Some(definition.category.clone());
+    CustomColumn {
+        definition_id: Some(definition.id.clone()),
+        header: custom_header(&definition.category, &definition.name, &definition.unit),
+        category,
+        name: definition.name.clone(),
+        unit: definition.unit.clone(),
+    }
+}
+
+fn custom_columns_from_reviews(reviews: &[ReviewedIngredientImportDraft]) -> Vec<CustomColumn> {
+    let mut columns = Vec::new();
+    for nutrient in reviews
+        .iter()
+        .flat_map(|review| review.nutrients.iter())
+        .filter(|nutrient| {
+            !NUTRIENT_COLUMNS
+                .iter()
+                .any(|built_in| nutrient.definition_id.as_deref() == Some(built_in.definition_id))
+        })
+    {
+        let category = nutrient.category.as_deref().unwrap_or("nutrition");
+        let candidate = CustomColumn {
+            definition_id: nutrient.definition_id.clone(),
+            category: Some(category.into()),
+            name: nutrient.name.clone(),
+            unit: nutrient.unit.clone(),
+            header: custom_header(category, &nutrient.name, &nutrient.unit),
+        };
+        if !columns
+            .iter()
+            .any(|existing| custom_columns_match(existing, &candidate))
+        {
+            columns.push(candidate);
+        }
+    }
+    columns
+}
+
+fn custom_header(category: &str, name: &str, unit: &str) -> String {
+    let category_label = if category == "research" {
+        "研发指标"
+    } else {
+        "营养相关"
+    };
+    format!("自定义含量[{category_label}]:{name}({unit})")
+}
+
+fn headers_with_custom(custom_columns: &[CustomColumn]) -> Vec<String> {
+    let mut headers = TEMPLATE_HEADERS[..CUSTOM_COLUMN_INSERT_INDEX]
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    headers.extend(custom_columns.iter().map(|column| column.header.clone()));
+    headers.extend(
+        TEMPLATE_HEADERS[CUSTOM_COLUMN_INSERT_INDEX..]
+            .iter()
+            .map(ToString::to_string),
+    );
+    headers
+}
+
+fn custom_value_matches(value: &ImportedNutrientValue, column: &CustomColumn) -> bool {
+    match (&value.definition_id, &column.definition_id) {
+        (Some(left), Some(right)) => left == right,
+        _ => {
+            value.name.eq_ignore_ascii_case(&column.name)
+                && value.unit == column.unit
+                && value.category == column.category
+        }
+    }
+}
+
+fn custom_columns_match(left: &CustomColumn, right: &CustomColumn) -> bool {
+    match (&left.definition_id, &right.definition_id) {
+        (Some(left_id), Some(right_id)) => left_id == right_id,
+        _ => {
+            left.name.eq_ignore_ascii_case(&right.name)
+                && left.unit == right.unit
+                && left.category == right.category
+        }
     }
 }
 

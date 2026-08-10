@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -144,20 +144,88 @@ describe("VariantEditor", () => {
       "per_100ml",
     );
     expect(
-      screen.getByText("可以保存原始营养数据，但无法换算为质量基准。"),
+      screen.getByText("可以保存原始数据，但无法换算为质量基准。"),
     ).not.toBeNull();
 
     await user.click(
-      screen.getByRole("button", { name: "添加自定义成分" }),
+      screen.getByRole("button", { name: "新建全局模板" }),
     );
-    await user.type(screen.getByLabelText("自定义成分名称"), "乳糖");
-    await user.type(screen.getByLabelText("自定义成分单位"), "g");
-    await user.click(screen.getByRole("button", { name: "创建成分" }));
+    await user.type(screen.getByLabelText("含量项名称"), "乳糖");
+    await user.type(screen.getByLabelText("单位"), "g");
+    await user.click(screen.getByRole("button", { name: "创建并选择" }));
 
     expect(await screen.findByLabelText("乳糖（g）")).not.toBeNull();
     expect(await api.listNutrientDefinitions()).toContainEqual(
       expect.objectContaining({ name: "乳糖", unit: "g" }),
     );
+  });
+
+  it("does not auto-attach a global template and allows explicit reuse", async () => {
+    const api = createApi();
+    await api.createNutrientDefinition("乳糖", "g", "nutrition");
+    const group = await getMilkGroup(api);
+    const user = userEvent.setup();
+
+    render(
+      <VariantEditor
+        api={api}
+        group={group}
+        onCancel={() => undefined}
+        onSaved={() => undefined}
+        variant={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "营养成分" }));
+    expect(screen.queryByLabelText("乳糖（g）")).toBeNull();
+    const panel = screen.getByRole("tabpanel");
+    await user.selectOptions(
+      within(panel).getByLabelText("选择复用"),
+      within(panel).getByRole("option", { name: "乳糖（g）" }),
+    );
+    await user.click(
+      within(panel).getByRole("button", { name: "添加到当前原料" }),
+    );
+    expect(screen.getByLabelText("乳糖（g）")).toBeTruthy();
+  });
+
+  it("allows w/v sweetness without density and confirms removal after data entry", async () => {
+    const api = createApi();
+    const group = await getMilkGroup(api);
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm");
+
+    render(
+      <VariantEditor
+        api={api}
+        group={group}
+        onCancel={() => undefined}
+        onSaved={() => undefined}
+        variant={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "研发指标" }));
+    const panel = screen.getByRole("tabpanel");
+    const enabled = within(panel).getByRole("checkbox");
+    await user.click(enabled);
+    await user.selectOptions(
+      within(panel).getByLabelText("甜味物质含量基准"),
+      "w_v_per_100ml",
+    );
+    await user.type(within(panel).getByLabelText("甜味物质含量"), "10");
+    await user.type(within(panel).getByLabelText("相对甜度倍数"), "1");
+    expect(
+      within(panel).getByText(/缺少密度.*配方暂时无法换算/),
+    ).toBeTruthy();
+
+    confirm.mockReturnValueOnce(false);
+    await user.click(enabled);
+    expect((enabled as HTMLInputElement).checked).toBe(true);
+    confirm.mockReturnValueOnce(true);
+    await user.click(enabled);
+    expect((enabled as HTMLInputElement).checked).toBe(false);
+    confirm.mockRestore();
   });
 
   it("edits allergens and shows linked source attachments without local paths", async () => {

@@ -12,6 +12,7 @@ import { AllergenEditor } from "../imports/AllergenEditor";
 import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { IngredientDraftNotice } from "./IngredientDraftNotice";
 import { NutritionEditor } from "./NutritionEditor";
+import { SweetnessEditor } from "./SweetnessEditor";
 import { useIngredientDraft } from "./useIngredientDraft";
 import { VariantBasicFields } from "./VariantBasicFields";
 
@@ -36,6 +37,7 @@ function emptyInput(groupId: string): IngredientVariantInput {
     source: "",
     researchNotes: "",
     nutrition: { basis: "per_100g", values: [] },
+    sweetness: null,
     allergens: { contains: [], mayContain: [] },
   };
 }
@@ -63,6 +65,7 @@ function toInput(
       basis: variant.nutrition.basis,
       values: variant.nutrition.values.map((value) => ({ ...value })),
     },
+    sweetness: variant.sweetness ? { ...variant.sweetness } : null,
     allergens: {
       contains: [...variant.allergens.contains],
       mayContain: [...variant.allergens.mayContain],
@@ -80,14 +83,23 @@ function withDefinitions(
       value.value,
     ]),
   );
+  const builtInValues = definitions
+    .filter((definition) => definition.builtIn)
+    .map((definition) => ({
+      nutrientDefinitionId: definition.id,
+      value: values.get(definition.id) ?? null,
+    }));
+  const selectedCustomValues = input.nutrition.values.filter((value) =>
+    definitions.some(
+      (definition) =>
+        definition.id === value.nutrientDefinitionId && !definition.builtIn,
+    ),
+  );
   return {
     ...input,
     nutrition: {
       ...input.nutrition,
-      values: definitions.map((definition) => ({
-        nutrientDefinitionId: definition.id,
-        value: values.get(definition.id) ?? null,
-      })),
+      values: [...builtInValues, ...selectedCustomValues],
     },
   };
 }
@@ -100,7 +112,7 @@ export function VariantEditor({
   variant,
   initialResearchNotes = "",
 }: VariantEditorProps) {
-  const [tab, setTab] = useState<"basic" | "nutrition">("basic");
+  const [tab, setTab] = useState<"basic" | "nutrition" | "research">("basic");
   const [input, setInput] = useState<IngredientVariantInput>(() =>
     toInput(group, variant, initialResearchNotes),
   );
@@ -142,17 +154,21 @@ export function VariantEditor({
 
   function addDefinition(definition: NutrientDefinition) {
     setDefinitions((current) => [...current, definition]);
-    setInput((current) => ({
-      ...current,
-      nutrition: {
-        ...current.nutrition,
-        values: [
-          ...current.nutrition.values,
-          { nutrientDefinitionId: definition.id, value: null },
-        ],
-      },
-    }));
     setDirty(true);
+  }
+
+  function updateDefinition(definition: NutrientDefinition) {
+    setDefinitions((current) =>
+      current.map((item) => (item.id === definition.id ? definition : item)),
+    );
+  }
+
+  function markDefinitionArchived(definitionId: string, archivedAt: string) {
+    setDefinitions((current) =>
+      current.map((item) =>
+        item.id === definitionId ? { ...item, archivedAt } : item,
+      ),
+    );
   }
 
   function changeInput(next: IngredientVariantInput) {
@@ -245,6 +261,16 @@ export function VariantEditor({
           >
             营养成分
           </button>
+          <button
+            aria-controls="variant-research-panel"
+            aria-selected={tab === "research"}
+            className={tab === "research" ? "is-active" : undefined}
+            onClick={() => setTab("research")}
+            role="tab"
+            type="button"
+          >
+            研发指标
+          </button>
         </div>
 
         <div
@@ -276,6 +302,8 @@ export function VariantEditor({
               changeInput({ ...input, nutrition })
             }
             onDefinitionCreated={addDefinition}
+            onDefinitionUpdated={updateDefinition}
+            onDefinitionArchived={markDefinitionArchived}
           />
           <AllergenEditor
             onChange={(allergens) =>
@@ -284,6 +312,31 @@ export function VariantEditor({
             value={input.allergens ?? { contains: [], mayContain: [] }}
           />
           <SourceAttachmentList attachments={variant?.sourceAttachments ?? []} />
+        </div>
+
+        <div
+          className="variant-panel"
+          hidden={tab !== "research"}
+          id="variant-research-panel"
+          role="tabpanel"
+        >
+          <NutritionEditor
+            api={api}
+            category="research"
+            definitions={definitions}
+            densityGPerMl={input.densityGPerMl}
+            nutrition={input.nutrition}
+            onChange={(nutrition) => changeInput({ ...input, nutrition })}
+            onDefinitionCreated={addDefinition}
+            onDefinitionUpdated={updateDefinition}
+            onDefinitionArchived={markDefinitionArchived}
+            showBasis={false}
+          />
+          <SweetnessEditor
+            densityGPerMl={input.densityGPerMl}
+            onChange={(sweetness) => changeInput({ ...input, sweetness })}
+            sweetness={input.sweetness ?? null}
+          />
         </div>
 
         {dirty ? (

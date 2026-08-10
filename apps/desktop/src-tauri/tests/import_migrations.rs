@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_eleven() {
+fn fresh_database_applies_latest_schema_version_twelve() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 11);
+    assert_eq!(schema_version(&connection), 12);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -42,6 +42,7 @@ fn fresh_database_applies_latest_schema_version_eleven() {
         "import_draft_source_links",
         "ingredient_variant_attachments",
         "ingredient_variant_allergens",
+        "ingredient_variant_sweetness",
         "agent_provider_configs",
         "agent_conversations",
         "agent_runs",
@@ -72,6 +73,14 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
         .unwrap();
     connection
         .execute(
+            "INSERT INTO nutrient_definitions
+             (id, code, name, unit, built_in, sort_order)
+             VALUES ('custom-lactose', 'custom:lactose', '乳糖', 'g', 0, 9)",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
             "INSERT INTO suppliers (id, name, created_at, updated_at)
              VALUES ('supplier-1', '供应商 A', ?1, ?1)",
             ["2026-07-18T00:00:00Z"],
@@ -94,10 +103,18 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
             params!["2026-07-18T00:00:00Z"],
         )
         .unwrap();
+    connection
+        .execute(
+            "INSERT INTO ingredient_nutrient_values
+             (ingredient_variant_id, nutrient_definition_id, value)
+             VALUES ('variant-1', 'custom-lactose', NULL)",
+            [],
+        )
+        .unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 11);
+    assert_eq!(schema_version(&connection), 12);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -113,6 +130,25 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
     assert!(table_exists(&connection, "agent_provider_configs"));
     assert!(table_exists(&connection, "recipe_versions"));
     assert!(table_exists(&connection, "nutrition_label_versions"));
+    assert!(table_exists(&connection, "ingredient_variant_sweetness"));
+    let migrated_category: String = connection
+        .query_row(
+            "SELECT category FROM nutrient_definitions WHERE id = 'custom-lactose'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let association_is_null: bool = connection
+        .query_row(
+            "SELECT value IS NULL FROM ingredient_nutrient_values
+             WHERE ingredient_variant_id = 'variant-1'
+               AND nutrient_definition_id = 'custom-lactose'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(migrated_category, "nutrition");
+    assert!(association_is_null);
     let confidence_column_count: i64 = connection
         .query_row(
             "SELECT COUNT(*) FROM pragma_table_info('import_draft_source_links') WHERE name = 'confidence'",

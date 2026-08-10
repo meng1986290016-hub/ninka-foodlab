@@ -31,11 +31,12 @@ use commands::ingest::{
     update_ingredient_import_draft,
 };
 use commands::ingredients::{
-    archive_category, archive_ingredient_variant, archive_material_group, archive_supplier,
-    clear_draft, compare_ingredient_variants, copy_ingredient_variant, create_category,
-    create_material_group, create_nutrient_definition, create_supplier, database_status, get_draft,
-    get_setting, list_categories, list_material_groups, list_nutrient_definitions, list_suppliers,
-    rename_category, save_draft, save_ingredient_variant, set_setting, update_material_group,
+    archive_category, archive_ingredient_variant, archive_material_group,
+    archive_nutrient_definition, archive_supplier, clear_draft, compare_ingredient_variants,
+    copy_ingredient_variant, create_category, create_material_group, create_nutrient_definition,
+    create_supplier, database_status, get_draft, get_setting, list_categories,
+    list_material_groups, list_nutrient_definitions, list_suppliers, rename_category, save_draft,
+    save_ingredient_variant, set_setting, update_material_group, update_nutrient_definition,
     update_supplier,
 };
 use commands::labels::{
@@ -93,6 +94,8 @@ pub fn run() {
             archive_ingredient_variant,
             list_nutrient_definitions,
             create_nutrient_definition,
+            update_nutrient_definition,
+            archive_nutrient_definition,
             compare_ingredient_variants,
             get_setting,
             set_setting,

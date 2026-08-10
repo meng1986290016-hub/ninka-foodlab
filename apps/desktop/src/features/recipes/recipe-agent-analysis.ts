@@ -115,7 +115,6 @@ interface SubstitutionRequest extends AnalysisRequest {
 
 export function recipeDraftFingerprint(draft: RecipeDraft): string {
   return JSON.stringify({
-    targetBatchGrams: draft.targetBatchGrams,
     finishedMassGrams: draft.finishedMassGrams,
     servingMassGrams: draft.servingMassGrams,
     packageCount: draft.packageCount,
@@ -192,25 +191,6 @@ export function diagnoseRecipeDraft(
   }
 
   const calculation = result.value.calculation;
-  const inputMass = decimal(calculation.inputMassGrams);
-  const targetMass = decimal(request.draft.targetBatchGrams);
-  if (inputMass !== null && targetMass !== null && targetMass.gt(0)) {
-    const differencePercent = inputMass
-      .sub(targetMass)
-      .abs()
-      .div(targetMass)
-      .mul(100);
-    if (differencePercent.gte(0.5)) {
-      findings.push({
-        code: "batch_mismatch",
-        severity: "warning",
-        title: "当前投料合计与计划投料总量不一致",
-        detail: `当前投料 ${formatNumber(inputMass)} g，计划 ${formatNumber(targetMass)} g，相差 ${formatNumber(differencePercent)}%。计划值不会自动改动下方原料。`,
-      });
-      recommendations.push("确认计划投料总量是否只是研发基准；如需一致，请直接调整各原料用量。");
-    }
-  }
-
   if (request.draft.finishedMassGrams === null) {
     findings.push({
       code: "finished_mass_missing",

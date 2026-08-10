@@ -666,7 +666,7 @@ export function RecipeLibrary({
                   <th>方案状态</th>
                   <th>类型</th>
                   <th>版本状态</th>
-                  <th>计划投料总量</th>
+                  <th>投料合计</th>
                   <th>整批成本</th>
                   <th>{tab === "archived" ? "归档时间" : "最近更新"}</th>
                   <th>引用</th>
@@ -737,7 +737,7 @@ export function RecipeLibrary({
                       <td>
                         {latest
                           ? `${formatNumber(
-                              latest.snapshot.targetBatchGrams,
+                              latest.snapshot.calculation.inputMassGrams,
                             )} g`
                           : "—"}
                       </td>
@@ -1486,6 +1486,20 @@ function VersionSnapshot({
   currentPrice: RecipeCurrentPriceResult | null;
 }) {
   const { snapshot } = version;
+  const nutritionItems = snapshot.calculation.nutrients.filter(
+    (nutrient) => (nutrient.category ?? "nutrition") === "nutrition",
+  );
+  const researchItems = snapshot.calculation.nutrients.filter(
+    (nutrient) => nutrient.category === "research",
+  );
+  const itemNames = Object.fromEntries(
+    snapshot.items.map((item) => [
+      item.id,
+      item.kind === "ingredient"
+        ? item.ingredient.materialName
+        : item.recipeVersion.recipeName,
+    ]),
+  );
   return (
     <>
       <section className="recipe-library-inspector__section">
@@ -1495,8 +1509,8 @@ function VersionSnapshot({
         </div>
         <dl className="recipe-library__overview">
           <div>
-            <dt>计划投料总量</dt>
-            <dd>{formatNumber(snapshot.targetBatchGrams)} g</dd>
+            <dt>投料合计</dt>
+            <dd>{formatNumber(snapshot.calculation.inputMassGrams)} g</dd>
           </div>
           <div>
             <dt>出成重量</dt>
@@ -1550,11 +1564,13 @@ function VersionSnapshot({
           <span>每 100 g</span>
         </div>
         <div className="recipe-library__nutrition">
-          {snapshot.calculation.nutrients.map((nutrient) => (
+          {nutritionItems.map((nutrient) => (
             <div key={nutrient.nutrientDefinitionId}>
               <span>{nutrient.name}</span>
               <strong>
-                {formatNumber(nutrient.per100gKnownAmount)} {nutrient.unit}
+                {nutrient.status === "unknown"
+                  ? "—"
+                  : `${formatNumber(nutrient.per100gKnownAmount)} ${nutrient.unit}`}
               </strong>
               <small>
                 {nutrient.status === "complete"
@@ -1565,11 +1581,57 @@ function VersionSnapshot({
               </small>
             </div>
           ))}
-          {snapshot.calculation.nutrients.length === 0 ? (
+          {nutritionItems.length === 0 ? (
             <p className="recipe-library__muted">暂无营养估算</p>
           ) : null}
         </div>
       </section>
+
+      {researchItems.length > 0 || snapshot.calculation.sweetness ? (
+        <section className="recipe-library-inspector__section">
+          <div className="recipe-library-inspector__section-title">
+            <h3>研发指标</h3>
+            <span>理论研发估算</span>
+          </div>
+          <div className="recipe-library__nutrition">
+            {researchItems.map((nutrient) => (
+              <div key={nutrient.nutrientDefinitionId}>
+                <span>{nutrient.name}</span>
+                <strong>
+                  {nutrient.status === "unknown"
+                    ? "—"
+                    : `${formatNumber(nutrient.per100gKnownAmount)} ${nutrient.unit}/100g`}
+                </strong>
+                <small>
+                  {nutrient.status === "complete"
+                    ? "完整"
+                    : nutrient.status === "partial"
+                      ? "部分数据"
+                      : "待补充"}
+                </small>
+              </div>
+            ))}
+            {snapshot.calculation.sweetness ? (
+              <div>
+                <span>理论甜度</span>
+                <strong>
+                  {snapshot.calculation.sweetness.status === "unknown"
+                    ? "—"
+                    : `${snapshot.calculation.sweetness.status === "partial" ? "≈" : ""}${formatNumber(snapshot.calculation.sweetness.per100gSucroseEquivalent)} g/100g`}
+                </strong>
+                <small>
+                  蔗糖当量
+                  {snapshot.calculation.sweetness.missingItemIds.length > 0
+                    ? ` · 待补充：${snapshot.calculation.sweetness.missingItemIds
+                        .map((id) => itemNames[id] ?? id)
+                        .join("、")}`
+                    : ""}
+                </small>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <section className="recipe-library-inspector__section">
         <div className="recipe-library-inspector__section-title">

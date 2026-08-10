@@ -230,6 +230,7 @@ fn recipe_diagnosis_and_supplier_comparison_are_deterministic_read_only_tools() 
                         value: Some(protein.into()),
                     }],
                 },
+                sweetness: None,
                 allergens: IngredientVariantAllergens {
                     contains: vec!["乳".into()],
                     may_contain: Vec::new(),

@@ -52,12 +52,9 @@ function renderTable(issues: RecipeCalculationIssue[]) {
       issues={issues}
       items={[materialNeedItem]}
       missingData={{}}
-      targetBatchGrams="1"
       versionUpgrades={{}}
       onAdd={vi.fn()}
       onAmountChange={vi.fn()}
-      onAutoFillChange={vi.fn()}
-      onLockChange={vi.fn()}
       onMove={vi.fn()}
       onRemove={vi.fn()}
       onReplaceMaterialNeed={vi.fn()}
@@ -68,6 +65,14 @@ function renderTable(issues: RecipeCalculationIssue[]) {
 }
 
 describe("RecipeItemTable issue placement", () => {
+  it("calculates percentages from the actual input total", () => {
+    renderTable([]);
+
+    expect(screen.getByText("100.00%")).not.toBeNull();
+    expect(screen.queryByText("锁定")).toBeNull();
+    expect(screen.queryByText("补足")).toBeNull();
+  });
+
   it("keeps supplier-version warnings inside the row data cell", () => {
     renderTable([issue({})]);
 

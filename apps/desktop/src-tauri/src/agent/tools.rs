@@ -665,7 +665,6 @@ impl AgentToolRegistry {
             "recipe": source["recipe"].clone(),
             "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
             "currentFacts": {
-                "plannedInputGrams": payload.get("targetBatchGrams").cloned().unwrap_or(Value::Null),
                 "currentInputGrams": calculation.get("inputMassGrams").cloned().unwrap_or(Value::Null),
                 "finishedMassGrams": payload.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
                 "yieldPercent": calculation.get("yieldPercent").cloned().unwrap_or(Value::Null),
@@ -1279,7 +1278,6 @@ fn recipe_proposal_schema() -> Value {
             "productName": { "type": "string" },
             "recipeKind": { "type": "string", "enum": ["formula", "semi_finished"] },
             "mode": { "type": "string", "enum": ["goal_design", "label_reverse"] },
-            "plannedInputGrams": { "type": "string" },
             "finishedMassGrams": { "type": ["string", "null"] },
             "yieldAssumption": { "type": "string", "enum": ["provided", "assumed_100_percent"] },
             "items": {
@@ -1343,7 +1341,7 @@ fn recipe_proposal_schema() -> Value {
             "warnings": { "type": "array", "items": { "type": "string" } },
             "markdownNotes": { "type": "string" }
         },
-        "required": ["productName", "recipeKind", "mode", "plannedInputGrams", "finishedMassGrams", "yieldAssumption", "items", "requirements", "assumptions", "warnings", "markdownNotes"],
+        "required": ["productName", "recipeKind", "mode", "finishedMassGrams", "yieldAssumption", "items", "requirements", "assumptions", "warnings", "markdownNotes"],
         "additionalProperties": false
     })
 }

@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { toGrams } from "@food-rd/core";
 import { useState } from "react";
 
 import type {
@@ -13,12 +14,9 @@ interface RecipeItemTableProps {
   issues: RecipeCalculationIssue[];
   items: RecipeDraftItem[];
   missingData: Record<string, string[]>;
-  targetBatchGrams: string;
   versionUpgrades: Record<string, RecipeVersion>;
   onAdd(): void;
   onAmountChange(id: string, amount: string): void;
-  onAutoFillChange(id: string): void;
-  onLockChange(id: string): void;
   onMove(id: string, direction: -1 | 1): void;
   onRemove(id: string): void;
   onReplaceMaterialNeed(id: string): void;
@@ -32,12 +30,9 @@ export function RecipeItemTable({
   issues,
   items,
   missingData,
-  targetBatchGrams,
   versionUpgrades,
   onAdd,
   onAmountChange,
-  onAutoFillChange,
-  onLockChange,
   onMove,
   onRemove,
   onReplaceMaterialNeed,
@@ -45,6 +40,7 @@ export function RecipeItemTable({
   onUpgradeVersion,
 }: RecipeItemTableProps) {
   const [focusedAmountId, setFocusedAmountId] = useState<string | null>(null);
+  const totalMassGrams = formulaMassGrams(items);
 
   return (
     <div className="recipe-table-frame">
@@ -53,12 +49,10 @@ export function RecipeItemTable({
           <thead>
             <tr>
               <th aria-label="排序" />
-              <th>锁定</th>
               <th>原料 / 供应商与规格</th>
               <th>用量</th>
               <th>单位</th>
               <th>占比</th>
-              <th>补足</th>
               <th>数据</th>
               <th aria-label="操作" />
             </tr>
@@ -66,7 +60,7 @@ export function RecipeItemTable({
           <tbody>
             {items.length === 0 ? (
               <tr className="recipe-empty-row">
-                <td colSpan={9}>
+                <td colSpan={7}>
                   <strong>还没有配方原料</strong>
                   <span>添加具体供应商原料版本或半成品版本开始设计。</span>
                 </td>
@@ -75,7 +69,7 @@ export function RecipeItemTable({
               items.map((item, index) => {
                 const label = itemLabel(item);
                 const displayedAmount =
-                  focusedAmountId === item.id && !item.autoFill
+                  focusedAmountId === item.id
                     ? item.amount
                     : formatDisplayedAmount(item.amount);
                 const itemIssues = issues.filter(
@@ -115,28 +109,6 @@ export function RecipeItemTable({
                           <Icon name="arrow-down" size={14} />
                         </button>
                       </span>
-                    </td>
-                    <td className="recipe-lock-cell">
-                      <button
-                        aria-label={
-                          item.locked
-                            ? `解锁${label}`
-                            : `锁定${label}`
-                        }
-                        aria-pressed={item.locked}
-                        className={
-                          item.locked
-                            ? "recipe-icon-button is-active"
-                            : "recipe-icon-button"
-                        }
-                        onClick={() => onLockChange(item.id)}
-                        type="button"
-                      >
-                        <Icon
-                          name={item.locked ? "lock" : "unlock"}
-                          size={18}
-                        />
-                      </button>
                     </td>
                     <td className="recipe-identity-cell">
                       <strong>{label}</strong>
@@ -181,13 +153,10 @@ export function RecipeItemTable({
                         }
                         onBlur={() => setFocusedAmountId(null)}
                         onFocus={() => setFocusedAmountId(item.id)}
-                        readOnly={item.autoFill}
                         title={
-                          item.autoFill
-                            ? `取消补足后可手动编辑。精确值：${item.amount}`
-                            : displayedAmount !== item.amount
-                              ? `精确值：${item.amount}`
-                              : undefined
+                          displayedAmount !== item.amount
+                            ? `精确值：${item.amount}`
+                            : undefined
                         }
                         value={displayedAmount}
                       />
@@ -220,27 +189,7 @@ export function RecipeItemTable({
                       </select>
                     </td>
                     <td className="recipe-percent-cell">
-                      {percentage(item, targetBatchGrams)}
-                    </td>
-                    <td className="recipe-autofill-cell">
-                      <button
-                        aria-label={
-                          item.autoFill
-                            ? `取消${label}补足`
-                            : `设${label}为补足`
-                        }
-                        aria-pressed={item.autoFill}
-                        className={
-                          item.autoFill
-                            ? "recipe-autofill is-active"
-                            : "recipe-autofill"
-                        }
-                        disabled={item.locked}
-                        onClick={() => onAutoFillChange(item.id)}
-                        type="button"
-                      >
-                        {item.autoFill ? "补足" : "—"}
-                      </button>
+                      {percentage(item, totalMassGrams)}
                     </td>
                     <td className="recipe-data-column">
                       <span className="recipe-data-cell">
@@ -326,19 +275,44 @@ function itemDetail(item: RecipeDraftItem) {
 
 function percentage(
   item: RecipeDraftItem,
-  targetBatchGrams: string,
+  totalMassGrams: Decimal | null,
 ) {
-  if (item.unit !== "g") return "—";
+  if (totalMassGrams === null || totalMassGrams.lte(0)) return "—";
+  const density =
+    item.kind === "ingredient"
+      ? item.ingredientVariant.densityGPerMl ?? undefined
+      : undefined;
+  const converted = toGrams(
+    { value: item.amount, unit: item.unit },
+    density,
+  );
+  if (!converted.ok) return "—";
   try {
-    const total = new Decimal(targetBatchGrams);
-    const amount = new Decimal(item.amount);
-    if (!total.isFinite() || total.lte(0) || !amount.isFinite()) {
+    const amount = new Decimal(converted.value);
+    if (!amount.isFinite()) {
       return "—";
     }
-    return `${amount.div(total).mul(100).toDecimalPlaces(2).toFixed(2)}%`;
+    return `${amount.div(totalMassGrams).mul(100).toDecimalPlaces(2).toFixed(2)}%`;
   } catch {
     return "—";
   }
+}
+
+function formulaMassGrams(items: RecipeDraftItem[]) {
+  let total = new Decimal(0);
+  for (const item of items) {
+    const density =
+      item.kind === "ingredient"
+        ? item.ingredientVariant.densityGPerMl ?? undefined
+        : undefined;
+    const converted = toGrams(
+      { value: item.amount, unit: item.unit },
+      density,
+    );
+    if (!converted.ok) return null;
+    total = total.add(converted.value);
+  }
+  return total;
 }
 
 function completeness(

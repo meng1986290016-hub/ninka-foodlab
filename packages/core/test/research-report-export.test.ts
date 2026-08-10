@@ -19,7 +19,6 @@ const document = createResearchReportDocument({
     versionId: "recipe-version-export",
     versionNumber: 2,
     versionCreatedAt: "2026-07-31T08:50:00.000Z",
-    targetBatchGrams: "1000",
     finishedMassGrams: "960",
     yieldPercent: "96",
     completenessPercent: 100,
@@ -122,6 +121,9 @@ describe("research report exports", () => {
     const ingredientSheet = decode(
       entries.get("xl/worksheets/sheet2.xml"),
     );
+    const recipeSheet = decode(
+      entries.get("xl/worksheets/sheet1.xml"),
+    );
 
     expect([...entries.keys()]).toEqual(
       expect.arrayContaining([
@@ -147,6 +149,8 @@ describe("research report exports", () => {
       "&apos;=WEBSERVICE(&quot;https://example.test&quot;)",
     );
     expect(ingredientSheet).not.toContain("<f>");
+    expect(recipeSheet).toContain("投料合计(g)");
+    expect(recipeSheet).not.toContain("计划投料总量");
   });
 
   it("wraps the browser-rendered JPEG in a deterministic PDF page", () => {

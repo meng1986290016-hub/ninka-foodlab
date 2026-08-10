@@ -2,7 +2,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::ingredients::repository::RepositoryError;
 
-pub const LATEST_SCHEMA_VERSION: i64 = 11;
+pub const LATEST_SCHEMA_VERSION: i64 = 12;
 
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../migrations/0001_initial.sql")),
@@ -42,6 +42,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (
         11,
         include_str!("../../migrations/0011_import_source_confidence.sql"),
+    ),
+    (
+        12,
+        include_str!("../../migrations/0012_custom_components_and_sweetness.sql"),
     ),
 ];
 

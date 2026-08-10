@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 import type { ResearchReportDocument } from "./research-report.js";
 
 export const RESEARCH_REPORT_EXPORT_SCHEMA_VERSION = 1 as const;
@@ -178,7 +180,7 @@ function reportSheets(
         ["配方类型", document.recipe.kind],
         ["配方版本", `V${document.recipe.versionNumber}`],
         ["配方版本 ID", document.recipe.versionId],
-        ["计划投料总量(g)", document.recipe.targetBatchGrams],
+        ["投料合计(g)", reportInputMassGrams(document)],
         ["出成重量(g)", document.recipe.finishedMassGrams ?? ""],
         ["得率(%)", document.recipe.yieldPercent ?? ""],
         ["数据完整度(%)", String(document.recipe.completenessPercent)],
@@ -432,6 +434,17 @@ function concatBytes(parts: Uint8Array[]) {
     offset += part.length;
   }
   return result;
+}
+
+function reportInputMassGrams(
+  document: Readonly<ResearchReportDocument>,
+) {
+  return document.ingredients
+    .reduce(
+      (total, ingredient) => total.add(ingredient.massGrams),
+      new Decimal(0),
+    )
+    .toString();
 }
 
 function ascii(value: string) {

@@ -102,6 +102,15 @@ export function buildVariantComparison(
     },
     ...definitions
       .slice()
+      .filter(
+        (definition) =>
+          definition.builtIn ||
+          selected.some((variant) =>
+            variant.nutrition.values.some(
+              (value) => value.nutrientDefinitionId === definition.id,
+            ),
+          ),
+      )
       .sort((left, right) => left.sortOrder - right.sortOrder)
       .map((definition) => ({
         key: `nutrient:${definition.id}`,
@@ -115,11 +124,33 @@ export function buildVariantComparison(
           return value == null || value === "" ? null : value;
         }),
       })),
+    {
+      key: "sweetnessBasis",
+      label: "甜度含量基准",
+      unit: null,
+      values: valuesFor((variant) => variant.sweetness?.basis ?? null),
+    },
+    {
+      key: "sweetnessContent",
+      label: "甜味物质含量",
+      unit: null,
+      values: valuesFor((variant) => variant.sweetness?.content ?? null),
+    },
+    {
+      key: "sweetnessRelativeFactor",
+      label: "相对甜度倍数（蔗糖=1）",
+      unit: null,
+      values: valuesFor(
+        (variant) => variant.sweetness?.relativeFactor ?? null,
+      ),
+    },
   ];
 
   return {
     materialGroupId: group.id,
     variants: selected,
-    rows,
+    rows: selected.some((variant) => variant.sweetness)
+      ? rows
+      : rows.filter((row) => !row.key.startsWith("sweetness")),
   };
 }

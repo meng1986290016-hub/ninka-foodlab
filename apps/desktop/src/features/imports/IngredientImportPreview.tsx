@@ -6,6 +6,7 @@ import type { NutritionBasis, PriceUnit } from "../../api/types";
 import { AllergenEditor } from "./AllergenEditor";
 import { ImportIssueList } from "./ImportIssueList";
 import { SourceAttachmentList } from "./SourceAttachmentList";
+import { SweetnessEditor } from "../ingredients/SweetnessEditor";
 
 interface IngredientImportPreviewProps {
   drafts: IngredientImportDraft[];
@@ -133,26 +134,60 @@ export function IngredientImportPreview({
               <div className="import-nutrient-grid field--full">
                 <h4>营养成分</h4>
                 {review.nutrients.map((nutrient, nutrientIndex) => (
-                  <label className="field" key={`${nutrient.name}-${nutrient.unit}-${nutrientIndex}`}>
-                    <span>{nutrient.name}（{nutrient.unit}）</span>
-                    <input
-                      aria-label={`${nutrient.name}（${nutrient.unit}）`}
-                      inputMode="decimal"
-                      onChange={(event) => {
-                        const nutrients = review.nutrients.map((candidate, candidateIndex) =>
-                          candidateIndex === nutrientIndex
-                            ? { ...candidate, value: event.target.value === "" ? null : event.target.value }
-                            : candidate,
-                        );
-                        update("nutrients", nutrients);
-                      }}
-                      placeholder="未知"
-                      value={nutrient.value ?? ""}
-                    />
-                  </label>
+                  <div className="import-custom-nutrient" key={`${nutrient.name}-${nutrient.unit}-${nutrientIndex}`}>
+                    <label className="field">
+                      <span>{nutrient.name}（{nutrient.unit}）</span>
+                      <input
+                        aria-label={`${nutrient.name}（${nutrient.unit}）`}
+                        inputMode="decimal"
+                        onChange={(event) => {
+                          const nutrients = review.nutrients.map((candidate, candidateIndex) =>
+                            candidateIndex === nutrientIndex
+                              ? { ...candidate, value: event.target.value === "" ? null : event.target.value }
+                              : candidate,
+                          );
+                          update("nutrients", nutrients);
+                        }}
+                        placeholder="未知"
+                        value={nutrient.value ?? ""}
+                      />
+                    </label>
+                    {nutrient.definitionId === null ? (
+                      <label className="field">
+                        <span>分类</span>
+                        <select
+                          aria-label={`${nutrient.name}分类`}
+                          onChange={(event) => {
+                            const nutrients = review.nutrients.map((candidate, candidateIndex) =>
+                              candidateIndex === nutrientIndex
+                                ? {
+                                    ...candidate,
+                                    category: event.target.value === ""
+                                      ? null
+                                      : event.target.value as "nutrition" | "research",
+                                  }
+                                : candidate,
+                            );
+                            update("nutrients", nutrients);
+                          }}
+                          value={nutrient.category ?? ""}
+                        >
+                          <option value="">请选择分类</option>
+                          <option value="nutrition">营养相关</option>
+                          <option value="research">研发指标</option>
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
                 ))}
                 <p className="data-helper">留空表示未知；输入 0 表示已确认为 0。</p>
               </div>
+
+              <SweetnessEditor
+                densityGPerMl={review.densityGPerMl}
+                onChange={(sweetness) => update("sweetness", sweetness)}
+                sweetness={review.sweetness ?? null}
+              />
 
               <AllergenEditor
                 onChange={(allergens) => {

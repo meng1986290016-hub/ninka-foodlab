@@ -78,10 +78,17 @@ export function calculateNutrition(
   for (const code of codes) {
     let totalKnown = new Decimal(0);
     let knownMass = new Decimal(0);
+    let trackedMass = new Decimal(0);
+    let trackedCount = 0;
     const missingComponentIds: string[] = [];
 
     for (const component of input.components) {
       const mass = masses.get(component.id) ?? new Decimal(0);
+      if (!Object.hasOwn(component.nutrientsPer100g, code)) {
+        continue;
+      }
+      trackedMass = trackedMass.add(mass);
+      trackedCount += 1;
       const amount = component.nutrientsPer100g[code];
       if (amount === null || amount === undefined) {
         missingComponentIds.push(component.id);
@@ -95,12 +102,12 @@ export function calculateNutrition(
 
     const status: EstimateStatus = missingComponentIds.length === 0
       ? "complete"
-      : missingComponentIds.length === input.components.length
+      : missingComponentIds.length === trackedCount
         ? "unknown"
         : "partial";
-    const completeness = inputMass.isZero()
+    const completeness = trackedMass.isZero()
       ? new Decimal(0)
-      : knownMass.div(inputMass);
+      : knownMass.div(trackedMass);
 
     nutrients[code] = {
       totalKnownAmount: decimalString(totalKnown),

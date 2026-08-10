@@ -5532,7 +5532,7 @@ tbody tr:hover {
 .editor-tabs {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 3px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
@@ -5620,7 +5620,7 @@ tbody tr:hover {
 .nutrition-table__header,
 .nutrition-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px 50px;
+  grid-template-columns: minmax(0, 1fr) 112px 50px 48px;
   align-items: center;
   gap: var(--space-2);
   min-height: 42px;
@@ -5663,6 +5663,106 @@ tbody tr:hover {
 
 .nutrition-add-button {
   justify-self: start;
+}
+
+.custom-definition-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.custom-definition-picker > .text-button {
+  justify-self: start;
+}
+
+.custom-definition-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.custom-definition-manager {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.custom-definition-manager > div {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.custom-definition-manager > div:first-child {
+  border-top: 0;
+}
+
+.custom-definition-manager strong,
+.custom-definition-manager small {
+  display: block;
+}
+
+.custom-definition-manager small {
+  margin-top: 2px;
+  color: var(--color-ink-muted);
+}
+
+.sweetness-editor {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+}
+
+.sweetness-editor__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.sweetness-editor__heading h3,
+.sweetness-editor__heading p {
+  margin: 0;
+}
+
+.sweetness-editor__heading h3 {
+  font-size: 14px;
+}
+
+.sweetness-editor__heading p {
+  margin-top: var(--space-1);
+  color: var(--color-ink-muted);
+  font-size: 11px;
+}
+
+.sweetness-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.sweetness-editor__fields > .nutrition-warning {
+  grid-column: 1 / -1;
+}
+
+.import-custom-nutrient {
+  display: grid;
+  grid-column: span 2;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.7fr);
+  gap: var(--space-2);
 }
 
 .custom-nutrient-form {
@@ -6968,7 +7068,6 @@ tbody tr:hover {
 
 .recipe-icon-button:focus-visible,
 .recipe-add-item-button:focus-visible,
-.recipe-autofill:focus-visible,
 .recipe-sort-buttons button:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
@@ -7014,7 +7113,7 @@ tbody tr:hover {
 .recipe-batch-bar {
   display: grid;
   min-height: 70px;
-  grid-template-columns: 1.25fr 1.35fr 1.15fr .75fr;
+  grid-template-columns: 1.35fr 1.15fr .75fr;
   align-items: center;
   gap: var(--space-4);
   padding: 10px var(--space-4);
@@ -7112,7 +7211,7 @@ tbody tr:hover {
   line-height: 1.5;
 }
 
-.recipe-rebalance-error {
+.recipe-editor-error {
   display: flex;
   min-height: 38px;
   align-items: center;
@@ -7170,7 +7269,7 @@ tbody tr:hover {
 }
 
 .recipe-item-table {
-  min-width: 900px;
+  min-width: 760px;
   table-layout: fixed;
 }
 
@@ -7189,34 +7288,26 @@ tbody tr:hover {
 }
 
 .recipe-item-table th:nth-child(2) {
-  width: 58px;
+  width: 28%;
 }
 
 .recipe-item-table th:nth-child(3) {
-  width: 25%;
-}
-
-.recipe-item-table th:nth-child(4) {
   width: 112px;
 }
 
-.recipe-item-table th:nth-child(5) {
+.recipe-item-table th:nth-child(4) {
   width: 76px;
 }
 
-.recipe-item-table th:nth-child(6) {
+.recipe-item-table th:nth-child(5) {
   width: 78px;
 }
 
-.recipe-item-table th:nth-child(7) {
-  width: 72px;
-}
-
-.recipe-item-table th:nth-child(8) {
+.recipe-item-table th:nth-child(6) {
   width: 88px;
 }
 
-.recipe-item-table th:nth-child(9) {
+.recipe-item-table th:nth-child(7) {
   width: 52px;
 }
 
@@ -7264,8 +7355,6 @@ tbody tr:hover {
   opacity: 0.3;
 }
 
-.recipe-lock-cell,
-.recipe-autofill-cell,
 .recipe-row-actions {
   text-align: center;
 }
@@ -7347,24 +7436,6 @@ tbody tr:hover {
   color: var(--color-ink-soft);
   font-variant-numeric: tabular-nums;
   text-align: right;
-}
-
-.recipe-autofill {
-  min-width: 46px;
-  min-height: 30px;
-  padding: 0 var(--space-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-ink-muted);
-  font-size: 12px;
-}
-
-.recipe-autofill.is-active {
-  border-color: #8bc0a3;
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-  font-weight: 650;
 }
 
 .recipe-data-status {
@@ -7740,6 +7811,33 @@ tbody tr:hover {
 .recipe-nutrition-row span:not(:first-child) {
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+.recipe-sweetness-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: 12px;
+}
+
+.recipe-sweetness-result strong {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.recipe-sweetness-result small {
+  grid-column: 1 / -1;
+  color: var(--color-ink-muted);
+}
+
+.recipe-sweetness-result small.is-warning {
+  color: var(--color-warning);
 }
 
 .recipe-cost-preview dl {
@@ -9150,8 +9248,8 @@ tbody tr:hover {
     min-width: 720px;
   }
 
-  .recipe-item-table th:nth-child(8),
-  .recipe-item-table td:nth-child(8) {
+  .recipe-item-table th:nth-child(6),
+  .recipe-item-table td:nth-child(6) {
     display: none;
   }
 

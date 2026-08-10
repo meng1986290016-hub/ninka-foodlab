@@ -98,6 +98,7 @@ async function updateMilk(
           value: values[definition.code] ?? "0",
         })),
       },
+    sweetness: overrides.sweetness ?? variant.sweetness ?? null,
     allergens:
       overrides.allergens ?? {
         contains: ["乳"],
@@ -132,6 +133,34 @@ async function addMilk(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("RecipeWorkbench live results", () => {
+  it("shows every selected custom item beyond eight rows plus research sweetness", async () => {
+    const api = createApi();
+    await api.createNutrientDefinition("乳糖", "g", "nutrition");
+    await api.createNutrientDefinition("钾", "mg", "nutrition");
+    await api.createNutrientDefinition("钙", "mg", "nutrition");
+    await api.createNutrientDefinition("总多酚", "mg", "research");
+    await updateMilk(api, {
+      sweetness: {
+        basis: "w_w_percent",
+        content: "10",
+        relativeFactor: "1",
+      },
+    });
+    await createFormula(api, "自定义指标展示");
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} />);
+    await screen.findByDisplayValue("自定义指标展示");
+    await addMilk(user);
+
+    const results = screen.getByRole("complementary", { name: "实时结果" });
+    for (const name of ["乳糖", "钾", "钙", "总多酚"]) {
+      expect(await within(results).findByText(name)).toBeTruthy();
+    }
+    expect(within(results).getByText("研发指标")).toBeTruthy();
+    expect(within(results).getByText("理论甜度")).toBeTruthy();
+    expect(within(results).getByText("10 g/100g")).toBeTruthy();
+  });
+
   it("shows per-100g and batch nutrition, cost, yield and both allergen classes", async () => {
     const api = createApi();
     await updateMilk(api);
@@ -140,11 +169,6 @@ describe("RecipeWorkbench live results", () => {
     render(<RecipeWorkbench api={api} />);
     await screen.findByDisplayValue("实时结果配方");
     await addMilk(user);
-    const target = screen.getByRole("textbox", {
-      name: "计划投料总量",
-    });
-    await user.clear(target);
-    await user.type(target, "100");
     const finished = screen.getByRole("textbox", {
       name: "出成重量",
     });
@@ -165,6 +189,22 @@ describe("RecipeWorkbench live results", () => {
     ).toBeTruthy();
   });
 
+  it("uses the actual input total without exposing a separate plan field", async () => {
+    const api = createApi();
+    await updateMilk(api);
+    await createFormula(api, "投料口径验证");
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} />);
+    await screen.findByDisplayValue("投料口径验证");
+    await addMilk(user);
+
+    expect(screen.queryByRole("textbox", { name: "计划投料总量" }))
+      .toBeNull();
+    expect(screen.getByLabelText("当前投料合计").textContent)
+      .toContain("100");
+    expect(screen.getByText("100.00%")).toBeTruthy();
+  });
+
   it("adds editable packaging and additional costs to the live total", async () => {
     const api = createApi();
     await updateMilk(api);
@@ -173,11 +213,6 @@ describe("RecipeWorkbench live results", () => {
     render(<RecipeWorkbench api={api} />);
     await screen.findByDisplayValue("成本编辑配方");
     await addMilk(user);
-    const target = screen.getByRole("textbox", {
-      name: "计划投料总量",
-    });
-    await user.clear(target);
-    await user.type(target, "100");
 
     await user.click(
       screen.getByRole("button", { name: "添加包材" }),

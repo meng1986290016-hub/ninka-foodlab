@@ -59,7 +59,6 @@ export interface AgentRecipeProposalPayload {
   productName: string;
   recipeKind: RecipeKind;
   mode: AgentRecipeProposalMode;
-  plannedInputGrams: string;
   finishedMassGrams: string | null;
   yieldAssumption: "provided" | "assumed_100_percent";
   items: AgentRecipeProposalItem[];

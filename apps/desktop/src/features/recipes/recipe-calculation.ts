@@ -1,5 +1,6 @@
 import {
   calculateRecipe,
+  calculateSweetness,
   evaluateTarget,
   flattenRecipeVersion,
   toGrams,
@@ -10,6 +11,7 @@ import {
 import Decimal from "decimal.js";
 
 import type {
+  IngredientSweetness,
   IngredientVariant,
   NutrientDefinition,
 } from "../../api/types";
@@ -25,6 +27,7 @@ import type {
   RecipeVersion,
   RecipeVersionItemSnapshot,
 } from "../../api/recipe-types";
+import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 
 export interface RecipeCalculationRequest {
   draft: RecipeDraft;
@@ -60,6 +63,12 @@ interface GraphContext {
   allergensByIngredientId: Map<string, AllergenSource>;
   nutrientUnits: Map<string, string>;
   sourceItemByIngredientId: Map<string, string>;
+  sweetnessByIngredientId: Map<
+    string,
+    { sweetness: IngredientSweetness; densityGPerMl: string | null }
+  >;
+  builtInNutrientIds: Set<string>;
+  calculationWarnings: RecipeCalculationIssue[];
 }
 
 interface ConvertedIngredient {
@@ -88,6 +97,13 @@ export function calculateRecipeDraft(
       ]),
     ),
     sourceItemByIngredientId: new Map(),
+    sweetnessByIngredientId: new Map(),
+    builtInNutrientIds: new Set(
+      request.nutrientDefinitions
+        .filter((definition) => definition.builtIn)
+        .map((definition) => definition.id),
+    ),
+    calculationWarnings: [],
   };
 
   const referenced = buildReferencedGraph(
@@ -142,8 +158,8 @@ export function calculateRecipeDraft(
         amount: item.amount,
         unit: item.unit,
         massGrams: mass.value,
-        locked: item.locked,
-        autoFill: item.autoFill,
+        locked: false,
+        autoFill: false,
         ingredient: converted.value.snapshot,
       });
       continue;
@@ -157,10 +173,12 @@ export function calculateRecipeDraft(
           id: ingredientId,
           name: `${item.materialNeed.materialName}（待补充）`,
           nutrientsPer100g: Object.fromEntries(
-            request.nutrientDefinitions.map((definition) => [
+            request.nutrientDefinitions
+              .filter((definition) => definition.builtIn)
+              .map((definition) => [
               definition.id,
               null,
-            ]),
+              ]),
           ),
           pricePerKg: null,
         },
@@ -194,8 +212,8 @@ export function calculateRecipeDraft(
       amount: item.amount,
       unit: item.unit,
       massGrams: mass.value,
-      locked: item.locked,
-      autoFill: item.autoFill,
+      locked: false,
+      autoFill: false,
       recipeVersion: item.recipeVersion,
     });
   }
@@ -204,16 +222,14 @@ export function calculateRecipeDraft(
     return { ok: false, issues: conversionIssues };
   }
 
+  const basisMass =
+    request.draft.finishedMassGrams ?? decimal(rootInputMass);
   context.graph[ROOT_VERSION_ID] = {
     id: ROOT_VERSION_ID,
-    outputMassGrams:
-      request.draft.finishedMassGrams ??
-      request.draft.targetBatchGrams,
+    outputMassGrams: basisMass,
     items: rootItems,
   };
 
-  const basisMass =
-    request.draft.finishedMassGrams ?? decimal(rootInputMass);
   const flattened = flattenRecipeVersion(ROOT_VERSION_ID, context.graph);
   if (!flattened.ok) {
     return {
@@ -280,7 +296,51 @@ export function calculateRecipeDraft(
             componentSourceIds.get(componentId) ?? componentId,
         ),
       ),
+      category: nutrientDefinitions.get(id)?.category ?? "nutrition",
     }));
+
+  const sweetnessComponents = flattened.value.flatMap((leaf, index) => {
+    const configured = context.sweetnessByIngredientId.get(leaf.ingredient.id);
+    if (!configured) return [];
+    return [
+      {
+        id: `${leaf.ingredient.id}:${index}`,
+        massGrams: leaf.massGrams,
+        densityGPerMl: configured.densityGPerMl,
+        sweetness: configured.sweetness,
+      },
+    ];
+  });
+  let sweetness: RecipeCalculation["sweetness"] = null;
+  if (sweetnessComponents.length > 0) {
+    const calculatedSweetness = calculateSweetness({
+      components: sweetnessComponents,
+      totalInputMassGrams: decimal(rootInputMass),
+      ...(request.draft.finishedMassGrams === null
+        ? {}
+        : { finishedMassGrams: request.draft.finishedMassGrams }),
+    });
+    if (!calculatedSweetness.ok) {
+      return {
+        ok: false,
+        issues: calculatedSweetness.issues.map((issue) => adaptIssue(issue)),
+      };
+    }
+    sweetness = {
+      totalSucroseEquivalentGrams: normalizeDecimal(
+        calculatedSweetness.value.totalSucroseEquivalentGrams,
+      ),
+      per100gSucroseEquivalent: normalizeDecimal(
+        calculatedSweetness.value.per100gSucroseEquivalent,
+      ),
+      status: calculatedSweetness.value.status,
+      missingItemIds: unique(
+        calculatedSweetness.value.missingComponentIds.map(
+          (componentId) => componentSourceIds.get(componentId) ?? componentId,
+        ),
+      ),
+    };
+  }
 
   const missingCostItemIds = unique(
     calculated.value.cost.missingComponentIds.map(
@@ -333,12 +393,15 @@ export function calculateRecipeDraft(
         context.allergensByIngredientId.get(leaf.ingredient.id) ?? null,
     })),
   );
+  const builtInEstimates = nutrientEstimates.filter(
+    (estimate) => definitions.get(estimate.nutrientDefinitionId)?.builtIn,
+  );
   const missingFields = buildMissingFields(
-    nutrientEstimates,
+    builtInEstimates,
     missingCostItemIds,
   );
   const completeness = calculateCompleteness(
-    nutrientEstimates.map((estimate) => estimate.completenessRatio),
+    builtInEstimates.map((estimate) => estimate.completenessRatio),
     flattened.value.length,
     calculated.value.cost.missingComponentIds.length,
     missingFields,
@@ -361,6 +424,7 @@ export function calculateRecipeDraft(
         : "finished_mass",
     yieldPercent,
     nutrients: nutrientEstimates,
+    sweetness,
     cost,
     targets: targets.value,
     allergens,
@@ -369,6 +433,7 @@ export function calculateRecipeDraft(
   };
   const warnings = [
     ...conversionIssues,
+    ...context.calculationWarnings,
     ...calculated.warnings.map((issue) => adaptIssue(issue)),
     ...missingCostItemIds.map(
       (itemId): RecipeCalculationIssue => ({
@@ -400,7 +465,7 @@ function buildReferencedGraph(
         const ingredientId = graphIngredientId(version.id, item.id);
         const nutrientsPer100g = Object.fromEntries(
           unique([
-            ...context.nutrientUnits.keys(),
+            ...context.builtInNutrientIds,
             ...Object.keys(item.ingredient.nutrientsPer100g),
           ]).map((nutrientId) => [
             nutrientId,
@@ -431,6 +496,12 @@ function buildReferencedGraph(
         )) {
           context.nutrientUnits.set(id, unit);
         }
+        if (item.ingredient.sweetness) {
+          context.sweetnessByIngredientId.set(ingredientId, {
+            sweetness: item.ingredient.sweetness,
+            densityGPerMl: item.ingredient.densityGPerMl,
+          });
+        }
       } else {
         items.push({
           kind: "recipe",
@@ -439,9 +510,7 @@ function buildReferencedGraph(
         });
       }
     }
-    const outputMassGrams =
-      version.snapshot.finishedMassGrams ??
-      version.snapshot.targetBatchGrams;
+    const outputMassGrams = recipeVersionOutputMass(version.snapshot);
     try {
       if (new Decimal(outputMassGrams).lte(0)) {
         issues.push({
@@ -490,7 +559,9 @@ function convertCurrentIngredient(
     ]),
   );
   const nutrientIds = new Set([
-    ...definitions.keys(),
+    ...[...definitions.values()]
+      .filter((definition) => definition.builtIn)
+      .map((definition) => definition.id),
     ...provided.keys(),
   ]);
   let density: Decimal | null = null;
@@ -577,6 +648,7 @@ function convertCurrentIngredient(
     densityGPerMl: variant.densityGPerMl,
     nutrientsPer100g,
     nutrientUnits,
+    sweetness: variant.sweetness ?? null,
     pricePerKg,
     allergens,
     source: variant.source,
@@ -588,6 +660,12 @@ function convertCurrentIngredient(
     mayContain: allergens.mayContain,
     sourceItemId: item.id,
   });
+  if (variant.sweetness) {
+    context.sweetnessByIngredientId.set(ingredientId, {
+      sweetness: variant.sweetness,
+      densityGPerMl: variant.densityGPerMl,
+    });
+  }
   return {
     ok: true,
     value: {
@@ -769,6 +847,8 @@ function collectNutrientDefinitions(
       unit,
       builtIn: false,
       sortOrder: nextOrder++,
+      category: "nutrition",
+      archivedAt: null,
     });
   }
   return result;

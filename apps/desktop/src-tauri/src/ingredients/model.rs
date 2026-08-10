@@ -34,6 +34,8 @@ pub struct NutrientDefinition {
     pub unit: String,
     pub built_in: bool,
     pub sort_order: i64,
+    pub category: String,
+    pub archived_at: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,6 +50,14 @@ pub struct VariantNutritionValue {
 pub struct VariantNutrition {
     pub basis: String,
     pub values: Vec<VariantNutritionValue>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredientSweetness {
+    pub basis: String,
+    pub content: Option<String>,
+    pub relative_factor: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +100,7 @@ pub struct IngredientVariant {
     pub source: String,
     pub research_notes: String,
     pub nutrition: VariantNutrition,
+    pub sweetness: Option<IngredientSweetness>,
     pub allergens: IngredientVariantAllergens,
     pub source_attachments: Vec<IngredientSourceAttachment>,
     pub completeness: DataCompleteness,
@@ -139,6 +150,8 @@ pub struct IngredientVariantInput {
     #[serde(default)]
     pub research_notes: String,
     pub nutrition: VariantNutrition,
+    #[serde(default)]
+    pub sweetness: Option<IngredientSweetness>,
     #[serde(default)]
     pub allergens: IngredientVariantAllergens,
     #[serde(default)]

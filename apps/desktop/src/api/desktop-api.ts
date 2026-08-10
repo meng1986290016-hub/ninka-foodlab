@@ -238,7 +238,15 @@ export interface DesktopApi extends LegacyIngredientApi {
   createNutrientDefinition(
     name: string,
     unit: string,
+    category: NutrientDefinition["category"],
   ): Promise<NutrientDefinition>;
+  updateNutrientDefinition(
+    id: string,
+    name: string,
+    unit: string,
+    category: NutrientDefinition["category"],
+  ): Promise<NutrientDefinition>;
+  archiveNutrientDefinition(id: string): Promise<void>;
   compareIngredientVariants(
     materialGroupId: string,
     variantIds: string[],

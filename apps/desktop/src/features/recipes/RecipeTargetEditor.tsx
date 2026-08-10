@@ -21,6 +21,9 @@ export function RecipeTargetEditor({
   targets,
   onChange,
 }: RecipeTargetEditorProps) {
+  const targetNutrients = nutrientDefinitions.filter(
+    (definition) => definition.builtIn,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [metricKey, setMetricKey] = useState("");
   const [minimum, setMinimum] = useState("");
@@ -31,8 +34,8 @@ export function RecipeTargetEditor({
   function openNew() {
     setEditingId("new");
     setMetricKey(
-      nutrientDefinitions[0]
-        ? `nutrition:${nutrientDefinitions[0].id}`
+      targetNutrients[0]
+        ? `nutrition:${targetNutrients[0].id}`
         : "cost:batch",
     );
     setMinimum("");
@@ -146,7 +149,7 @@ export function RecipeTargetEditor({
               value={metricKey}
             >
               <optgroup label="营养（每100g）">
-                {nutrientDefinitions.map((definition) => (
+                {targetNutrients.map((definition) => (
                   <option
                     key={definition.id}
                     value={`nutrition:${definition.id}`}

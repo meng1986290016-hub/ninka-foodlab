@@ -409,10 +409,10 @@ describe("BrowserDemoApi", () => {
       createId: () => "custom-lactose",
     });
 
-    await groupedApi.createNutrientDefinition("乳糖", "g");
+    await groupedApi.createNutrientDefinition("乳糖", "g", "nutrition");
 
     await expect(
-      groupedApi.createNutrientDefinition(" 乳糖 ", "g"),
+      groupedApi.createNutrientDefinition(" 乳糖 ", "g", "nutrition"),
     ).rejects.toMatchObject({ code: "duplicate_name" });
   });
 

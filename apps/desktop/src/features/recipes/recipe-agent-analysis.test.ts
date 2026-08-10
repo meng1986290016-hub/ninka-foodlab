@@ -23,6 +23,8 @@ const nutrientDefinitions: NutrientDefinition[] = [
     unit: "g",
     builtIn: true,
     sortOrder: 0,
+    category: "nutrition",
+    archivedAt: null,
   },
 ];
 

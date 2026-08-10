@@ -84,11 +84,14 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 89);
+    assert_eq!(REGISTERED_COMMANDS.len(), 91);
     for command in [
         "list_categories",
         "create_supplier",
         "list_material_groups",
+        "create_nutrient_definition",
+        "update_nutrient_definition",
+        "archive_nutrient_definition",
         "save_ingredient_variant",
         "compare_ingredient_variants",
         "save_draft",

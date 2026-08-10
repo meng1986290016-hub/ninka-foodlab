@@ -155,8 +155,8 @@ export function RecipeVersionDialog({
                 <dd>{snapshot.items.length} 项</dd>
               </div>
               <div>
-                <dt>计划投料总量</dt>
-                <dd>{snapshot.targetBatchGrams} g</dd>
+                <dt>投料合计</dt>
+                <dd>{snapshot.calculation.inputMassGrams} g</dd>
               </div>
               <div>
                 <dt>出成重量</dt>

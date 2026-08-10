@@ -9,6 +9,7 @@ fn nutrient(name: &str, unit: &str, value: Option<&str>) -> ImportedNutrientValu
         name: name.into(),
         unit: unit.into(),
         value: value.map(str::to_string),
+        category: Some("nutrition".into()),
     }
 }
 
@@ -26,6 +27,7 @@ fn valid_review() -> ReviewedIngredientImportDraft {
         density_g_per_ml: None,
         nutrition_basis: Some("per_100g".into()),
         nutrients: vec![nutrient("蛋白质", "g", Some("34.0"))],
+        sweetness: None,
         contains_allergens: vec!["乳及乳制品".into()],
         may_contain_allergens: Vec::new(),
         source: "供应商规格书".into(),

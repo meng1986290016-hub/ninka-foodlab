@@ -27,7 +27,6 @@ export interface ResearchReportRecipe {
   versionId: string;
   versionNumber: number;
   versionCreatedAt: string;
-  targetBatchGrams: string;
   finishedMassGrams: string | null;
   yieldPercent: string | null;
   completenessPercent: number;

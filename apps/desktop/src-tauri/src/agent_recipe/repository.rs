@@ -421,9 +421,14 @@ impl AgentRecipeRepository {
             }
         }
         let notes = proposal_notes(&proposal.payload);
+        let input_mass_grams = proposal
+            .evaluation
+            .pointer("/calculation/inputMassGrams")
+            .cloned()
+            .unwrap_or_else(|| json!("0"));
         let payload = json!({
             "recipeId": recipe_id, "basedOnVersionId": based_on_version_id, "source": "agent",
-            "targetBatchGrams": proposal.payload.planned_input_grams,
+            "targetBatchGrams": input_mass_grams,
             "finishedMassGrams": proposal.payload.finished_mass_grams,
             "servingMassGrams": null, "packageCount": null,
             "items": draft_items, "packagingCosts": [], "additionalCosts": [], "targets": [],

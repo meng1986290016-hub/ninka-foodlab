@@ -51,7 +51,6 @@ export function buildResearchReportDocument({
       versionId: recipeVersion.id,
       versionNumber: recipeVersion.versionNumber,
       versionCreatedAt: recipeVersion.createdAt,
-      targetBatchGrams: snapshot.targetBatchGrams,
       finishedMassGrams: snapshot.finishedMassGrams,
       yieldPercent: calculation.yieldPercent,
       completenessPercent: calculation.completeness.percent,

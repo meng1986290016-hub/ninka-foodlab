@@ -16,7 +16,6 @@
 - 营养计算：`calculateNutrition`
 - 成本计算：`calculateCost`
 - 目标判断：`evaluateTarget`
-- 锁定与补足：`rebalanceFormula`
 - 半成品展开：`flattenRecipeVersion`
 - 完整配方计算：`calculateRecipe`
 

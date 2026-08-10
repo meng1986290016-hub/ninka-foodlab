@@ -718,7 +718,7 @@ describe("recipe desktop API", () => {
     ).toEqual([
       expect.objectContaining({
         key: "protein",
-        before: null,
+        before: "已选择，未知",
         after: "0",
       }),
     ]);

@@ -296,7 +296,7 @@ describe("RecipeWorkbench", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("adds a concrete supplier variant, edits its amount and locks it", async () => {
+  it("adds a concrete supplier variant and edits its amount", async () => {
     const api = createApi();
     const recipe = await api.createRecipe({
       name: "原味高蛋白酸奶",
@@ -315,11 +315,8 @@ describe("RecipeWorkbench", () => {
     });
     await user.clear(amount);
     await user.type(amount, "85");
-    const lock = screen.getByRole("button", {
-      name: "锁定脱脂乳粉",
-    });
-    await user.click(lock);
-    expect(lock.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "锁定脱脂乳粉" }))
+      .toBeNull();
 
     await waitFor(
       async () => {
@@ -330,7 +327,7 @@ describe("RecipeWorkbench", () => {
               materialName: "脱脂乳粉",
               amount: "85",
               unit: "g",
-              locked: true,
+              locked: false,
             }),
           ],
         });
@@ -528,17 +525,17 @@ describe("RecipeWorkbench", () => {
     expect(document.activeElement).toBe(addButton);
   });
 
-  it("keeps a designated item automatically filled to the target", async () => {
+  it("edits each item directly and derives percentages from the actual total", async () => {
     const api = createApi();
     await api.createRecipe({
-      name: "自动补足配方",
+      name: "实际投料配方",
       code: null,
       tags: [],
       kind: "formula",
     });
     const user = userEvent.setup();
     render(<RecipeWorkbench api={api} />);
-    await screen.findByDisplayValue("自动补足配方");
+    await screen.findByDisplayValue("实际投料配方");
     await addIngredient(user, "脱脂乳粉");
     await addIngredient(user, "白砂糖");
 
@@ -549,21 +546,18 @@ describe("RecipeWorkbench", () => {
       name: "白砂糖用量",
     });
     await user.clear(milkAmount);
-    await user.type(milkAmount, "200");
-    await user.click(
-      screen.getByRole("button", { name: "设白砂糖为补足" }),
-    );
-    expect((sugarAmount as HTMLInputElement).value).toBe("800");
-
-    await user.clear(milkAmount);
     await user.type(milkAmount, "250");
+    await user.clear(sugarAmount);
+    await user.type(sugarAmount, "750");
     expect((sugarAmount as HTMLInputElement).value).toBe("750");
 
     const currentInputTotal = screen.getByLabelText("当前投料合计");
     expect(currentInputTotal.tagName).toBe("OUTPUT");
+    expect(currentInputTotal.textContent).toContain("1000");
     expect(currentInputTotal.textContent).toContain("由下方配方用量自动汇总");
-    expect(
-      screen.queryByRole("button", { name: "按比例调整" }),
-    ).toBeNull();
+    expect(screen.getByText("25.00%")).toBeTruthy();
+    expect(screen.getByText("75.00%")).toBeTruthy();
+    expect(screen.queryByText("锁定")).toBeNull();
+    expect(screen.queryByText("补足")).toBeNull();
   });
 });

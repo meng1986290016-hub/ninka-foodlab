@@ -22,7 +22,6 @@ const record = {
       versionId: "recipe-version-export",
       versionNumber: 2,
       versionCreatedAt: "2026-07-31T08:50:00.000Z",
-      targetBatchGrams: "1000",
       finishedMassGrams: null,
       yieldPercent: null,
       completenessPercent: 100,

@@ -9,6 +9,7 @@ import type { DesktopApi } from "../../api/desktop-api";
 import type {
   RecipeVersion,
 } from "../../api/recipe-types";
+import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 import type {
   IngredientVariant,
   MaterialGroup,
@@ -530,9 +531,7 @@ function VersionResults({
         const selected =
           selection?.kind === "version" &&
           selection.version.id === version.id;
-        const output =
-          version.snapshot.finishedMassGrams ??
-          version.snapshot.targetBatchGrams;
+        const output = recipeVersionOutputMass(version.snapshot);
         return (
           <label
             className={

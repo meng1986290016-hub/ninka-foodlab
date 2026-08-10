@@ -25,7 +25,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 89] = [
+pub const REGISTERED_COMMANDS: [&str; 91] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -43,6 +43,8 @@ pub const REGISTERED_COMMANDS: [&str; 89] = [
     "archive_ingredient_variant",
     "list_nutrient_definitions",
     "create_nutrient_definition",
+    "update_nutrient_definition",
+    "archive_nutrient_definition",
     "compare_ingredient_variants",
     "get_setting",
     "set_setting",

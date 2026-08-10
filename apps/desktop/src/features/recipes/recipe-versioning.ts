@@ -61,7 +61,9 @@ export function prepareRecipeVersion(
       schemeName: request.recipe.schemeName ?? "主配方",
       schemeStatus: request.recipe.schemeStatus ?? "current",
     },
-    targetBatchGrams: request.draft.targetBatchGrams,
+    // Retained in the snapshot schema for backward compatibility. New
+    // versions store the actual input total instead of a separate plan value.
+    targetBatchGrams: request.calculation.value.calculation.inputMassGrams,
     finishedMassGrams: request.draft.finishedMassGrams,
     servingMassGrams: request.draft.servingMassGrams,
     packageCount: request.draft.packageCount,
@@ -116,12 +118,6 @@ export function validateFormalVersionInput(
   const issues: RecipeVersionValidationIssue[] = [];
   if (recipeName.trim() === "") {
     issues.push({ field: "配方名称", message: "请填写配方名称" });
-  }
-  if (!isPositive(draft.targetBatchGrams)) {
-    issues.push({
-      field: "计划投料总量",
-      message: "计划投料总量必须是大于 0 的有效数字",
-    });
   }
   if (
     draft.finishedMassGrams !== null &&
@@ -213,8 +209,6 @@ function isPositive(value: string) {
 function issueFieldLabel(issue: RecipeCalculationIssue) {
   if (issue.itemId !== null) return "配方项目";
   switch (issue.field) {
-    case "targetBatchGrams":
-      return "计划投料总量";
     case "finishedMassGrams":
       return "出成重量";
     case "servingMassGrams":

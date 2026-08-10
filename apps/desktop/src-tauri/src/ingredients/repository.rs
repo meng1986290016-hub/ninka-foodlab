@@ -13,9 +13,9 @@ use crate::database::{self, migrations};
 
 use super::model::{
     Category, DataCompleteness, DatabaseStatus, DraftRecord, IngredientSourceAttachment,
-    IngredientVariant, IngredientVariantAllergens, IngredientVariantInput, MaterialGroup,
-    MaterialGroupInput, NutrientDefinition, Supplier, VariantComparison, VariantComparisonRow,
-    VariantNutrition, VariantNutritionValue,
+    IngredientSweetness, IngredientVariant, IngredientVariantAllergens, IngredientVariantInput,
+    MaterialGroup, MaterialGroupInput, NutrientDefinition, Supplier, VariantComparison,
+    VariantComparisonRow, VariantNutrition, VariantNutritionValue,
 };
 
 const DECIMAL_ERROR: &str = "请输入不带单位的非负数值";
@@ -449,6 +449,7 @@ impl IngredientRepository {
             source: source.source,
             research_notes: source.research_notes,
             nutrition: source.nutrition,
+            sweetness: source.sweetness,
             allergens: source.allergens,
             duplicate_confirmed: false,
         })
@@ -521,6 +522,17 @@ impl IngredientRepository {
         ];
         for definition in self.list_nutrient_definitions()? {
             let nutrient_id = definition.id.clone();
+            if !definition.built_in
+                && !variants.iter().any(|variant| {
+                    variant
+                        .nutrition
+                        .values
+                        .iter()
+                        .any(|value| value.nutrient_definition_id == nutrient_id)
+                })
+            {
+                continue;
+            }
             rows.push(comparison_row(
                 &variants,
                 &format!("nutrient:{}", definition.id),
@@ -535,6 +547,41 @@ impl IngredientRepository {
                         .and_then(|value| value.value.clone())
                 },
             ));
+        }
+        if variants.iter().any(|variant| variant.sweetness.is_some()) {
+            rows.extend([
+                comparison_row(
+                    &variants,
+                    "sweetnessBasis",
+                    "甜度含量基准",
+                    None,
+                    |variant| variant.sweetness.as_ref().map(|value| value.basis.clone()),
+                ),
+                comparison_row(
+                    &variants,
+                    "sweetnessContent",
+                    "甜味物质含量",
+                    None,
+                    |variant| {
+                        variant
+                            .sweetness
+                            .as_ref()
+                            .and_then(|value| value.content.clone())
+                    },
+                ),
+                comparison_row(
+                    &variants,
+                    "sweetnessRelativeFactor",
+                    "相对甜度倍数（蔗糖=1）",
+                    None,
+                    |variant| {
+                        variant
+                            .sweetness
+                            .as_ref()
+                            .and_then(|value| value.relative_factor.clone())
+                    },
+                ),
+            ]);
         }
         Ok(VariantComparison {
             material_group_id: material_group_id.to_string(),
@@ -551,9 +598,11 @@ impl IngredientRepository {
         &mut self,
         name: &str,
         unit: &str,
+        category: &str,
     ) -> Result<NutrientDefinition, RepositoryError> {
         let name = required_name(name, "请填写营养成分名称")?;
         let unit = required_name(unit, "请填写营养成分单位")?;
+        validate_definition_category(category)?;
         let exists = self.connection.query_row(
             "SELECT EXISTS(SELECT 1 FROM nutrient_definitions WHERE lower(name) = lower(?1))",
             [&name],
@@ -570,18 +619,85 @@ impl IngredientRepository {
             |row| row.get::<_, i64>(0),
         )?;
         self.connection.execute(
-            "INSERT INTO nutrient_definitions (id, code, name, unit, built_in, sort_order)
-             VALUES (?1, ?2, ?3, ?4, 0, ?5)",
-            params![id, code, name, unit, sort_order],
+            "INSERT INTO nutrient_definitions
+             (id, code, name, unit, built_in, sort_order, category, archived_at)
+             VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, NULL)",
+            params![id, code, name, unit, sort_order, category],
         )?;
         self.connection
             .query_row(
-                "SELECT id, code, name, unit, built_in, sort_order
+                "SELECT id, code, name, unit, built_in, sort_order, category, archived_at
              FROM nutrient_definitions WHERE id = ?1",
                 [&id],
                 map_nutrient_definition,
             )
             .map_err(Into::into)
+    }
+
+    pub fn update_nutrient_definition(
+        &mut self,
+        id: &str,
+        name: &str,
+        unit: &str,
+        category: &str,
+    ) -> Result<NutrientDefinition, RepositoryError> {
+        let current = find_nutrient_definition(&self.connection, id)?;
+        if current.built_in {
+            return Err(RepositoryError::domain(
+                "unsupported_operation",
+                "内置营养成分不能修改",
+            ));
+        }
+        let used = self.connection.query_row(
+            "SELECT EXISTS(
+               SELECT 1 FROM ingredient_nutrient_values
+               WHERE nutrient_definition_id = ?1
+             )",
+            [id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if used {
+            return Err(RepositoryError::domain(
+                "reference_conflict",
+                "该模板已经被原料使用，不能修改名称、单位或分类",
+            ));
+        }
+        let name = required_name(name, "请填写自定义含量项名称")?;
+        let unit = required_name(unit, "请填写自定义含量项单位")?;
+        validate_definition_category(category)?;
+        let duplicate = self.connection.query_row(
+            "SELECT EXISTS(
+               SELECT 1 FROM nutrient_definitions
+               WHERE lower(name) = lower(?1) AND id <> ?2
+             )",
+            params![name, id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if duplicate {
+            return Err(RepositoryError::domain("duplicate_name", "名称已存在"));
+        }
+        self.connection.execute(
+            "UPDATE nutrient_definitions
+             SET name = ?1, unit = ?2, category = ?3
+             WHERE id = ?4",
+            params![name, unit, category, id],
+        )?;
+        find_nutrient_definition(&self.connection, id)
+    }
+
+    pub fn archive_nutrient_definition(&mut self, id: &str) -> Result<(), RepositoryError> {
+        let current = find_nutrient_definition(&self.connection, id)?;
+        if current.built_in {
+            return Err(RepositoryError::domain(
+                "unsupported_operation",
+                "内置营养成分不能停用",
+            ));
+        }
+        self.connection.execute(
+            "UPDATE nutrient_definitions SET archived_at = ?1 WHERE id = ?2",
+            params![(self.clock)(), id],
+        )?;
+        Ok(())
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<serde_json::Value>, RepositoryError> {
@@ -732,6 +848,17 @@ fn required_name(value: &str, message: &str) -> Result<String, RepositoryError> 
     Ok(trimmed.to_string())
 }
 
+fn validate_definition_category(category: &str) -> Result<(), RepositoryError> {
+    if matches!(category, "nutrition" | "research") {
+        Ok(())
+    } else {
+        Err(RepositoryError::domain(
+            "invalid_input",
+            "自定义含量项分类无效",
+        ))
+    }
+}
+
 fn nullable_text(value: Option<String>) -> Option<String> {
     value.and_then(|item| {
         let trimmed = item.trim();
@@ -782,6 +909,15 @@ fn normalize_and_validate_variant(
     for value in &mut input.nutrition.values {
         value.value = nullable_text(value.value.take());
         validate_decimal(&value.value, &value.nutrient_definition_id)?;
+    }
+    if let Some(sweetness) = &mut input.sweetness {
+        if !matches!(sweetness.basis.as_str(), "w_w_percent" | "w_v_per_100ml") {
+            return Err(RepositoryError::domain("invalid_input", "甜度含量基准无效"));
+        }
+        sweetness.content = nullable_text(sweetness.content.take());
+        sweetness.relative_factor = nullable_text(sweetness.relative_factor.take());
+        validate_decimal(&sweetness.content, "sweetness.content")?;
+        validate_decimal(&sweetness.relative_factor, "sweetness.relativeFactor")?;
     }
     input.allergens.contains = normalized_unique(&input.allergens.contains);
     input.allergens.may_contain = normalized_unique(&input.allergens.may_contain);
@@ -848,6 +984,23 @@ pub(crate) fn save_variant_in_transaction(
              (ingredient_variant_id, nutrient_definition_id, value)
              VALUES (?1, ?2, ?3)",
             params![id, value.nutrient_definition_id, value.value],
+        )?;
+    }
+    transaction.execute(
+        "DELETE FROM ingredient_variant_sweetness WHERE ingredient_variant_id = ?1",
+        [&id],
+    )?;
+    if let Some(sweetness) = &input.sweetness {
+        transaction.execute(
+            "INSERT INTO ingredient_variant_sweetness
+             (ingredient_variant_id, basis, content, relative_factor)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                id,
+                sweetness.basis,
+                sweetness.content,
+                sweetness.relative_factor
+            ],
         )?;
     }
     transaction.execute(
@@ -1020,7 +1173,24 @@ fn map_nutrient_definition(row: &Row<'_>) -> rusqlite::Result<NutrientDefinition
         unit: row.get(3)?,
         built_in: row.get(4)?,
         sort_order: row.get(5)?,
+        category: row.get(6)?,
+        archived_at: row.get(7)?,
     })
+}
+
+fn find_nutrient_definition(
+    connection: &Connection,
+    id: &str,
+) -> Result<NutrientDefinition, RepositoryError> {
+    connection
+        .query_row(
+            "SELECT id, code, name, unit, built_in, sort_order, category, archived_at
+             FROM nutrient_definitions WHERE id = ?1",
+            [id],
+            map_nutrient_definition,
+        )
+        .optional()?
+        .ok_or_else(|| RepositoryError::domain("not_found", "找不到该自定义含量项模板"))
 }
 
 fn find_category(connection: &Connection, id: &str) -> Result<Category, RepositoryError> {
@@ -1212,6 +1382,20 @@ fn hydrate_variant(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    let sweetness = connection
+        .query_row(
+            "SELECT basis, content, relative_factor
+             FROM ingredient_variant_sweetness WHERE ingredient_variant_id = ?1",
+            [&raw.id],
+            |row| {
+                Ok(IngredientSweetness {
+                    basis: row.get(0)?,
+                    content: row.get(1)?,
+                    relative_factor: row.get(2)?,
+                })
+            },
+        )
+        .optional()?;
     Ok(IngredientVariant {
         id: raw.id,
         material_group_id: raw.material_group_id,
@@ -1228,6 +1412,7 @@ fn hydrate_variant(
             basis: raw.nutrition_basis,
             values,
         },
+        sweetness,
         allergens,
         source_attachments,
         completeness,
@@ -1241,7 +1426,7 @@ fn list_nutrient_definitions(
     connection: &Connection,
 ) -> Result<Vec<NutrientDefinition>, RepositoryError> {
     let mut statement = connection.prepare(
-        "SELECT id, code, name, unit, built_in, sort_order
+        "SELECT id, code, name, unit, built_in, sort_order, category, archived_at
          FROM nutrient_definitions ORDER BY sort_order",
     )?;
     let values = statement

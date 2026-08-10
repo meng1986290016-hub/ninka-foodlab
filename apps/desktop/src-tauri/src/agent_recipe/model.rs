@@ -107,7 +107,6 @@ pub struct AgentRecipeProposalPayload {
     pub product_name: String,
     pub recipe_kind: RecipeKind,
     pub mode: AgentRecipeProposalMode,
-    pub planned_input_grams: String,
     pub finished_mass_grams: Option<String>,
     pub yield_assumption: String,
     pub items: Vec<AgentRecipeProposalItem>,

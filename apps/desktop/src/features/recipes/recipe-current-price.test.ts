@@ -215,6 +215,7 @@ describe("recipe current price recalculation", () => {
       name: "乳基底",
       kind: "semi_finished",
     };
+    childSnapshot.targetBatchGrams = "1";
     childSnapshot.packagingCosts[0]!.unitCost = "1";
     const child = version(
       "version-child",

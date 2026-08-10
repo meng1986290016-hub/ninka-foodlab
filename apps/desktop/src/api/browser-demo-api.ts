@@ -84,6 +84,7 @@ import {
   recipeProductId,
   recipeSchemeStatus,
 } from "./recipe-types";
+import { recipeVersionOutputMass } from "./recipe-output-mass";
 import type {
   ResearchReportExportRequest,
   ResearchReportRecord,
@@ -259,9 +260,7 @@ function versionReference(version: RecipeVersion): RecipeVersionReference {
     recipeId: version.recipeId,
     recipeName: version.snapshot.recipe.name,
     versionNumber: version.versionNumber,
-    outputMassGrams:
-      version.snapshot.finishedMassGrams ??
-      version.snapshot.targetBatchGrams,
+    outputMassGrams: recipeVersionOutputMass(version.snapshot),
     createdAt: version.createdAt,
   };
 }
@@ -278,8 +277,8 @@ function draftItemsFromSnapshot(
           ingredientVariantId: item.ingredient.ingredientVariantId,
           amount: item.amount,
           unit: item.unit,
-          locked: item.locked,
-          autoFill: item.autoFill,
+          locked: false,
+          autoFill: false,
         }
       : {
           id: item.id,
@@ -288,8 +287,8 @@ function draftItemsFromSnapshot(
           recipeVersionId: item.recipeVersion.id,
           amount: item.amount,
           unit: item.unit,
-          locked: item.locked,
-          autoFill: item.autoFill,
+          locked: false,
+          autoFill: false,
         },
   );
 }
@@ -367,20 +366,43 @@ function buildRecipeVersionComparison(
     }
   }
 
-  const nutrients = (version: RecipeVersion) =>
+  const nutrients = (
+    version: RecipeVersion,
+    category: "nutrition" | "research",
+  ) =>
     new Map(
-      version.snapshot.calculation.nutrients.map((nutrient) => [
+      version.snapshot.calculation.nutrients
+        .filter((nutrient) => (nutrient.category ?? "nutrition") === category)
+        .map((nutrient) => [
         nutrient.nutrientDefinitionId,
         {
           label: nutrient.name,
           unit: nutrient.unit,
           value:
             nutrient.status === "unknown"
-              ? null
+              ? "已选择，未知"
               : nutrient.per100gKnownAmount,
         },
       ]),
     );
+  const sweetness = (version: RecipeVersion) => {
+    const estimate = version.snapshot.calculation.sweetness;
+    return new Map([
+      [
+        "theoreticalSweetness",
+        {
+          label: "理论甜度（蔗糖当量）",
+          unit: "g/100g",
+          value:
+            !estimate
+              ? null
+              : estimate.status === "unknown"
+                ? "已配置，未知"
+              : estimate.per100gSucroseEquivalent,
+        },
+      ],
+    ]);
+  };
   const costs = (version: RecipeVersion) =>
     new Map(
       [
@@ -441,7 +463,15 @@ function buildRecipeVersionComparison(
     before: versionReference(before),
     after: versionReference(after),
     itemChanges,
-    nutritionChanges: comparisonRows(nutrients(before), nutrients(after)),
+    nutritionChanges: comparisonRows(
+      nutrients(before, "nutrition"),
+      nutrients(after, "nutrition"),
+    ),
+    researchChanges: comparisonRows(
+      nutrients(before, "research"),
+      nutrients(after, "research"),
+    ),
+    sweetnessChanges: comparisonRows(sweetness(before), sweetness(after)),
     costChanges: comparisonRows(costs(before), costs(after)),
     targetChanges: comparisonRows(targets(before), targets(after)),
     allergenChanges: comparisonRows(allergens(before), allergens(after)),
@@ -545,12 +575,14 @@ function demoReview(
     priceUnit: "kg",
     densityGPerMl: null,
     nutritionBasis: "per_100g",
-    nutrients: definitions.map((definition) => ({
+    nutrients: definitions.filter((definition) => definition.builtIn).map((definition) => ({
       definitionId: definition.id,
       name: definition.name,
       unit: definition.unit,
       value: null,
+      category: definition.category,
     })),
+    sweetness: null,
     containsAllergens: [],
     mayContainAllergens: [],
     source: displayName,
@@ -634,7 +666,15 @@ function normalizeImportReview(
       name: nutrient.name.trim(),
       unit: nutrient.unit.trim(),
       value: nullableText(nutrient.value),
+      category: nutrient.category ?? null,
     })),
+    sweetness: review.sweetness
+      ? {
+          ...review.sweetness,
+          content: nullableText(review.sweetness.content),
+          relativeFactor: nullableText(review.sweetness.relativeFactor),
+        }
+      : null,
     containsAllergens: review.containsAllergens.map((value) => value.trim()).filter(Boolean),
     mayContainAllergens: review.mayContainAllergens
       .map((value) => value.trim())
@@ -666,6 +706,15 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
   if (normalized.nutritionBasis === null) {
     add("请选择营养基准", "nutritionBasis");
   }
+  normalized.nutrients.forEach((nutrient, index) => {
+    if (
+      nutrient.definitionId === null &&
+      nutrient.category !== "nutrition" &&
+      nutrient.category !== "research"
+    ) {
+      add("请选择自定义含量项分类", `nutrients.${index}.category`);
+    }
+  });
   for (const [fieldPath, value] of [
     ["currentPrice", normalized.currentPrice],
     ["densityGPerMl", normalized.densityGPerMl],
@@ -683,6 +732,38 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
         row: null,
         column: null,
       });
+    }
+  }
+  if (normalized.sweetness) {
+    if (
+      normalized.sweetness.basis !== "w_w_percent" &&
+      normalized.sweetness.basis !== "w_v_per_100ml"
+    ) {
+      issues.push({
+        code: "invalid_basis",
+        severity: "error",
+        message: "甜度含量基准必须为 w/w 或 w/v",
+        fieldPath: "sweetness.basis",
+        sourceName: null,
+        row: null,
+        column: null,
+      });
+    }
+    for (const [fieldPath, value] of [
+      ["sweetness.content", normalized.sweetness.content],
+      ["sweetness.relativeFactor", normalized.sweetness.relativeFactor],
+    ] as const) {
+      if (value !== null && !DECIMAL_PATTERN.test(value)) {
+        issues.push({
+          code: "invalid_decimal",
+          severity: "error",
+          message: "请输入不带单位的非负数值",
+          fieldPath,
+          sourceName: null,
+          row: null,
+          column: null,
+        });
+      }
     }
   }
   return issues;
@@ -1163,7 +1244,7 @@ export class BrowserDemoApi implements DesktopApi {
       recipeId: id,
       basedOnVersionId: null,
       source: "manual",
-      targetBatchGrams: snapshot.targetBatchGrams,
+      targetBatchGrams: snapshot.calculation.inputMassGrams,
       finishedMassGrams: snapshot.finishedMassGrams,
       servingMassGrams: snapshot.servingMassGrams,
       packageCount: snapshot.packageCount,
@@ -1661,7 +1742,7 @@ export class BrowserDemoApi implements DesktopApi {
       recipeId: version.recipeId,
       basedOnVersionId: version.id,
       source: "manual",
-      targetBatchGrams: snapshot.targetBatchGrams,
+      targetBatchGrams: snapshot.calculation.inputMassGrams,
       finishedMassGrams: snapshot.finishedMassGrams,
       servingMassGrams: snapshot.servingMassGrams,
       packageCount: snapshot.packageCount,
@@ -2394,7 +2475,7 @@ export class BrowserDemoApi implements DesktopApi {
       recipeId,
       basedOnVersionId,
       source: "agent",
-      targetBatchGrams: evaluated.payload.plannedInputGrams,
+      targetBatchGrams: evaluated.evaluation.calculation.inputMassGrams,
       finishedMassGrams: evaluated.payload.finishedMassGrams,
       servingMassGrams: null,
       packageCount: null,
@@ -2970,6 +3051,14 @@ export class BrowserDemoApi implements DesktopApi {
           value: nullableText(value.value),
         })),
       },
+      sweetness:
+        input.sweetness == null
+          ? null
+          : {
+              basis: input.sweetness.basis,
+              content: nullableText(input.sweetness.content),
+              relativeFactor: nullableText(input.sweetness.relativeFactor),
+            },
       allergens: {
         contains: [...(input.allergens?.contains ?? [])],
         mayContain: [...(input.allergens?.mayContain ?? [])],
@@ -2993,6 +3082,7 @@ export class BrowserDemoApi implements DesktopApi {
       source: normalizedInput.source,
       researchNotes: normalizedInput.researchNotes,
       nutrition: normalizedInput.nutrition,
+      sweetness: normalizedInput.sweetness ?? null,
       allergens: normalizedInput.allergens ?? { contains: [], mayContain: [] },
       sourceAttachments: previous?.sourceAttachments ?? [],
       completeness,
@@ -3026,6 +3116,7 @@ export class BrowserDemoApi implements DesktopApi {
       source: source.source,
       researchNotes: source.researchNotes,
       nutrition: source.nutrition,
+      sweetness: source.sweetness ? { ...source.sweetness } : null,
       allergens: {
         contains: [...source.allergens.contains],
         mayContain: [...source.allergens.mayContain],
@@ -3058,10 +3149,15 @@ export class BrowserDemoApi implements DesktopApi {
       .sort((left, right) => left.sortOrder - right.sortOrder);
   }
 
-  async createNutrientDefinition(name: string, unit: string) {
+  async createNutrientDefinition(
+    name: string,
+    unit: string,
+    category: NutrientDefinition["category"],
+  ) {
     const state = this.read();
-    const trimmedName = this.requiredName(name, "请填写营养成分名称");
-    const trimmedUnit = this.requiredName(unit, "请填写营养成分单位");
+    const trimmedName = this.requiredName(name, "请填写自定义含量项名称");
+    const trimmedUnit = this.requiredName(unit, "请填写自定义含量项单位");
+    this.validateDefinitionCategory(category);
     this.assertUniqueName(state.nutrientDefinitions, trimmedName);
     const definition: NutrientDefinition = {
       id: this.createId(),
@@ -3070,10 +3166,80 @@ export class BrowserDemoApi implements DesktopApi {
       unit: trimmedUnit,
       builtIn: false,
       sortOrder: state.nutrientDefinitions.length,
+      category,
+      archivedAt: null,
     };
     state.nutrientDefinitions = [...state.nutrientDefinitions, definition];
     this.write(state);
     return definition;
+  }
+
+  async updateNutrientDefinition(
+    id: string,
+    name: string,
+    unit: string,
+    category: NutrientDefinition["category"],
+  ) {
+    const state = this.read();
+    const current = state.nutrientDefinitions.find((item) => item.id === id);
+    if (!current) {
+      throw new DesktopApiError("not_found", "找不到该自定义含量项模板");
+    }
+    if (current.builtIn) {
+      throw new DesktopApiError(
+        "unsupported_operation",
+        "内置营养成分不能修改",
+      );
+    }
+    const used = state.materialGroups.some((group) =>
+      group.variants.some((variant) =>
+        variant.nutrition.values.some(
+          (value) => value.nutrientDefinitionId === id,
+        ),
+      ),
+    );
+    if (used) {
+      throw new DesktopApiError(
+        "reference_conflict",
+        "该模板已经被原料使用，不能修改名称、单位或分类",
+      );
+    }
+    const trimmedName = this.requiredName(name, "请填写自定义含量项名称");
+    const trimmedUnit = this.requiredName(unit, "请填写自定义含量项单位");
+    this.validateDefinitionCategory(category);
+    this.assertUniqueName(
+      state.nutrientDefinitions.filter((item) => item.id !== id),
+      trimmedName,
+    );
+    const updated: NutrientDefinition = {
+      ...current,
+      name: trimmedName,
+      unit: trimmedUnit,
+      category,
+    };
+    state.nutrientDefinitions = state.nutrientDefinitions.map((item) =>
+      item.id === id ? updated : item,
+    );
+    this.write(state);
+    return updated;
+  }
+
+  async archiveNutrientDefinition(id: string) {
+    const state = this.read();
+    const current = state.nutrientDefinitions.find((item) => item.id === id);
+    if (!current) {
+      throw new DesktopApiError("not_found", "找不到该自定义含量项模板");
+    }
+    if (current.builtIn) {
+      throw new DesktopApiError(
+        "unsupported_operation",
+        "内置营养成分不能停用",
+      );
+    }
+    state.nutrientDefinitions = state.nutrientDefinitions.map((item) =>
+      item.id === id ? { ...item, archivedAt: this.now() } : item,
+    );
+    this.write(state);
   }
 
   async compareIngredientVariants(
@@ -3352,7 +3518,6 @@ export class BrowserDemoApi implements DesktopApi {
       productName: reverse ? "巧克力冰淇淋（逆向估算）" : "低糖乳味冷冻甜品",
       recipeKind: "formula",
       mode: reverse ? "label_reverse" : "goal_design",
-      plannedInputGrams: "1000",
       finishedMassGrams: null,
       yieldAssumption: "assumed_100_percent",
       items,
@@ -3703,6 +3868,8 @@ export class BrowserDemoApi implements DesktopApi {
           unit: nutrient.unit,
           builtIn: false,
           sortOrder: state.nutrientDefinitions.length,
+          category: nutrient.category ?? "nutrition",
+          archivedAt: null,
         };
         state.nutrientDefinitions.push(definition);
       }
@@ -3722,6 +3889,7 @@ export class BrowserDemoApi implements DesktopApi {
         basis: review.nutritionBasis ?? "per_100g",
         values: nutritionValues,
       },
+      sweetness: review.sweetness ?? null,
       allergens: {
         contains: review.containsAllergens,
         mayContain: review.mayContainAllergens,
@@ -3742,6 +3910,7 @@ export class BrowserDemoApi implements DesktopApi {
       source: input.source,
       researchNotes: input.researchNotes,
       nutrition: input.nutrition,
+      sweetness: input.sweetness ?? null,
       allergens: input.allergens ?? { contains: [], mayContain: [] },
       sourceAttachments: draft.attachments.map((attachment) => ({ ...attachment })),
       completeness: calculateCompleteness(input, state.nutrientDefinitions),
@@ -3781,6 +3950,27 @@ export class BrowserDemoApi implements DesktopApi {
     this.validateDecimal(input.densityGPerMl, "densityGPerMl");
     for (const value of input.nutrition.values) {
       this.validateDecimal(value.value, value.nutrientDefinitionId);
+    }
+    if (input.sweetness) {
+      if (
+        input.sweetness.basis !== "w_w_percent" &&
+        input.sweetness.basis !== "w_v_per_100ml"
+      ) {
+        throw new DesktopApiError("invalid_input", "甜度含量基准无效");
+      }
+      this.validateDecimal(input.sweetness.content, "sweetness.content");
+      this.validateDecimal(
+        input.sweetness.relativeFactor,
+        "sweetness.relativeFactor",
+      );
+    }
+  }
+
+  private validateDefinitionCategory(
+    category: NutrientDefinition["category"],
+  ) {
+    if (category !== "nutrition" && category !== "research") {
+      throw new DesktopApiError("invalid_input", "自定义含量项分类无效");
     }
   }
 
@@ -4015,7 +4205,6 @@ function browserDemoRecipeRetrospective(
   const calculation = draft.calculation;
   const facts = [
     `配方：${recipe.name}`,
-    `计划投料：${draft.targetBatchGrams || "未记录"} g`,
     `当前投料：${calculation?.inputMassGrams ?? "未完成计算"} g`,
     `出成重量：${draft.finishedMassGrams ?? "未记录"}${draft.finishedMassGrams ? " g" : ""}`,
     `得率：${calculation?.yieldPercent ? `${conciseRetrospectiveDecimal(calculation.yieldPercent)}%` : "未记录"}`,
@@ -4024,16 +4213,6 @@ function browserDemoRecipeRetrospective(
     `研发备注：${draft.markdownNotes.trim() || "未记录"}`,
   ];
   const confirmations: string[] = [];
-  const planned = Number(draft.targetBatchGrams);
-  const current = Number(calculation?.inputMassGrams);
-  if (
-    Number.isFinite(planned) &&
-    planned > 0 &&
-    Number.isFinite(current) &&
-    Math.abs(current - planned) / planned >= 0.005
-  ) {
-    confirmations.push("当前投料合计与计划投料总量不一致，需要确认本轮实际投料基准。");
-  }
   if (draft.finishedMassGrams === null) {
     confirmations.push("实际出成重量未记录，暂时不能复核加工损耗和真实得率。");
   }

@@ -19,7 +19,6 @@ const input: ResearchReportDocumentInput = {
     versionId: "recipe-version-1",
     versionNumber: 1,
     versionCreatedAt: "2026-07-31T06:20:00.000Z",
-    targetBatchGrams: "1000",
     finishedMassGrams: "960",
     yieldPercent: "96",
     completenessPercent: 100,
@@ -158,9 +157,11 @@ describe("research report document", () => {
     expect(first).toContain("人工确认");
     expect(first).toContain("检测值");
     expect(first).toContain("规则包 2011.1");
+    expect(first).toContain("投料合计");
+    expect(first).not.toContain("计划投料总量");
     expect(first).not.toMatch(/<(?:image|use)[^>]+href=|@import|url\(/);
     expect(createHash("sha256").update(first).digest("hex")).toBe(
-      "af88413aa60413839a91624fedd17ddf260982f6fa70e3352a2ef4f4eea93101",
+      "af81708d1c618aea6fb295817d585e108ba9da58955fa682f1aa5e0b1d2d7b81",
     );
   });
 

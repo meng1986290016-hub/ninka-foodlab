@@ -175,10 +175,34 @@ pub fn list_nutrient_definitions(
 pub fn create_nutrient_definition(
     name: String,
     unit: String,
+    category: String,
     state: State<'_, AppState>,
 ) -> Result<NutrientDefinition, CommandError> {
     with_repository_mut(&state, |repository| {
-        repository.create_nutrient_definition(&name, &unit)
+        repository.create_nutrient_definition(&name, &unit, &category)
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn update_nutrient_definition(
+    id: String,
+    name: String,
+    unit: String,
+    category: String,
+    state: State<'_, AppState>,
+) -> Result<NutrientDefinition, CommandError> {
+    with_repository_mut(&state, |repository| {
+        repository.update_nutrient_definition(&id, &name, &unit, &category)
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn archive_nutrient_definition(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    with_repository_mut(&state, |repository| {
+        repository.archive_nutrient_definition(&id)
     })
 }
 

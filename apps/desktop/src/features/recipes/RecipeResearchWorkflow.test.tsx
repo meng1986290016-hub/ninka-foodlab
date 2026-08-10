@@ -78,7 +78,7 @@ async function saveFormalVersion(
 }
 
 describe("complete recipe research workflow", () => {
-  it("persists selection, locking, auto-fill, two versions and their differences across restart", async () => {
+  it("persists direct amounts, two versions and their differences across restart", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;
     let minute = 0;
@@ -136,12 +136,8 @@ describe("complete recipe research workflow", () => {
     });
     await user.clear(milkAmount);
     await user.type(milkAmount, "200");
-    await user.click(
-      screen.getByRole("button", { name: "锁定脱脂乳粉" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "设白砂糖为补足" }),
-    );
+    await user.clear(sugarAmount);
+    await user.type(sugarAmount, "800");
     expect((sugarAmount as HTMLInputElement).value).toBe("800");
 
     const notes = screen.getByRole("textbox", { name: "研发备注" });
@@ -153,6 +149,8 @@ describe("complete recipe research workflow", () => {
 
     await user.clear(milkAmount);
     await user.type(milkAmount, "250");
+    await user.clear(sugarAmount);
+    await user.type(sugarAmount, "750");
     expect((sugarAmount as HTMLInputElement).value).toBe("750");
     await user.clear(notes);
     await user.type(notes, "V2：提高乳粉，甜感更平衡。");
@@ -203,12 +201,12 @@ describe("complete recipe research workflow", () => {
         expect.objectContaining({
           materialName: "脱脂乳粉",
           amount: "250",
-          locked: true,
+          locked: false,
         }),
         expect.objectContaining({
           materialName: "白砂糖",
           amount: "750",
-          autoFill: true,
+          autoFill: false,
         }),
       ],
       markdownNotes: "V2：提高乳粉，甜感更平衡。",

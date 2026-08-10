@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 import type {
   ResearchReportDocument,
   ResearchReportIngredient,
@@ -52,7 +54,7 @@ export function renderResearchReportSvg(
   y += 24;
   const metricWidth = CONTENT_WIDTH / 4;
   const metrics = [
-    ["计划投料总量", `${document.recipe.targetBatchGrams} g`],
+    ["投料合计", `${reportInputMassGrams(document)} g`],
     ["数据完整度", `${document.recipe.completenessPercent}%`],
     ["整批成本", money(document.cost.batchTotal)],
     ["适用标准", document.nutrition.standardCode],
@@ -449,6 +451,17 @@ function escapeXml(value: string) {
 
 function number(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function reportInputMassGrams(
+  document: Readonly<ResearchReportDocument>,
+) {
+  return document.ingredients
+    .reduce(
+      (total, ingredient) => total.add(ingredient.massGrams),
+      new Decimal(0),
+    )
+    .toString();
 }
 
 function emptyIngredient(): ResearchReportIngredient {

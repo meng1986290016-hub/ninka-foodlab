@@ -1,7 +1,9 @@
 import type {
   DataCompleteness,
   EntityId,
+  IngredientSweetness,
   IngredientVariant,
+  NutrientDefinitionCategory,
 } from "./types";
 import type { MaterialNeed } from "./agent-recipe-types";
 
@@ -187,6 +189,7 @@ export interface RecipeDraftInput {
   recipeId: EntityId;
   basedOnVersionId: EntityId | null;
   source: RecipeDraftSource;
+  /** @deprecated Kept only for stored-draft compatibility; use calculation.inputMassGrams. */
   targetBatchGrams: RecipeDecimal;
   finishedMassGrams: RecipeDecimal | null;
   servingMassGrams: RecipeDecimal | null;
@@ -219,6 +222,14 @@ export interface RecipeNutrientEstimate {
   per100gKnownAmount: RecipeDecimal;
   status: "complete" | "partial" | "unknown";
   completenessRatio: RecipeDecimal;
+  missingItemIds: EntityId[];
+  category?: NutrientDefinitionCategory;
+}
+
+export interface RecipeSweetnessEstimate {
+  totalSucroseEquivalentGrams: RecipeDecimal;
+  per100gSucroseEquivalent: RecipeDecimal;
+  status: "complete" | "partial" | "unknown";
   missingItemIds: EntityId[];
 }
 
@@ -275,6 +286,7 @@ export interface RecipeCalculation {
   basis: "input_mass" | "finished_mass";
   yieldPercent: RecipeDecimal | null;
   nutrients: RecipeNutrientEstimate[];
+  sweetness?: RecipeSweetnessEstimate | null;
   cost: RecipeCostSummary;
   targets: RecipeTargetEvaluation[];
   allergens: RecipeAllergenSummary;
@@ -292,6 +304,7 @@ export interface RecipeIngredientSnapshot {
   densityGPerMl: RecipeDecimal | null;
   nutrientsPer100g: Record<EntityId, RecipeDecimal | null>;
   nutrientUnits: Record<EntityId, string>;
+  sweetness?: IngredientSweetness | null;
   pricePerKg: RecipeDecimal | null;
   allergens: RecipeAllergenSummary;
   source: string;
@@ -336,6 +349,7 @@ export interface RecipeVersionSnapshot {
     schemeName?: string;
     schemeStatus?: RecipeSchemeStatus;
   };
+  /** @deprecated Kept only for snapshot compatibility; use calculation.inputMassGrams. */
   targetBatchGrams: RecipeDecimal;
   finishedMassGrams: RecipeDecimal | null;
   servingMassGrams: RecipeDecimal | null;
@@ -406,6 +420,8 @@ export interface RecipeVersionComparison {
   after: RecipeVersionReference;
   itemChanges: RecipeVersionItemChange[];
   nutritionChanges: RecipeVersionComparisonRow[];
+  researchChanges?: RecipeVersionComparisonRow[];
+  sweetnessChanges?: RecipeVersionComparisonRow[];
   costChanges: RecipeVersionComparisonRow[];
   targetChanges: RecipeVersionComparisonRow[];
   allergenChanges: RecipeVersionComparisonRow[];

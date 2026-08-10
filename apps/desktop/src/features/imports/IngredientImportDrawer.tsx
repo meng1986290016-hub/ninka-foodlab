@@ -51,14 +51,14 @@ export function IngredientImportDrawer({
           .flatMap((draft) => draft.review.nutrients)
           .filter((nutrient) => nutrient.definitionId === null)
           .map((nutrient) => [
-            `${nutrient.name}\u0000${nutrient.unit}`,
-            `${nutrient.name}（${nutrient.unit}）`,
+            `${nutrient.name}\u0000${nutrient.unit}\u0000${nutrient.category ?? ""}`,
+            `${nutrient.name}（${nutrient.unit}，${nutrient.category === "research" ? "研发指标" : "营养相关"}）`,
           ]),
       ).values(),
     ];
     const customMessage = customNutrients.length === 0
       ? ""
-      : `\n\n将同时新建营养成分定义：${customNutrients.join("、")}`;
+      : `\n\n将同时新建自定义含量项模板：${customNutrients.join("、")}`;
     if (!window.confirm(`将正式保存 ${activeDrafts.length} 个供应商版本，是否继续？${customMessage}`)) {
       return;
     }

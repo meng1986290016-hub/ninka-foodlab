@@ -14,7 +14,9 @@ use food_rd_desktop::ingest::{
     spreadsheet::{
         TEMPLATE_HEADERS, parse_csv, parse_ingredient_table, write_library_export, write_template,
     },
+    validation::validate_review,
 };
+use food_rd_desktop::ingredients::model::IngredientSweetness;
 use uuid::Uuid;
 use zip::ZipArchive;
 
@@ -93,7 +95,7 @@ fn csv_export_round_trip_preserves_reviewed_fields_and_formula_safety() {
     review.nutrients[0].value = None;
     review.nutrients[1].value = Some("0".into());
 
-    write_library_export(&path, IngredientExchangeFormat::Csv, &[review]).unwrap();
+    write_library_export(&path, IngredientExchangeFormat::Csv, &[review.clone()]).unwrap();
 
     let exported = fs::read_to_string(&path).unwrap();
     assert!(exported.contains("'=测试原料"));
@@ -143,8 +145,8 @@ fn template_uses_exact_headers_examples_and_xlsx_dropdowns() {
     let csv_path = fixture.path("template.csv");
     let xlsx_path = fixture.path("template.xlsx");
 
-    write_template(&csv_path, IngredientExchangeFormat::Csv).unwrap();
-    write_template(&xlsx_path, IngredientExchangeFormat::Xlsx).unwrap();
+    write_template(&csv_path, IngredientExchangeFormat::Csv, &[]).unwrap();
+    write_template(&xlsx_path, IngredientExchangeFormat::Xlsx, &[]).unwrap();
 
     let csv = fs::read_to_string(&csv_path).unwrap();
     assert_eq!(csv.lines().next().unwrap(), TEMPLATE_HEADERS.join(","));
@@ -165,6 +167,92 @@ fn template_uses_exact_headers_examples_and_xlsx_dropdowns() {
     assert!(worksheet_xml.contains("dataValidations"));
     assert!(worksheet_xml.contains("kg,g,L,mL"));
     assert!(worksheet_xml.contains("每100g,每100mL"));
+    assert!(worksheet_xml.contains("w/w,w/v"));
+}
+
+#[test]
+fn custom_columns_and_sweetness_round_trip_preserve_selection_unknown_and_zero() {
+    let fixture = OutputFixture::new();
+    let path = fixture.path("custom-library.csv");
+    let mut review = valid_review();
+    review.nutrients.push(ImportedNutrientValue {
+        definition_id: Some("custom-lactose".into()),
+        name: "乳糖".into(),
+        unit: "g".into(),
+        value: None,
+        category: Some("nutrition".into()),
+    });
+    review.nutrients.push(ImportedNutrientValue {
+        definition_id: Some("custom-polyphenol".into()),
+        name: "总多酚".into(),
+        unit: "mg".into(),
+        value: Some("0".into()),
+        category: Some("research".into()),
+    });
+    review.sweetness = Some(IngredientSweetness {
+        basis: "w_v_per_100ml".into(),
+        content: Some("12.5".into()),
+        relative_factor: Some("0.8".into()),
+    });
+
+    write_library_export(&path, IngredientExchangeFormat::Csv, &[review.clone()]).unwrap();
+    let exported = fs::read_to_string(&path).unwrap();
+    assert!(exported.contains("自定义含量[营养相关]:乳糖(g)"));
+    assert!(exported.contains("自定义含量[研发指标]:总多酚(mg)"));
+    assert!(exported.contains("未知"));
+
+    let imported = parse_csv(&exported).unwrap();
+    let lactose = imported[0]
+        .nutrients
+        .iter()
+        .find(|nutrient| nutrient.name == "乳糖")
+        .unwrap();
+    let polyphenol = imported[0]
+        .nutrients
+        .iter()
+        .find(|nutrient| nutrient.name == "总多酚")
+        .unwrap();
+    assert_eq!(lactose.value, None);
+    assert_eq!(lactose.category.as_deref(), Some("nutrition"));
+    assert_eq!(polyphenol.value.as_deref(), Some("0"));
+    assert_eq!(polyphenol.category.as_deref(), Some("research"));
+    assert_eq!(
+        imported[0]
+            .sweetness
+            .as_ref()
+            .map(|value| value.basis.as_str()),
+        Some("w_v_per_100ml")
+    );
+
+    let xlsx_path = fixture.path("custom-library.xlsx");
+    write_library_export(&xlsx_path, IngredientExchangeFormat::Xlsx, &[review]).unwrap();
+    let xlsx_imported = parse_ingredient_table(&read_first_xlsx_table(&xlsx_path)).unwrap();
+    assert!(xlsx_imported[0].nutrients.iter().any(|nutrient| {
+        nutrient.name == "乳糖"
+            && nutrient.value.is_none()
+            && nutrient.category.as_deref() == Some("nutrition")
+    }));
+    assert_eq!(
+        xlsx_imported[0]
+            .sweetness
+            .as_ref()
+            .and_then(|value| value.relative_factor.as_deref()),
+        Some("0.8")
+    );
+}
+
+#[test]
+fn legacy_custom_column_requires_category_review() {
+    let draft = parse_csv(
+        "通用原料名称,供应商名称,营养基准,自定义含量:乳糖(g)\n脱脂乳粉,供应商A,每100g,2\n",
+    )
+    .unwrap()
+    .remove(0);
+    assert!(
+        validate_review(&draft)
+            .iter()
+            .any(|issue| { issue.field_path.as_deref() == Some("nutrients.0.category") })
+    );
 }
 
 fn valid_review() -> ReviewedIngredientImportDraft {
@@ -184,6 +272,7 @@ fn valid_review() -> ReviewedIngredientImportDraft {
             nutrient("protein", "蛋白质", "g", Some("34.0")),
             nutrient("fat", "脂肪", "g", Some("0.8")),
         ],
+        sweetness: None,
         contains_allergens: vec!["乳及乳制品".into()],
         may_contain_allergens: vec!["大豆".into()],
         source: "供应商规格书".into(),
@@ -203,6 +292,7 @@ fn nutrient(
         name: name.into(),
         unit: unit.into(),
         value: value.map(str::to_string),
+        category: Some("nutrition".into()),
     }
 }
 

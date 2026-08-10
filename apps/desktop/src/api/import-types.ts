@@ -1,7 +1,9 @@
 import type {
   EntityId,
   IngredientSourceAttachment,
+  IngredientSweetness,
   IngredientVariant,
+  NutrientDefinitionCategory,
   NutritionBasis,
   PriceUnit,
 } from "./types";
@@ -66,6 +68,7 @@ export interface ImportedNutrientValue {
   name: string;
   unit: string;
   value: string | null;
+  category?: NutrientDefinitionCategory | null;
 }
 
 export interface ReviewedIngredientImportDraft {
@@ -81,6 +84,7 @@ export interface ReviewedIngredientImportDraft {
   densityGPerMl: string | null;
   nutritionBasis: NutritionBasis | null;
   nutrients: ImportedNutrientValue[];
+  sweetness?: IngredientSweetness | null;
   containsAllergens: string[];
   mayContainAllergens: string[];
   source: string;

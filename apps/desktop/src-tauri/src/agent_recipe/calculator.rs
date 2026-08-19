@@ -47,7 +47,11 @@ pub fn evaluate(
     payload: &AgentRecipeProposalPayload,
 ) -> Result<Value, RepositoryError> {
     validate_payload(payload)?;
-    let definitions = ingredients.list_nutrient_definitions()?;
+    let definitions = ingredients
+        .list_nutrient_definitions()?
+        .into_iter()
+        .filter(|definition| definition.category == "nutrition")
+        .collect::<Vec<_>>();
     let mut total_mass = Decimal::ZERO;
     let mut known_cost = Decimal::ZERO;
     let mut missing_cost_ids = Vec::new();

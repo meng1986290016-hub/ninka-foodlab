@@ -15,6 +15,7 @@ import type {
   RecipeSchemeUpdateInput,
   RecipeSummary,
   RecipeVersion,
+  RecipeVersionItemSnapshot,
 } from "../../api/recipe-types";
 import {
   recipeProductId,
@@ -22,6 +23,15 @@ import {
   recipeSchemeStatus,
 } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import {
+  buildVersionDataGapReport,
+  createSnapshotIngredientNutritionDetail,
+  createVersionNutritionDetail,
+} from "../data-quality/data-quality";
 import {
   calculateRecipeAtCurrentPrices,
   loadRecipeVersionClosure,
@@ -121,6 +131,8 @@ export function RecipeLibrary({
   const [createName, setCreateName] = useState("");
   const [createKind, setCreateKind] = useState<RecipeKind>("formula");
   const [creating, setCreating] = useState(false);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -332,6 +344,64 @@ export function RecipeLibrary({
       setError(messageFrom(cause, "无法按当前价格重算"));
     } finally {
       setRecalculating(false);
+    }
+  }
+
+  async function openSelectedVersionGaps(nutrientDefinitionId?: string) {
+    if (selectedVersion === null) return;
+    setError(null);
+    try {
+      const referencedVersions = await loadRecipeVersionClosure(
+        (id) => api.getRecipeVersion(id),
+        selectedVersion,
+      );
+      setDataDrawer({
+        kind: "gaps",
+        report: buildVersionDataGapReport({
+          rootVersion: selectedVersion,
+          referencedVersions,
+        }),
+        initialGrouping:
+          nutrientDefinitionId === undefined ? "source" : "field",
+        ...(nutrientDefinitionId === undefined
+          ? {}
+          : { nutrientDefinitionId }),
+      });
+    } catch (cause) {
+      setError(messageFrom(cause, "缺失数据详情无法读取"));
+    }
+  }
+
+  async function openSnapshotNutrition(item: RecipeVersionItemSnapshot) {
+    if (selectedVersion === null) return;
+    if (item.kind === "ingredient") {
+      const nutrientNames = new Map(
+        selectedVersion.snapshot.calculation.nutrients.map((nutrient) => [
+          nutrient.nutrientDefinitionId,
+          {
+            name: nutrient.name,
+            category: "nutrition" as const,
+          },
+        ]),
+      );
+      setDataDrawer({
+        kind: "nutrition",
+        detail: createSnapshotIngredientNutritionDetail(
+          item.ingredient,
+          nutrientNames,
+          selectedVersion.createdAt,
+        ),
+      });
+      return;
+    }
+    try {
+      const child = await api.getRecipeVersion(item.recipeVersion.id);
+      setDataDrawer({
+        kind: "nutrition",
+        detail: createVersionNutritionDetail(child),
+      });
+    } catch (cause) {
+      setError(messageFrom(cause, "半成品营养信息无法读取"));
     }
   }
 
@@ -845,6 +915,9 @@ export function RecipeLibrary({
           onClose={() => setInspectorOpen(false)}
           onCreateAlternative={() => setAlternativeOpen(true)}
           onOpenSchemeSettings={() => setSchemeSettingsOpen(true)}
+          onViewGaps={() => void openSelectedVersionGaps()}
+          onViewItemNutrition={(item) => void openSnapshotNutrition(item)}
+          onViewNutrientGap={(id) => void openSelectedVersionGaps(id)}
           onCopy={() => void copyToDraft()}
           onOpenNutritionLabel={() => {
             if (selectedVersion) {
@@ -871,6 +944,11 @@ export function RecipeLibrary({
           restoring={restoring}
         />
       )}
+
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
 
       {archiveCandidate ? (
         <div className="recipe-library-dialog-backdrop">
@@ -1150,6 +1228,9 @@ interface RecipeVersionInspectorProps {
   onClose(): void;
   onCreateAlternative(): void;
   onOpenSchemeSettings(): void;
+  onViewGaps(): void;
+  onViewItemNutrition(item: RecipeVersionItemSnapshot): void;
+  onViewNutrientGap(nutrientDefinitionId: string): void;
 }
 
 function RecipeVersionInspector({
@@ -1178,6 +1259,9 @@ function RecipeVersionInspector({
   onClose,
   onCreateAlternative,
   onOpenSchemeSettings,
+  onViewGaps,
+  onViewItemNutrition,
+  onViewNutrientGap,
 }: RecipeVersionInspectorProps) {
   if (entry === null) {
     return (
@@ -1470,6 +1554,9 @@ function RecipeVersionInspector({
         {selectedVersion ? (
           <VersionSnapshot
             currentPrice={currentPrice}
+            onViewGaps={onViewGaps}
+            onViewItemNutrition={onViewItemNutrition}
+            onViewNutrientGap={onViewNutrientGap}
             version={selectedVersion}
           />
         ) : null}
@@ -1481,24 +1568,19 @@ function RecipeVersionInspector({
 function VersionSnapshot({
   version,
   currentPrice,
+  onViewGaps,
+  onViewItemNutrition,
+  onViewNutrientGap,
 }: {
   version: RecipeVersion;
   currentPrice: RecipeCurrentPriceResult | null;
+  onViewGaps(): void;
+  onViewItemNutrition(item: RecipeVersionItemSnapshot): void;
+  onViewNutrientGap(nutrientDefinitionId: string): void;
 }) {
   const { snapshot } = version;
   const nutritionItems = snapshot.calculation.nutrients.filter(
     (nutrient) => (nutrient.category ?? "nutrition") === "nutrition",
-  );
-  const researchItems = snapshot.calculation.nutrients.filter(
-    (nutrient) => nutrient.category === "research",
-  );
-  const itemNames = Object.fromEntries(
-    snapshot.items.map((item) => [
-      item.id,
-      item.kind === "ingredient"
-        ? item.ingredient.materialName
-        : item.recipeVersion.recipeName,
-    ]),
   );
   return (
     <>
@@ -1522,7 +1604,19 @@ function VersionSnapshot({
           </div>
           <div>
             <dt>数据完整度</dt>
-            <dd>{snapshot.calculation.completeness.percent}%</dd>
+            <dd>
+              {snapshot.calculation.completeness.percent >= 100 ? (
+                "100%"
+              ) : (
+                <button
+                  className="data-quality-trigger"
+                  onClick={onViewGaps}
+                  type="button"
+                >
+                  {snapshot.calculation.completeness.percent}% · 查看缺失
+                </button>
+              )}
+            </dd>
           </div>
         </dl>
       </section>
@@ -1536,11 +1630,18 @@ function VersionSnapshot({
           {snapshot.items.map((item) => (
             <div key={item.id}>
               <span>
-                <strong>
-                  {item.kind === "ingredient"
-                    ? item.ingredient.materialName
-                    : item.recipeVersion.recipeName}
-                </strong>
+                <button
+                  className="data-quality-trigger"
+                  onClick={() => onViewItemNutrition(item)}
+                  type="button"
+                >
+                  <strong>
+                    {item.kind === "ingredient"
+                      ? item.ingredient.materialName
+                      : item.recipeVersion.recipeName}
+                  </strong>
+                  <Icon name="nutrition" size={14} />
+                </button>
                 <small>
                   {item.kind === "ingredient"
                     ? `${item.ingredient.supplierName} · ${item.ingredient.modelOrSpecification}`
@@ -1570,15 +1671,21 @@ function VersionSnapshot({
               <strong>
                 {nutrient.status === "unknown"
                   ? "—"
-                  : `${formatNumber(nutrient.per100gKnownAmount)} ${nutrient.unit}`}
+                  : `${nutrient.status === "partial" ? "已知部分 " : ""}${formatNumber(nutrient.per100gKnownAmount)} ${nutrient.unit}`}
               </strong>
-              <small>
-                {nutrient.status === "complete"
-                  ? "完整"
-                  : nutrient.status === "partial"
-                    ? "部分数据"
-                    : "待补充"}
-              </small>
+              {nutrient.status === "complete" ? (
+                <small>完整</small>
+              ) : (
+                <button
+                  className="data-quality-trigger"
+                  onClick={() => onViewNutrientGap(nutrient.nutrientDefinitionId)}
+                  type="button"
+                >
+                  {nutrient.status === "partial"
+                    ? `覆盖 ${Math.round(Number(nutrient.completenessRatio) * 100)}% · 查看缺失`
+                    : "待补充 · 查看缺失"}
+                </button>
+              )}
             </div>
           ))}
           {nutritionItems.length === 0 ? (
@@ -1586,34 +1693,6 @@ function VersionSnapshot({
           ) : null}
         </div>
       </section>
-
-      {researchItems.length > 0 ? (
-        <section className="recipe-library-inspector__section">
-          <div className="recipe-library-inspector__section-title">
-            <h3>研发指标</h3>
-            <span>理论研发估算</span>
-          </div>
-          <div className="recipe-library__nutrition">
-            {researchItems.map((nutrient) => (
-              <div key={nutrient.nutrientDefinitionId}>
-                <span>{nutrient.name}</span>
-                <strong>
-                  {nutrient.status === "unknown"
-                    ? "—"
-                    : `${formatNumber(nutrient.per100gKnownAmount)} ${nutrient.unit}/100g`}
-                </strong>
-                <small>
-                  {nutrient.status === "complete"
-                    ? "完整"
-                    : nutrient.status === "partial"
-                      ? "部分数据"
-                      : "待补充"}
-                </small>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       <section className="recipe-library-inspector__section">
         <div className="recipe-library-inspector__section-title">

@@ -411,7 +411,6 @@ export interface RecipeVersionComparison {
   after: RecipeVersionReference;
   itemChanges: RecipeVersionItemChange[];
   nutritionChanges: RecipeVersionComparisonRow[];
-  researchChanges?: RecipeVersionComparisonRow[];
   costChanges: RecipeVersionComparisonRow[];
   targetChanges: RecipeVersionComparisonRow[];
   allergenChanges: RecipeVersionComparisonRow[];

@@ -3,14 +3,12 @@ import { useMemo, useState } from "react";
 import type { DesktopApi } from "../../api/desktop-api";
 import type {
   NutrientDefinition,
-  NutrientDefinitionCategory,
   NutritionBasis,
   VariantNutrition,
 } from "../../api/types";
 
 interface NutritionEditorProps {
   api: DesktopApi;
-  category?: NutrientDefinitionCategory;
   definitions: NutrientDefinition[];
   densityGPerMl: string | null;
   nutrition: VariantNutrition;
@@ -19,12 +17,10 @@ interface NutritionEditorProps {
   onDefinitionUpdated?: (definition: NutrientDefinition) => void;
   onDefinitionArchived?: (definitionId: string, archivedAt: string) => void;
   allowCustomDefinition?: boolean;
-  showBasis?: boolean;
 }
 
 export function NutritionEditor({
   api,
-  category = "nutrition",
   definitions,
   densityGPerMl,
   nutrition,
@@ -33,7 +29,6 @@ export function NutritionEditor({
   onDefinitionUpdated,
   onDefinitionArchived,
   allowCustomDefinition = true,
-  showBasis = true,
 }: NutritionEditorProps) {
   const [adding, setAdding] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -57,15 +52,14 @@ export function NutritionEditor({
   const selectedIds = useMemo(() => new Set(values.keys()), [values]);
   const visibleDefinitions = definitions.filter(
     (definition) =>
-      definition.category === category &&
-      ((category === "nutrition" && definition.builtIn) ||
-        selectedIds.has(definition.id)),
+      definition.category === "nutrition" &&
+      (definition.builtIn || selectedIds.has(definition.id)),
   );
   const availableDefinitions = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("zh-CN");
     return definitions.filter(
       (definition) =>
-        definition.category === category &&
+        definition.category === "nutrition" &&
         definition.archivedAt === null &&
         !selectedIds.has(definition.id) &&
         (query === "" ||
@@ -73,9 +67,10 @@ export function NutritionEditor({
             .toLocaleLowerCase("zh-CN")
             .includes(query)),
     );
-  }, [category, definitions, search, selectedIds]);
+  }, [definitions, search, selectedIds]);
   const managedDefinitions = definitions.filter(
-    (definition) => !definition.builtIn && definition.category === category,
+    (definition) =>
+      !definition.builtIn && definition.category === "nutrition",
   );
 
   function updateValue(definitionId: string, value: string) {
@@ -147,11 +142,7 @@ export function NutritionEditor({
     setError(null);
     try {
       if (editingId === null) {
-        const created = await api.createNutrientDefinition(
-          name,
-          unit,
-          category,
-        );
+        const created = await api.createNutrientDefinition(name, unit, "nutrition");
         onDefinitionCreated(created);
         attachDefinition(created);
       } else {
@@ -159,7 +150,7 @@ export function NutritionEditor({
           editingId,
           name,
           unit,
-          category,
+          "nutrition",
         );
         onDefinitionUpdated?.(updated);
       }
@@ -201,34 +192,28 @@ export function NutritionEditor({
     <div className="nutrition-editor">
       <div className="editor-section-heading field--full">
         <div>
-          <h3>{category === "nutrition" ? "营养成分" : "研发指标"}</h3>
-          <p>
-            {category === "nutrition"
-              ? "维护标签与配方计算需要的基础营养数据。"
-              : "只选择当前原料需要维护和参与配方汇总的研发指标。"}
-          </p>
+          <h3>营养成分</h3>
+          <p>维护标签与配方计算需要的基础营养数据。</p>
         </div>
       </div>
 
-      {showBasis ? (
-        <label className="field field--full">
-          <span>营养数据基准</span>
-          <select
-            onChange={(event) =>
-              onChange({
-                ...nutrition,
-                basis: event.target.value as NutritionBasis,
-              })
-            }
-            value={nutrition.basis}
-          >
-            <option value="per_100g">每 100 g</option>
-            <option value="per_100ml">每 100 mL</option>
-          </select>
-        </label>
-      ) : null}
+      <label className="field field--full">
+        <span>营养数据基准</span>
+        <select
+          onChange={(event) =>
+            onChange({
+              ...nutrition,
+              basis: event.target.value as NutritionBasis,
+            })
+          }
+          value={nutrition.basis}
+        >
+          <option value="per_100g">每 100 g</option>
+          <option value="per_100ml">每 100 mL</option>
+        </select>
+      </label>
 
-      {showBasis && nutrition.basis === "per_100ml" && !densityGPerMl ? (
+      {nutrition.basis === "per_100ml" && !densityGPerMl ? (
         <p className="nutrition-warning" role="status">
           可以保存原始数据，但无法换算为质量基准。
         </p>
@@ -236,7 +221,7 @@ export function NutritionEditor({
 
       <div className="nutrition-table field--full">
         <div className="nutrition-table__header">
-          <span>{category === "nutrition" ? "营养成分" : "已选研发指标"}</span>
+          <span>营养成分</span>
           <span>数值</span>
           <span>单位</span>
           <span aria-hidden="true" />
@@ -257,7 +242,7 @@ export function NutritionEditor({
               value={values.get(definition.id) ?? ""}
             />
             <span className="nutrition-unit">{definition.unit}</span>
-            {definition.builtIn && category === "nutrition" ? (
+            {definition.builtIn ? (
               <span />
             ) : (
               <button
@@ -272,7 +257,7 @@ export function NutritionEditor({
           </div>
         ))}
         {visibleDefinitions.length === 0 ? (
-          <p className="data-helper">尚未选择研发指标。</p>
+          <p className="data-helper">尚未选择营养成分。</p>
         ) : null}
       </div>
 
@@ -431,9 +416,7 @@ export function NutritionEditor({
       ) : null}
 
       <p className="data-helper nutrition-editor__footnote">
-        {category === "research"
-          ? "留空表示未知；输入 0 表示已经确认数值为 0。未选择的研发指标不会参与配方汇总。"
-          : "留空表示未知；输入 0 表示已经确认数值为 0。未选择的自定义项不会参与配方汇总。"}
+        留空表示未知；输入 0 表示已经确认数值为 0。未选择的自定义项不会参与配方汇总。
       </p>
     </div>
   );

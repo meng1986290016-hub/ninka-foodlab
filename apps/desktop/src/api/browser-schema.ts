@@ -23,6 +23,7 @@ import type {
 } from "./agent-types";
 import type {
   Recipe,
+  RecipeCalculation,
   RecipeDraft,
   RecipeVersion,
 } from "./recipe-types";
@@ -352,40 +353,180 @@ export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
   };
 }
 
-const RETIRED_RESEARCH_DEFINITION_ID = "theoretical_sweetness";
-
 export function migrateV9ToV10(state: BrowserStateV9): BrowserStateV10 {
-  return removeRetiredResearchMetric(state);
+  return removeResearchMetrics(state);
 }
 
-function removeRetiredResearchMetric(
+function removeResearchMetrics(
   state: BrowserStateV9 | BrowserStateV10,
 ): BrowserStateV10 {
+  const retiredDefinitionIds = new Set(
+    state.nutrientDefinitions
+      .filter(
+        (definition) =>
+          (definition as unknown as { category?: string }).category ===
+            "research" || definition.id === "theoretical_sweetness",
+      )
+      .map((definition) => definition.id),
+  );
+  const retiredDefinitionNames = new Set(
+    state.nutrientDefinitions
+      .filter((definition) => retiredDefinitionIds.has(definition.id))
+      .map((definition) => definition.name),
+  );
+  const cleanCalculation = (
+    calculation: RecipeCalculation | null,
+  ): RecipeCalculation | null =>
+    calculation === null
+      ? null
+      : {
+          ...calculation,
+          nutrients: calculation.nutrients.filter(
+            (nutrient) =>
+              !retiredDefinitionIds.has(nutrient.nutrientDefinitionId) &&
+              (nutrient as unknown as { category?: string }).category !==
+                "research",
+          ),
+        };
+  const cleanVariant = (variant: IngredientVariant): IngredientVariant => {
+    const legacyVariant = variant as IngredientVariant & {
+      sweetness?: unknown;
+    };
+    const { sweetness: _retiredMetric, ...cleaned } = legacyVariant;
+    return {
+      ...cleaned,
+      nutrition: {
+        ...cleaned.nutrition,
+        values: cleaned.nutrition.values.filter(
+          (value) =>
+            !retiredDefinitionIds.has(value.nutrientDefinitionId),
+        ),
+      },
+      completeness: {
+        ...cleaned.completeness,
+        missingFields: cleaned.completeness.missingFields.filter(
+          (field) => !retiredDefinitionNames.has(field),
+        ),
+      },
+    };
+  };
+  const keepTarget = (target: RecipeDraft["targets"][number]) =>
+    target.metric.kind !== "nutrition_per_100g" ||
+    !retiredDefinitionIds.has(target.metric.nutrientDefinitionId);
   return {
     ...state,
     schemaVersion: BROWSER_SCHEMA_VERSION,
     nutrientDefinitions: state.nutrientDefinitions.filter(
-      (definition) => definition.id !== RETIRED_RESEARCH_DEFINITION_ID,
+      (definition) => !retiredDefinitionIds.has(definition.id),
     ),
     materialGroups: state.materialGroups.map((group) => ({
       ...group,
-      variants: group.variants.map((variant) => {
-        const legacyVariant = variant as IngredientVariant & {
-          sweetness?: unknown;
-        };
-        const { sweetness: _retiredMetric, ...cleanVariant } = legacyVariant;
-        return {
-          ...cleanVariant,
-          nutrition: {
-            ...cleanVariant.nutrition,
-            values: cleanVariant.nutrition.values.filter(
-              (value) =>
-                value.nutrientDefinitionId !== RETIRED_RESEARCH_DEFINITION_ID,
+      variants: group.variants.map(cleanVariant),
+    })),
+    importDrafts: Object.fromEntries(
+      Object.entries(state.importDrafts).map(([id, draft]) => [
+        id,
+        {
+          ...draft,
+          review: {
+            ...draft.review,
+            nutrients: draft.review.nutrients.filter(
+              (nutrient) =>
+                (nutrient.category as string | null | undefined) !==
+                  "research" &&
+                (nutrient.definitionId === null ||
+                  !retiredDefinitionIds.has(nutrient.definitionId)),
             ),
           },
-        };
+        },
+      ]),
+    ),
+    recipeDrafts: Object.fromEntries(
+      Object.entries(state.recipeDrafts).map(([id, draft]) => [
+        id,
+        {
+          ...draft,
+          items: draft.items.map((item) =>
+            item.kind === "ingredient"
+              ? {
+                  ...item,
+                  ingredientVariant: cleanVariant(item.ingredientVariant),
+                }
+              : item,
+          ),
+          targets: draft.targets.filter(keepTarget),
+          calculation: cleanCalculation(draft.calculation),
+        },
+      ]),
+    ),
+    recipeVersions: Object.fromEntries(
+      Object.entries(state.recipeVersions).map(([id, version]) => [
+        id,
+        {
+          ...version,
+          snapshot: {
+            ...version.snapshot,
+            targets: version.snapshot.targets.filter(keepTarget),
+            calculation: cleanCalculation(version.snapshot.calculation)!,
+            items: version.snapshot.items.map((item) =>
+              item.kind === "ingredient"
+                ? {
+                    ...item,
+                    ingredient: {
+                      ...item.ingredient,
+                      nutrientsPer100g: Object.fromEntries(
+                        Object.entries(item.ingredient.nutrientsPer100g).filter(
+                          ([definitionId]) =>
+                            !retiredDefinitionIds.has(definitionId),
+                        ),
+                      ),
+                      nutrientUnits: Object.fromEntries(
+                        Object.entries(item.ingredient.nutrientUnits).filter(
+                          ([definitionId]) =>
+                            !retiredDefinitionIds.has(definitionId),
+                        ),
+                      ),
+                    },
+                  }
+                : item,
+            ),
+          },
+        },
+      ]),
+    ),
+    agentRecipeProposals: Object.fromEntries(
+      Object.entries(state.agentRecipeProposals).map(([id, proposal]) => {
+        const keptRequirementIndexes = proposal.payload.requirements
+          .map((requirement, index) => ({ requirement, index }))
+          .filter(
+            ({ requirement }) =>
+              requirement.nutrientDefinitionId === null ||
+              !retiredDefinitionIds.has(requirement.nutrientDefinitionId),
+          );
+        return [
+          id,
+          {
+            ...proposal,
+            payload: {
+              ...proposal.payload,
+              requirements: keptRequirementIndexes.map(
+                ({ requirement }) => requirement,
+              ),
+            },
+            evaluation: {
+              ...proposal.evaluation,
+              calculation: cleanCalculation(proposal.evaluation.calculation)!,
+              requirementStatuses: keptRequirementIndexes.flatMap(
+                ({ index }) => {
+                  const status = proposal.evaluation.requirementStatuses[index];
+                  return status ? [status] : [];
+                },
+              ),
+            },
+          },
+        ];
       }),
-    })),
+    ),
   };
 }
 
@@ -400,7 +541,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = removeRetiredResearchMetric(parsed);
+    const migrated = removeResearchMetrics(parsed);
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -421,10 +562,13 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 8) {
       throw new Error("unsupported browser schema");
     }
+    const serialized = JSON.stringify(parsed);
     const migrated = migrateV9ToV10(migrateV8ToV9(parsed));
     if (
       !("agentRecipeProposals" in parsed) ||
-      !("materialNeeds" in parsed)
+      !("materialNeeds" in parsed) ||
+      serialized.includes('"category":"research"') ||
+      serialized.includes('"theoretical_sweetness"')
     ) {
       writeBrowserState(storage, migrated);
     }

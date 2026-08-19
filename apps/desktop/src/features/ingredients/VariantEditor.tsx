@@ -112,7 +112,7 @@ export function VariantEditor({
   variant,
   initialResearchNotes = "",
 }: VariantEditorProps) {
-  const [tab, setTab] = useState<"basic" | "nutrition" | "research">("basic");
+  const [tab, setTab] = useState<"basic" | "nutrition">("basic");
   const [input, setInput] = useState<IngredientVariantInput>(() =>
     toInput(group, variant, initialResearchNotes),
   );
@@ -261,16 +261,6 @@ export function VariantEditor({
           >
             营养成分
           </button>
-          <button
-            aria-controls="variant-research-panel"
-            aria-selected={tab === "research"}
-            className={tab === "research" ? "is-active" : undefined}
-            onClick={() => setTab("research")}
-            role="tab"
-            type="button"
-          >
-            研发指标
-          </button>
         </div>
 
         <div
@@ -312,26 +302,6 @@ export function VariantEditor({
             value={input.allergens ?? { contains: [], mayContain: [] }}
           />
           <SourceAttachmentList attachments={variant?.sourceAttachments ?? []} />
-        </div>
-
-        <div
-          className="variant-panel"
-          hidden={tab !== "research"}
-          id="variant-research-panel"
-          role="tabpanel"
-        >
-          <NutritionEditor
-            api={api}
-            category="research"
-            definitions={definitions}
-            densityGPerMl={input.densityGPerMl}
-            nutrition={input.nutrition}
-            onChange={(nutrition) => changeInput({ ...input, nutrition })}
-            onDefinitionCreated={addDefinition}
-            onDefinitionUpdated={updateDefinition}
-            onDefinitionArchived={markDefinitionArchived}
-            showBasis={false}
-          />
         </div>
 
         {dirty ? (

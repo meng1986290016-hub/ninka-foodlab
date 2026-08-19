@@ -168,7 +168,7 @@ fn latest_migration_keeps_label_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 13);
+    assert_eq!(version, 15);
     for object in [
         "nutrition_labels",
         "nutrition_label_drafts",

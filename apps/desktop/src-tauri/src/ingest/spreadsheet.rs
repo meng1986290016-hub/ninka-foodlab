@@ -342,7 +342,8 @@ pub fn write_template(
         .iter()
         .filter(|definition| {
             definition.archived_at.is_none()
-                && (!definition.built_in || definition.category == "research")
+                && !definition.built_in
+                && definition.category == "nutrition"
         })
         .map(custom_column_from_definition)
         .collect::<Vec<_>>();
@@ -547,8 +548,6 @@ fn parse_custom_header(header: &str) -> Option<CustomColumn> {
     let (category, remainder) = if let Some(value) = header.strip_prefix("自定义含量[营养相关]:")
     {
         (Some("nutrition".to_string()), value)
-    } else if let Some(value) = header.strip_prefix("自定义含量[研发指标]:") {
-        (Some("research".to_string()), value)
     } else if let Some(value) = header.strip_prefix("自定义含量:") {
         (None, value)
     } else {
@@ -589,6 +588,7 @@ fn custom_columns_from_reviews(reviews: &[ReviewedIngredientImportDraft]) -> Vec
             !NUTRIENT_COLUMNS
                 .iter()
                 .any(|built_in| nutrient.definition_id.as_deref() == Some(built_in.definition_id))
+                && nutrient.category.as_deref().unwrap_or("nutrition") == "nutrition"
         })
     {
         let category = nutrient.category.as_deref().unwrap_or("nutrition");
@@ -610,12 +610,8 @@ fn custom_columns_from_reviews(reviews: &[ReviewedIngredientImportDraft]) -> Vec
 }
 
 fn custom_header(category: &str, name: &str, unit: &str) -> String {
-    let category_label = if category == "research" {
-        "研发指标"
-    } else {
-        "营养相关"
-    };
-    format!("自定义含量[{category_label}]:{name}({unit})")
+    let _ = category;
+    format!("自定义含量[营养相关]:{name}({unit})")
 }
 
 fn headers_with_custom(custom_columns: &[CustomColumn]) -> Vec<String> {

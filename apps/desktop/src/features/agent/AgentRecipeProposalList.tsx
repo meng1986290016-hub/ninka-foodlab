@@ -1,5 +1,12 @@
+import { useState } from "react";
+
 import type { AgentRecipeProposal } from "../../api/agent-recipe-types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import { buildCalculationDataGapReport } from "../data-quality/data-quality";
 
 interface AgentRecipeProposalListProps {
   busy: boolean;
@@ -16,6 +23,8 @@ export function AgentRecipeProposalList({
   onOpen,
   onOpenAccepted,
 }: AgentRecipeProposalListProps) {
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   if (proposals.length === 0) return null;
   return (
     <section className="agent-proposal-list" aria-label="配方提案">
@@ -47,7 +56,37 @@ export function AgentRecipeProposalList({
               </div>
               <div>
                 <dt>数据完整度</dt>
-                <dd>{calculation.completeness.percent}%</dd>
+                <dd>
+                  {calculation.completeness.percent >= 100 ? (
+                    "100%"
+                  ) : (
+                    <button
+                      className="data-quality-trigger"
+                      onClick={() => {
+                        const itemNames = new Map(
+                          proposal.payload.items.map((item) => [
+                            item.id,
+                            item.kind === "ingredient"
+                              ? `${item.materialName}（${item.supplierName}${item.modelOrSpecification ? ` · ${item.modelOrSpecification}` : ""}）`
+                              : `${item.materialName}（待补充原料）`,
+                          ]),
+                        );
+                        setDataDrawer({
+                          kind: "gaps",
+                          report: buildCalculationDataGapReport(
+                            proposal.payload.productName,
+                            calculation,
+                            itemNames,
+                          ),
+                          initialGrouping: "source",
+                        });
+                      }}
+                      type="button"
+                    >
+                      {calculation.completeness.percent}% · 查看缺失
+                    </button>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>匹配原料</dt>
@@ -96,6 +135,10 @@ export function AgentRecipeProposalList({
           </article>
         );
       })}
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </section>
   );
 }

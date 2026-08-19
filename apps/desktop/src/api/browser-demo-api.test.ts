@@ -163,12 +163,21 @@ describe("BrowserDemoApi", () => {
     });
   });
 
-  it("migrates legacy sweetness inputs into the reusable research template", async () => {
+  it("removes legacy research metrics from browser storage", async () => {
     await api.listMaterialGroups();
     const stored = JSON.parse(
       storage.getItem("food-rd.browser-demo.v8") ?? "null",
     ) as {
-      nutrientDefinitions: Array<{ id: string }>;
+      nutrientDefinitions: Array<{
+        id: string;
+        code?: string;
+        name?: string;
+        unit?: string;
+        builtIn?: boolean;
+        sortOrder?: number;
+        category?: string;
+        archivedAt?: string | null;
+      }>;
       materialGroups: Array<{
         variants: Array<{
           sweetness?: unknown;
@@ -181,8 +190,18 @@ describe("BrowserDemoApi", () => {
         }>;
       }>;
     };
-    stored.nutrientDefinitions = stored.nutrientDefinitions.filter(
-      (definition) => definition.id !== "theoretical_sweetness",
+    stored.nutrientDefinitions.push(
+      { id: "theoretical_sweetness" },
+      {
+        id: "polyphenol",
+        code: "custom:polyphenol",
+        name: "总多酚",
+        unit: "mg",
+        builtIn: false,
+        sortOrder: 1001,
+        category: "research",
+        archivedAt: null,
+      },
     );
     const variant = stored.materialGroups[0]?.variants[0];
     if (variant === undefined) throw new Error("missing demo variant");
@@ -191,25 +210,29 @@ describe("BrowserDemoApi", () => {
       content: "10",
       relativeFactor: "2",
     };
+    variant.nutrition.values.push({
+      nutrientDefinitionId: "theoretical_sweetness",
+      value: "0.2",
+    });
+    variant.nutrition.values.push({
+      nutrientDefinitionId: "polyphenol",
+      value: "20",
+    });
     storage.setItem("food-rd.browser-demo.v8", JSON.stringify(stored));
 
     const reopened = new BrowserDemoApi({ storage });
     const groups = await reopened.listMaterialGroups();
     const migrated = groups[0]?.variants[0];
 
-    expect(
-      migrated?.nutrition.values.find(
-        (value) =>
-          value.nutrientDefinitionId === "theoretical_sweetness",
-      )?.value,
-    ).toBe("0.2");
-    expect(await reopened.listNutrientDefinitions()).toContainEqual(
-      expect.objectContaining({
-        id: "theoretical_sweetness",
-        category: "research",
-        unit: "倍",
-      }),
-    );
+    for (const id of ["theoretical_sweetness", "polyphenol"]) {
+      expect(migrated?.nutrition.values).not.toContainEqual(
+        expect.objectContaining({ nutrientDefinitionId: id }),
+      );
+      expect(await reopened.listNutrientDefinitions()).not.toContainEqual(
+        expect.objectContaining({ id }),
+      );
+    }
+    expect("sweetness" in (migrated ?? {})).toBe(false);
   });
 
   it("commits every ready demo draft with one atomic browser write", async () => {

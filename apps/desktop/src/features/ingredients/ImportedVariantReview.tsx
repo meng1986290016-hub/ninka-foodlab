@@ -61,7 +61,7 @@ export function ImportedVariantReview({
   onSaved,
   onSavedAndNext,
 }: ImportedVariantReviewProps) {
-  const [tab, setTab] = useState<"basic" | "nutrition" | "research">("basic");
+  const [tab, setTab] = useState<"basic" | "nutrition">("basic");
   const [review, setReview] = useState(() => cloneReview(draft.review));
   const [definitions, setDefinitions] = useState<NutrientDefinition[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -271,15 +271,6 @@ export function ImportedVariantReview({
           >
             营养与过敏原
           </button>
-          <button
-            aria-selected={tab === "research"}
-            className={tab === "research" ? "is-active" : undefined}
-            onClick={() => setTab("research")}
-            role="tab"
-            type="button"
-          >
-            研发指标
-          </button>
         </div>
 
         <div className="variant-panel" hidden={tab !== "basic"} role="tabpanel">
@@ -384,7 +375,7 @@ export function ImportedVariantReview({
                                 ...candidate,
                                 category: event.target.value === ""
                                   ? null
-                                  : event.target.value as "nutrition" | "research",
+                                  : ("nutrition" as const),
                               }
                             : candidate,
                         );
@@ -394,7 +385,6 @@ export function ImportedVariantReview({
                     >
                       <option value="">请选择</option>
                       <option value="nutrition">营养相关</option>
-                      <option value="research">研发指标</option>
                     </select>
                   </label>
                 </div>
@@ -416,20 +406,6 @@ export function ImportedVariantReview({
               contains: review.containsAllergens,
               mayContain: review.mayContainAllergens,
             }}
-          />
-        </div>
-
-        <div className="variant-panel" hidden={tab !== "research"} role="tabpanel">
-          <NutritionEditor
-            allowCustomDefinition={false}
-            api={api}
-            category="research"
-            definitions={definitions}
-            densityGPerMl={review.densityGPerMl}
-            nutrition={variantInput.nutrition}
-            onChange={updateNutrition}
-            onDefinitionCreated={() => {}}
-            showBasis={false}
           />
         </div>
 

@@ -20,6 +20,12 @@ import type {
 } from "../../api/nutrition-label-types";
 import type { Recipe, RecipeVersion } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import { buildVersionDataGapReport } from "../data-quality/data-quality";
+import { loadRecipeVersionClosure } from "../recipes/recipe-current-price";
 import { ResearchReportPreviewWorkspace } from "../reports/ResearchReportPreviewWorkspace";
 import { NutritionFactsPreview } from "./NutritionFactsPreview";
 import { NutritionSourceEditor } from "./NutritionSourceEditor";
@@ -73,6 +79,8 @@ export function NutritionLabelWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [reportVersion, setReportVersion] =
     useState<NutritionLabelVersion | null>(null);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -243,6 +251,31 @@ export function NutritionLabelWorkspace({
     setNotice(null);
   }
 
+  async function openRecipeDataGaps(nutrientDefinitionId?: string) {
+    if (context === null) return;
+    setError(null);
+    try {
+      const referencedVersions = await loadRecipeVersionClosure(
+        (id) => api.getRecipeVersion(id),
+        context.recipeVersion,
+      );
+      setDataDrawer({
+        kind: "gaps",
+        report: buildVersionDataGapReport({
+          rootVersion: context.recipeVersion,
+          referencedVersions,
+        }),
+        initialGrouping:
+          nutrientDefinitionId === undefined ? "source" : "field",
+        ...(nutrientDefinitionId === undefined
+          ? {}
+          : { nutrientDefinitionId }),
+      });
+    } catch (cause) {
+      setError(messageFrom(cause, "配方缺失数据详情无法读取"));
+    }
+  }
+
   if (loading) {
     return (
       <section className="nutrition-label-workspace nutrition-label-workspace--state">
@@ -410,6 +443,22 @@ export function NutritionLabelWorkspace({
         </p>
       ) : null}
 
+      {context.recipeVersion.snapshot.calculation.completeness.percent < 100 ? (
+        <div className="nutrition-label-message has-warning">
+          <Icon name="warning" size={16} />
+          <span>
+            配方来源数据完整度 {context.recipeVersion.snapshot.calculation.completeness.percent}%，正式标签仍需确认缺失来源。
+          </span>
+          <button
+            className="data-quality-trigger"
+            onClick={() => void openRecipeDataGaps()}
+            type="button"
+          >
+            查看缺失
+          </button>
+        </div>
+      ) : null}
+
       <div className="nutrition-label-workspace__body">
         <NutritionSourceEditor
           calculation={calculation}
@@ -429,6 +478,10 @@ export function NutritionLabelWorkspace({
           recipeVersion={context.recipeVersion}
         />
       </div>
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </section>
   );
 }

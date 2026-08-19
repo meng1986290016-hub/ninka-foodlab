@@ -26,6 +26,16 @@ import type {
   NutrientDefinition,
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import {
+  buildDraftDataGapReport,
+  createVariantNutritionDetail,
+  createVersionNutritionDetail,
+  type DataGapEntry,
+} from "../data-quality/data-quality";
 import { calculateRecipeDraft } from "./recipe-calculation";
 import { RecipeCostEditor } from "./RecipeCostEditor";
 import { RecipeHeader } from "./RecipeHeader";
@@ -53,6 +63,16 @@ interface RecipeWorkbenchProps {
   onAgentContextChange?(context: RecipeAgentWorkbenchContext | null): void;
   onOpenAgent?(): void;
   onOpenSampleSheet?(launch: SampleSheetLaunch): void;
+  onEditIngredient?(request: RecipeIngredientEditRequest): void;
+  onResumeNutritionConsumed?(): void;
+  resumeNutritionItemId?: string | null;
+}
+
+export interface RecipeIngredientEditRequest {
+  recipeId: string;
+  itemId: string;
+  materialGroupId: string;
+  ingredientVariantId: string;
 }
 
 type NarrowView = "formula" | "results" | "allergens";
@@ -65,6 +85,9 @@ export function RecipeWorkbench({
   onAgentContextChange,
   onOpenAgent,
   onOpenSampleSheet,
+  onEditIngredient,
+  onResumeNutritionConsumed,
+  resumeNutritionItemId,
 }: RecipeWorkbenchProps) {
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +158,8 @@ export function RecipeWorkbench({
       onAgentContextChange={onAgentContextChange}
       onBack={onBack}
       onOpenAgent={onOpenAgent}
+      onEditIngredient={onEditIngredient}
+      onResumeNutritionConsumed={onResumeNutritionConsumed}
       onRecipeUpdated={(recipe) =>
         setRecipes((current) =>
           current.map((summary) =>
@@ -146,6 +171,7 @@ export function RecipeWorkbench({
       }
       onOpenSampleSheet={onOpenSampleSheet}
       recipe={active.recipe}
+      resumeNutritionItemId={resumeNutritionItemId}
     />
   );
 }
@@ -158,6 +184,9 @@ interface RecipeEditorLoaderProps {
   onOpenAgent: (() => void) | undefined;
   onRecipeUpdated(recipe: Recipe): void;
   onOpenSampleSheet: ((launch: SampleSheetLaunch) => void) | undefined;
+  onEditIngredient: ((request: RecipeIngredientEditRequest) => void) | undefined;
+  onResumeNutritionConsumed: (() => void) | undefined;
+  resumeNutritionItemId: string | null | undefined;
 }
 
 function RecipeEditorLoader({
@@ -168,6 +197,9 @@ function RecipeEditorLoader({
   onOpenAgent,
   onRecipeUpdated,
   onOpenSampleSheet,
+  onEditIngredient,
+  onResumeNutritionConsumed,
+  resumeNutritionItemId,
 }: RecipeEditorLoaderProps) {
   const [nutrients, setNutrients] = useState<NutrientDefinition[] | null>(
     null,
@@ -240,8 +272,11 @@ function RecipeEditorLoader({
       onRecipeUpdated={onRecipeUpdated}
       onBack={onBack}
       onOpenAgent={onOpenAgent}
+      onEditIngredient={onEditIngredient}
       onOpenSampleSheet={onOpenSampleSheet}
+      onResumeNutritionConsumed={onResumeNutritionConsumed}
       recipe={recipe}
+      resumeNutritionItemId={resumeNutritionItemId}
     />
   );
 }
@@ -256,6 +291,9 @@ interface RecipeEditorProps {
   onOpenAgent: (() => void) | undefined;
   onRecipeUpdated(recipe: Recipe): void;
   onOpenSampleSheet: ((launch: SampleSheetLaunch) => void) | undefined;
+  onEditIngredient: ((request: RecipeIngredientEditRequest) => void) | undefined;
+  onResumeNutritionConsumed: (() => void) | undefined;
+  resumeNutritionItemId: string | null | undefined;
 }
 
 function RecipeEditor({
@@ -268,6 +306,9 @@ function RecipeEditor({
   onOpenAgent,
   onRecipeUpdated,
   onOpenSampleSheet,
+  onEditIngredient,
+  onResumeNutritionConsumed,
+  resumeNutritionItemId,
 }: RecipeEditorProps) {
   const [referencedVersions, setReferencedVersions] =
     useState(initialVersions);
@@ -290,6 +331,8 @@ function RecipeEditor({
   const [versionNotice, setVersionNotice] = useState<string | null>(
     null,
   );
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   const [batchMassUnitOverride, setBatchMassUnitOverride] =
     useState<BatchMassUnit | null>(null);
   const calculate = useCallback(
@@ -305,6 +348,105 @@ function RecipeEditor({
   const draftState = useRecipeDraft(api, recipe.id, { calculate });
   const { draft, dispatch } = draftState;
   const inactive = recipeSchemeStatus(recipe) === "inactive";
+  const dataGapReport = useMemo(
+    () =>
+      buildDraftDataGapReport({
+        draft,
+        recipeName,
+        calculation: draft.calculation,
+        nutrientDefinitions,
+        referencedVersions,
+      }),
+    [draft, nutrientDefinitions, recipeName, referencedVersions],
+  );
+
+  const openNutritionDetail = useCallback(
+    (item: RecipeDraftItem) => {
+      if (item.kind === "ingredient") {
+        setDataDrawer({
+          kind: "nutrition",
+          detail: createVariantNutritionDetail(
+            item.materialName,
+            item.ingredientVariant,
+            nutrientDefinitions,
+          ),
+        });
+        return;
+      }
+      if (item.kind === "recipe_version") {
+        const version = referencedVersions.find(
+          (candidate) => candidate.id === item.recipeVersionId,
+        );
+        if (version !== undefined) {
+          setDataDrawer({
+            kind: "nutrition",
+            detail: createVersionNutritionDetail(version),
+          });
+        }
+      }
+    },
+    [nutrientDefinitions, referencedVersions],
+  );
+
+  useEffect(() => {
+    if (resumeNutritionItemId == null || draftState.loading) return;
+    const item = draft.items.find((candidate) => candidate.id === resumeNutritionItemId);
+    if (item !== undefined) openNutritionDetail(item);
+    onResumeNutritionConsumed?.();
+  }, [
+    draft.items,
+    draftState.loading,
+    onResumeNutritionConsumed,
+    openNutritionDetail,
+    resumeNutritionItemId,
+  ]);
+
+  const openGapReport = useCallback(
+    (nutrientDefinitionId?: string) =>
+      setDataDrawer({
+        kind: "gaps",
+        report: dataGapReport,
+        initialGrouping:
+          nutrientDefinitionId === undefined ? "source" : "field",
+        ...(nutrientDefinitionId === undefined
+          ? {}
+          : { nutrientDefinitionId }),
+      }),
+    [dataGapReport],
+  );
+
+  const editIngredientFromGap = useCallback(
+    async (entry: DataGapEntry) => {
+      if (
+        inactive ||
+        !entry.editable ||
+        entry.ingredientVariantId === null ||
+        entry.materialGroupId === null ||
+        onEditIngredient === undefined
+      ) {
+        return;
+      }
+      const itemId = entry.path.at(-1)?.id;
+      if (itemId === undefined) return;
+      setEditorError(null);
+      try {
+        await draftState.saveNow();
+        onEditIngredient({
+          recipeId: recipe.id,
+          itemId,
+          materialGroupId: entry.materialGroupId,
+          ingredientVariantId: entry.ingredientVariantId,
+        });
+      } catch (cause) {
+        setEditorError(
+          cause instanceof Error
+            ? cause.message
+            : "草稿保存失败，暂未打开原料库",
+        );
+      }
+    },
+    [draftState, inactive, onEditIngredient, recipe.id],
+  );
   const applyIngredientSubstitution = useCallback(
     (
       itemId: string,
@@ -906,6 +1048,8 @@ function RecipeEditor({
             onUpgradeVersion={(id, version) =>
               void upgradeVersion(id, version)
             }
+            onViewGaps={() => openGapReport()}
+            onViewNutrition={openNutritionDetail}
             versionUpgrades={versionUpgrades}
           />
 
@@ -949,16 +1093,8 @@ function RecipeEditor({
           activeView={narrowView}
           calculation={calculation}
           issues={visibleIssues}
-          itemNames={Object.fromEntries(
-            draft.items.map((item) => [
-              item.id,
-              item.kind === "ingredient"
-                ? item.materialName
-                : item.kind === "recipe_version"
-                  ? item.recipeVersion.recipeName
-                  : item.materialNeed.materialName,
-            ]),
-          )}
+          onViewGaps={() => openGapReport()}
+          onViewNutrientGap={openGapReport}
         />
       </div>
 
@@ -979,6 +1115,12 @@ function RecipeEditor({
       </div>
       </fieldset>
 
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+        onEditIngredient={(entry) => void editIngredientFromGap(entry)}
+      />
+
       <RecipeIngredientPicker
         api={api}
         onAddIngredient={addIngredient}
@@ -996,6 +1138,7 @@ function RecipeEditor({
           setVersionError(null);
         }}
         onConfirm={() => void confirmVersionSave()}
+        onViewGaps={() => openGapReport()}
         open={versionDialogOpen}
         preparation={versionPreparation}
         saving={versionSaving}
@@ -1060,14 +1203,16 @@ interface RecipeResultsInspectorProps {
   activeView: NarrowView;
   calculation: ReturnType<typeof useRecipeDraft>["draft"]["calculation"];
   issues: ReturnType<typeof useRecipeDraft>["draft"]["calculationIssues"];
-  itemNames: Record<string, string>;
+  onViewGaps(): void;
+  onViewNutrientGap(nutrientDefinitionId: string): void;
 }
 
 function RecipeResultsInspector({
   activeView,
   calculation,
   issues,
-  itemNames,
+  onViewGaps,
+  onViewNutrientGap,
 }: RecipeResultsInspectorProps) {
   const visibleClass =
     activeView === "formula"
@@ -1080,10 +1225,17 @@ function RecipeResultsInspector({
           {activeView === "allergens" ? "过敏原" : "实时结果"}
         </h2>
         {calculation ? (
-          <span>
+          <a
+            className="data-quality-trigger"
+            href="#data-quality"
+            onClick={(event) => {
+              event.preventDefault();
+              onViewGaps();
+            }}
+          >
             数据完整度{" "}
             <strong>{calculation.completeness.percent}%</strong>
-          </span>
+          </a>
         ) : null}
       </header>
       {calculation === null ? (
@@ -1098,23 +1250,10 @@ function RecipeResultsInspector({
       ) : (
         <>
           <ResultNutrients
-            nutrients={calculation.nutrients.filter(
-              (nutrient) => (nutrient.category ?? "nutrition") === "nutrition",
-            )}
+            nutrients={calculation.nutrients}
+            onViewNutrientGap={onViewNutrientGap}
             title="营养"
           />
-          {calculation.nutrients.some(
-            (nutrient) => nutrient.category === "research",
-          ) ? (
-            <section className="recipe-result-section">
-              <h3>研发指标</h3>
-              <ResultNutrientRows
-                nutrients={calculation.nutrients.filter(
-                  (nutrient) => nutrient.category === "research",
-                )}
-              />
-            </section>
-          ) : null}
           <section className="recipe-result-section recipe-cost-preview">
             <h3>成本</h3>
             <dl>
@@ -1153,23 +1292,30 @@ function RecipeResultsInspector({
 
 function ResultNutrients({
   nutrients,
+  onViewNutrientGap,
   title,
 }: {
   nutrients: RecipeCalculation["nutrients"];
+  onViewNutrientGap(nutrientDefinitionId: string): void;
   title: string;
 }) {
   return (
     <section className="recipe-result-section">
       <h3>{title}</h3>
-      <ResultNutrientRows nutrients={nutrients} />
+      <ResultNutrientRows
+        nutrients={nutrients}
+        onViewNutrientGap={onViewNutrientGap}
+      />
     </section>
   );
 }
 
 function ResultNutrientRows({
   nutrients,
+  onViewNutrientGap,
 }: {
   nutrients: RecipeCalculation["nutrients"];
+  onViewNutrientGap(nutrientDefinitionId: string): void;
 }) {
   return (
     <>
@@ -1180,7 +1326,21 @@ function ResultNutrientRows({
       </div>
       {nutrients.map((nutrient) => (
         <div className="recipe-nutrition-row" key={nutrient.nutrientDefinitionId}>
-          <span>{nutrient.name}</span>
+          {nutrient.status === "complete" ? (
+            <span>{nutrient.name}</span>
+          ) : (
+            <a
+              className="data-quality-trigger"
+              href="#data-quality"
+              onClick={(event) => {
+                event.preventDefault();
+                onViewNutrientGap(nutrient.nutrientDefinitionId);
+              }}
+            >
+              {nutrient.name}
+              <Icon name="warning" size={13} />
+            </a>
+          )}
           <span>{nutrientValue(nutrient, "per100g")}</span>
           <span>{nutrientValue(nutrient, "batch")}</span>
         </div>
@@ -1400,7 +1560,8 @@ function nutrientValue(
     basis === "per100g"
       ? nutrient.per100gKnownAmount
       : nutrient.totalKnownAmount;
-  return `${nutrient.status === "partial" ? "≈" : ""}${displayNumber(value)}${nutrient.unit}`;
+  const displayed = `${displayNumber(value)}${nutrient.unit}`;
+  return nutrient.status === "partial" ? `已知部分 ${displayed}` : displayed;
 }
 
 function displayNumber(value: string) {

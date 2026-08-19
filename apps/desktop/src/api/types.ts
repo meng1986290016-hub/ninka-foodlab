@@ -1,7 +1,7 @@
 export type EntityId = string;
 export type PriceUnit = "kg" | "g" | "L" | "mL";
 export type NutritionBasis = "per_100g" | "per_100ml";
-export type NutrientDefinitionCategory = "nutrition" | "research";
+export type NutrientDefinitionCategory = "nutrition";
 
 export interface Category {
   id: EntityId;

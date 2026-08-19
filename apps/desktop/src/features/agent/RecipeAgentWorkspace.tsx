@@ -8,6 +8,11 @@ import type {
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
 import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import { buildCalculationDataGapReport } from "../data-quality/data-quality";
+import {
   analyzeIngredientSubstitution,
   diagnoseRecipeDraft,
   type RecipeAgentDiagnosis,
@@ -187,7 +192,20 @@ export function RecipeAgentWorkspace({
       </div>
 
       {diagnosis ? (
-        <DiagnosisCard diagnosis={diagnosis} stale={diagnosisStale} />
+        <DiagnosisCard
+          diagnosis={diagnosis}
+          itemNames={new Map(
+            context.draft.items.map((item) => [
+              item.id,
+              item.kind === "ingredient"
+                ? `${item.materialName}（${item.ingredientVariant.supplierName}${item.ingredientVariant.modelOrSpecification ? ` · ${item.ingredientVariant.modelOrSpecification}` : ""}）`
+                : item.kind === "recipe_version"
+                  ? `${item.recipeVersion.recipeName} V${item.recipeVersion.versionNumber}`
+                  : `${item.materialNeed.materialName}（待补充原料）`,
+            ]),
+          )}
+          stale={diagnosisStale}
+        />
       ) : null}
 
       {substitutionOpen ? (
@@ -259,11 +277,15 @@ export function RecipeAgentWorkspace({
 
 function DiagnosisCard({
   diagnosis,
+  itemNames,
   stale,
 }: {
   diagnosis: RecipeAgentDiagnosis;
+  itemNames: ReadonlyMap<string, string>;
   stale: boolean;
 }) {
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   return (
     <article className={`agent-diagnosis-card is-${diagnosis.status}`}>
       <header>
@@ -278,7 +300,32 @@ function DiagnosisCard({
       <p>{diagnosis.summary}</p>
       {diagnosis.calculation ? (
         <dl className="agent-analysis-metrics">
-          <div><dt>数据完整度</dt><dd>{diagnosis.calculation.completeness.percent}%</dd></div>
+          <div>
+            <dt>数据完整度</dt>
+            <dd>
+              {diagnosis.calculation.completeness.percent >= 100 ? (
+                "100%"
+              ) : (
+                <button
+                  className="data-quality-trigger"
+                  onClick={() =>
+                    setDataDrawer({
+                      kind: "gaps",
+                      report: buildCalculationDataGapReport(
+                        "配方诊断",
+                        diagnosis.calculation!,
+                        itemNames,
+                      ),
+                      initialGrouping: "source",
+                    })
+                  }
+                  type="button"
+                >
+                  {diagnosis.calculation.completeness.percent}% · 查看缺失
+                </button>
+              )}
+            </dd>
+          </div>
           <div><dt>批次成本</dt><dd>¥{money(diagnosis.calculation.cost.batchTotal)}</dd></div>
           <div><dt>得率</dt><dd>{diagnosis.calculation.yieldPercent ? `${number(diagnosis.calculation.yieldPercent)}%` : "未填写"}</dd></div>
         </dl>
@@ -305,6 +352,10 @@ function DiagnosisCard({
           {diagnosis.recommendations.map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </article>
   );
 }

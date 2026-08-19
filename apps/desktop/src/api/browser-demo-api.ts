@@ -367,13 +367,10 @@ function buildRecipeVersionComparison(
     }
   }
 
-  const nutrients = (
-    version: RecipeVersion,
-    category: "nutrition" | "research",
-  ) =>
+  const nutrients = (version: RecipeVersion) =>
     new Map(
       version.snapshot.calculation.nutrients
-        .filter((nutrient) => (nutrient.category ?? "nutrition") === category)
+        .filter((nutrient) => (nutrient.category ?? "nutrition") === "nutrition")
         .map((nutrient) => [
         nutrient.nutrientDefinitionId,
         {
@@ -447,12 +444,8 @@ function buildRecipeVersionComparison(
     after: versionReference(after),
     itemChanges,
     nutritionChanges: comparisonRows(
-      nutrients(before, "nutrition"),
-      nutrients(after, "nutrition"),
-    ),
-    researchChanges: comparisonRows(
-      nutrients(before, "research"),
-      nutrients(after, "research"),
+      nutrients(before),
+      nutrients(after),
     ),
     costChanges: comparisonRows(costs(before), costs(after)),
     targetChanges: comparisonRows(targets(before), targets(after)),
@@ -685,8 +678,7 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
   normalized.nutrients.forEach((nutrient, index) => {
     if (
       nutrient.definitionId === null &&
-      nutrient.category !== "nutrition" &&
-      nutrient.category !== "research"
+      nutrient.category !== "nutrition"
     ) {
       add("请选择自定义含量项分类", `nutrients.${index}.category`);
     }
@@ -3082,7 +3074,9 @@ export class BrowserDemoApi implements DesktopApi {
   }
 
   async listNutrientDefinitions() {
-    const definitions = this.read().nutrientDefinitions;
+    const definitions = this.read().nutrientDefinitions.filter(
+      (definition) => definition.category === "nutrition",
+    );
     return definitions
       .filter((definition) => definition.builtIn)
       .concat(
@@ -3896,7 +3890,7 @@ export class BrowserDemoApi implements DesktopApi {
   private validateDefinitionCategory(
     category: NutrientDefinition["category"],
   ) {
-    if (category !== "nutrition" && category !== "research") {
+    if (category !== "nutrition") {
       throw new DesktopApiError("invalid_input", "自定义含量项分类无效");
     }
   }

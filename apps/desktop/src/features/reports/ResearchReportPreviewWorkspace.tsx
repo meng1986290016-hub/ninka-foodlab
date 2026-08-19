@@ -13,6 +13,12 @@ import {
 } from "../../api/research-report-file-picker";
 import type { ResearchReportRecord } from "../../api/research-report-types";
 import { Icon, type IconName } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import { buildVersionDataGapReport } from "../data-quality/data-quality";
+import { loadRecipeVersionClosure } from "../recipes/recipe-current-price";
 import { buildResearchReportDocument } from "./research-report-document";
 import {
   buildResearchReportExport,
@@ -97,6 +103,8 @@ export function ResearchReportPreviewWorkspace({
     useState<ResearchReportExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   const previewSource = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     artifact.svg,
   )}`;
@@ -154,6 +162,26 @@ export function ResearchReportPreviewWorkspace({
       setError(messageFrom(cause, "研发报告无法导出"));
     } finally {
       setExporting(null);
+    }
+  }
+
+  async function openDataGaps() {
+    setError(null);
+    try {
+      const referencedVersions = await loadRecipeVersionClosure(
+        (id) => api.getRecipeVersion(id),
+        recipeVersion,
+      );
+      setDataDrawer({
+        kind: "gaps",
+        report: buildVersionDataGapReport({
+          rootVersion: recipeVersion,
+          referencedVersions,
+        }),
+        initialGrouping: "source",
+      });
+    } catch (cause) {
+      setError(messageFrom(cause, "缺失数据详情无法读取"));
     }
   }
 
@@ -250,6 +278,22 @@ export function ResearchReportPreviewWorkspace({
         </p>
       ) : null}
 
+      {recipeVersion.snapshot.calculation.completeness.percent < 100 ? (
+        <div className="research-report-message has-warning">
+          <Icon name="warning" size={16} />
+          <span>
+            数据完整度 {recipeVersion.snapshot.calculation.completeness.percent}%
+          </span>
+          <button
+            className="data-quality-trigger"
+            onClick={() => void openDataGaps()}
+            type="button"
+          >
+            查看缺失
+          </button>
+        </div>
+      ) : null}
+
       <div className="research-report-workspace__body">
         <main className="research-report-preview-canvas">
           <div className="research-report-sheet">
@@ -335,6 +379,10 @@ export function ResearchReportPreviewWorkspace({
           </p>
         </aside>
       </div>
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </section>
   );
 }

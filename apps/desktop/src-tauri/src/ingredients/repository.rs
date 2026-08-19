@@ -813,7 +813,7 @@ fn required_name(value: &str, message: &str) -> Result<String, RepositoryError> 
 }
 
 fn validate_definition_category(category: &str) -> Result<(), RepositoryError> {
-    if matches!(category, "nutrition" | "research") {
+    if category == "nutrition" {
         Ok(())
     } else {
         Err(RepositoryError::domain(
@@ -1350,7 +1350,9 @@ fn list_nutrient_definitions(
 ) -> Result<Vec<NutrientDefinition>, RepositoryError> {
     let mut statement = connection.prepare(
         "SELECT id, code, name, unit, built_in, sort_order, category, archived_at
-         FROM nutrient_definitions ORDER BY sort_order",
+         FROM nutrient_definitions
+         WHERE category = 'nutrition'
+         ORDER BY sort_order",
     )?;
     let values = statement
         .query_map([], map_nutrient_definition)?

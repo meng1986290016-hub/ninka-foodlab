@@ -169,7 +169,7 @@ fn template_uses_exact_headers_examples_and_xlsx_dropdowns() {
 }
 
 #[test]
-fn custom_columns_and_theoretical_sweetness_round_trip_preserve_selection_unknown_and_zero() {
+fn custom_nutrition_columns_round_trip_and_retired_research_columns_are_omitted() {
     let fixture = OutputFixture::new();
     let path = fixture.path("custom-library.csv");
     let mut review = valid_review();
@@ -181,24 +181,25 @@ fn custom_columns_and_theoretical_sweetness_round_trip_preserve_selection_unknow
         category: Some("nutrition".into()),
     });
     review.nutrients.push(ImportedNutrientValue {
+        definition_id: Some("custom-potassium".into()),
+        name: "钾".into(),
+        unit: "mg".into(),
+        value: Some("0".into()),
+        category: Some("nutrition".into()),
+    });
+    review.nutrients.push(ImportedNutrientValue {
         definition_id: Some("custom-polyphenol".into()),
         name: "总多酚".into(),
         unit: "mg".into(),
         value: Some("0".into()),
         category: Some("research".into()),
     });
-    review.nutrients.push(ImportedNutrientValue {
-        definition_id: Some("theoretical_sweetness".into()),
-        name: "理论甜度（蔗糖=1）".into(),
-        unit: "倍".into(),
-        value: Some("0.8".into()),
-        category: Some("research".into()),
-    });
-
     write_library_export(&path, IngredientExchangeFormat::Csv, &[review.clone()]).unwrap();
     let exported = fs::read_to_string(&path).unwrap();
     assert!(exported.contains("自定义含量[营养相关]:乳糖(g)"));
-    assert!(exported.contains("自定义含量[研发指标]:总多酚(mg)"));
+    assert!(exported.contains("自定义含量[营养相关]:钾(mg)"));
+    assert!(!exported.contains("研发指标"));
+    assert!(!exported.contains("总多酚"));
     assert!(exported.contains("未知"));
 
     let imported = parse_csv(&exported).unwrap();
@@ -207,23 +208,15 @@ fn custom_columns_and_theoretical_sweetness_round_trip_preserve_selection_unknow
         .iter()
         .find(|nutrient| nutrient.name == "乳糖")
         .unwrap();
-    let polyphenol = imported[0]
+    let potassium = imported[0]
         .nutrients
         .iter()
-        .find(|nutrient| nutrient.name == "总多酚")
+        .find(|nutrient| nutrient.name == "钾")
         .unwrap();
     assert_eq!(lactose.value, None);
     assert_eq!(lactose.category.as_deref(), Some("nutrition"));
-    assert_eq!(polyphenol.value.as_deref(), Some("0"));
-    assert_eq!(polyphenol.category.as_deref(), Some("research"));
-    let sweetness = imported[0]
-        .nutrients
-        .iter()
-        .find(|nutrient| nutrient.name == "理论甜度（蔗糖=1）")
-        .unwrap();
-    assert_eq!(sweetness.value.as_deref(), Some("0.8"));
-    assert_eq!(sweetness.category.as_deref(), Some("research"));
-
+    assert_eq!(potassium.value.as_deref(), Some("0"));
+    assert_eq!(potassium.category.as_deref(), Some("nutrition"));
     let xlsx_path = fixture.path("custom-library.xlsx");
     write_library_export(&xlsx_path, IngredientExchangeFormat::Xlsx, &[review]).unwrap();
     let xlsx_imported = parse_ingredient_table(&read_first_xlsx_table(&xlsx_path)).unwrap();
@@ -233,10 +226,16 @@ fn custom_columns_and_theoretical_sweetness_round_trip_preserve_selection_unknow
             && nutrient.category.as_deref() == Some("nutrition")
     }));
     assert!(xlsx_imported[0].nutrients.iter().any(|nutrient| {
-        nutrient.name == "理论甜度（蔗糖=1）"
-            && nutrient.value.as_deref() == Some("0.8")
-            && nutrient.category.as_deref() == Some("research")
+        nutrient.name == "钾"
+            && nutrient.value.as_deref() == Some("0")
+            && nutrient.category.as_deref() == Some("nutrition")
     }));
+    assert!(
+        xlsx_imported[0]
+            .nutrients
+            .iter()
+            .all(|nutrient| nutrient.name != "总多酚")
+    );
 }
 
 #[test]

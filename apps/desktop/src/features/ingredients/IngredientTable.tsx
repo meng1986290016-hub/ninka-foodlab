@@ -10,6 +10,7 @@ interface IngredientTableProps {
   onAddVariant: (group: MaterialGroup) => void;
   onArchiveVariant: (variant: IngredientVariant) => void;
   onEditVariant?: (group: MaterialGroup, variant: IngredientVariant) => void;
+  onViewVariantGaps?: (group: MaterialGroup, variant: IngredientVariant) => void;
   onVariantSelectionChange: (
     group: MaterialGroup,
     variant: IngredientVariant,
@@ -26,6 +27,7 @@ export function IngredientTable({
   onAddVariant,
   onArchiveVariant,
   onEditVariant,
+  onViewVariantGaps,
   onVariantSelectionChange,
   selectedVariantIds,
   onSelectGroup,
@@ -124,6 +126,11 @@ export function IngredientTable({
                         }
                         onSelectionChange={(item, selected) =>
                           onVariantSelectionChange(activeGroup, item, selected)
+                        }
+                        onViewGaps={
+                          onViewVariantGaps
+                            ? (item) => onViewVariantGaps(activeGroup, item)
+                            : undefined
                         }
                         selected={selectedVariantIds.has(variant.id)}
                         variant={variant}

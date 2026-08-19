@@ -189,12 +189,9 @@ describe("VariantEditor", () => {
     expect(screen.getByLabelText("乳糖（g）")).toBeTruthy();
   });
 
-  it("reuses the theoretical sweetness template and confirms removal after data entry", async () => {
+  it("does not offer the retired research metrics tab", async () => {
     const api = createApi();
     const group = await getMilkGroup(api);
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm");
-
     render(
       <VariantEditor
         api={api}
@@ -205,81 +202,7 @@ describe("VariantEditor", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: "研发指标" }));
-    const panel = screen.getByRole("tabpanel");
-    await user.selectOptions(
-      within(panel).getByLabelText("选择模板"),
-      within(panel).getByRole("option", {
-        name: "理论甜度（蔗糖=1）（倍）",
-      }),
-    );
-    await user.click(within(panel).getByRole("button", { name: "添加" }));
-    const input = within(panel).getByLabelText("理论甜度（蔗糖=1）（倍）");
-    await user.type(input, "0.8");
-    const remove = within(panel).getByRole("button", {
-      name: "移除理论甜度（蔗糖=1）",
-    });
-
-    confirm.mockReturnValueOnce(false);
-    await user.click(remove);
-    expect(input).toBeTruthy();
-    confirm.mockReturnValueOnce(true);
-    await user.click(remove);
-    expect(
-      within(panel).queryByLabelText("理论甜度（蔗糖=1）（倍）"),
-    ).toBeNull();
-    confirm.mockRestore();
-  });
-
-  it("keeps a saved theoretical sweetness template attached when reopening", async () => {
-    const api = createApi();
-    const initialGroup = await getMilkGroup(api);
-    const base = initialGroup.variants[0];
-    if (base === undefined) throw new Error("missing demo variant");
-    await api.saveIngredientVariant({
-      id: base.id,
-      materialGroupId: base.materialGroupId,
-      supplierId: base.supplierId,
-      modelOrSpecification: base.modelOrSpecification,
-      internalCode: base.internalCode,
-      currentPrice: base.currentPrice,
-      priceUnit: base.priceUnit,
-      densityGPerMl: base.densityGPerMl,
-      source: base.source,
-      researchNotes: base.researchNotes,
-      nutrition: {
-        ...base.nutrition,
-        values: [
-          ...base.nutrition.values,
-          {
-            nutrientDefinitionId: "theoretical_sweetness",
-            value: "0.8",
-          },
-        ],
-      },
-      allergens: base.allergens,
-    });
-    const group = await getMilkGroup(api);
-    const saved = group.variants.find((variant) => variant.id === base.id);
-    if (saved === undefined) throw new Error("missing saved variant");
-    const user = userEvent.setup();
-
-    render(
-      <VariantEditor
-        api={api}
-        group={group}
-        onCancel={() => undefined}
-        onSaved={() => undefined}
-        variant={saved}
-      />,
-    );
-
-    await user.click(screen.getByRole("tab", { name: "研发指标" }));
-    expect(
-      (await screen.findByDisplayValue("0.8")).getAttribute("aria-label"),
-    ).toBe(
-      "理论甜度（蔗糖=1）（倍）",
-    );
+    expect(screen.queryByRole("tab", { name: "研发指标" })).toBeNull();
   });
 
   it("edits allergens and shows linked source attachments without local paths", async () => {

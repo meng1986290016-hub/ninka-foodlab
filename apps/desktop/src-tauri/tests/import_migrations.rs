@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_thirteen() {
+fn fresh_database_applies_latest_schema_version_fifteen() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 13);
+    assert_eq!(schema_version(&connection), 15);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -114,7 +114,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 13);
+    assert_eq!(schema_version(&connection), 15);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -160,11 +160,11 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 }
 
 #[test]
-fn sweetness_rows_upgrade_to_selected_research_template_values() {
+fn removal_migration_deletes_theoretical_sweetness_data_and_cached_results() {
     let connection = Connection::open_in_memory().unwrap();
     connection
         .execute_batch(
-            "CREATE TABLE nutrient_definitions (
+            r#"CREATE TABLE nutrient_definitions (
                id TEXT PRIMARY KEY,
                code TEXT NOT NULL UNIQUE,
                name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -174,9 +174,118 @@ fn sweetness_rows_upgrade_to_selected_research_template_values() {
                category TEXT NOT NULL DEFAULT 'nutrition',
                archived_at TEXT
              );
-             CREATE TABLE ingredient_variants (
+             CREATE TABLE ingredient_nutrient_values (
+               ingredient_variant_id TEXT NOT NULL,
+               nutrient_definition_id TEXT NOT NULL,
+               value TEXT,
+               PRIMARY KEY (ingredient_variant_id, nutrient_definition_id)
+             );
+             CREATE TABLE recipe_drafts (
                id TEXT PRIMARY KEY,
-               density_g_per_ml TEXT
+               calculation_json TEXT
+             );
+             CREATE TABLE recipe_versions (
+               id TEXT PRIMARY KEY,
+               snapshot_json TEXT NOT NULL
+             );
+             CREATE TRIGGER recipe_versions_no_update
+             BEFORE UPDATE ON recipe_versions
+             BEGIN
+               SELECT RAISE(ABORT, 'recipe versions are immutable');
+             END;
+             CREATE TABLE agent_recipe_proposals (
+               id TEXT PRIMARY KEY,
+               evaluation_json TEXT NOT NULL
+             );
+             INSERT INTO nutrient_definitions
+               (id, code, name, unit, built_in, sort_order, category)
+             VALUES
+               ('theoretical_sweetness', 'theoretical_sweetness', '理论甜度（蔗糖=1）', '倍', 1, 1000, 'research'),
+               ('polyphenol', 'custom:polyphenol', '总多酚', 'mg', 0, 1001, 'research');
+             INSERT INTO ingredient_nutrient_values
+               (ingredient_variant_id, nutrient_definition_id, value)
+             VALUES
+               ('variant-1', 'theoretical_sweetness', '1.2'),
+               ('variant-1', 'polyphenol', '20');
+             INSERT INTO recipe_drafts (id, calculation_json)
+             VALUES ('draft-1', '{"sweetness":{"status":"complete"},"cost":{"batchTotal":"10"}}');
+             INSERT INTO recipe_versions (id, snapshot_json)
+             VALUES ('version-1', '{"calculation":{"sweetness":{"status":"complete"},"cost":{"batchTotal":"10"}}}');
+             INSERT INTO agent_recipe_proposals (id, evaluation_json)
+             VALUES ('proposal-1', '{"calculation":{"sweetness":{"status":"complete"},"cost":{"batchTotal":"10"}}}');"#,
+        )
+        .unwrap();
+
+    connection
+        .execute_batch(include_str!(
+            "../migrations/0014_remove_theoretical_sweetness.sql"
+        ))
+        .unwrap();
+
+    let definition_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM nutrient_definitions WHERE id = 'theoretical_sweetness'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let value_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM ingredient_nutrient_values WHERE nutrient_definition_id = 'theoretical_sweetness'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(definition_count, 0);
+    assert_eq!(value_count, 0);
+    let preserved_custom_value: String = connection
+        .query_row(
+            "SELECT value FROM ingredient_nutrient_values WHERE nutrient_definition_id = 'polyphenol'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(preserved_custom_value, "20");
+    for (table, column, path) in [
+        ("recipe_drafts", "calculation_json", "$.sweetness"),
+        (
+            "recipe_versions",
+            "snapshot_json",
+            "$.calculation.sweetness",
+        ),
+        (
+            "agent_recipe_proposals",
+            "evaluation_json",
+            "$.calculation.sweetness",
+        ),
+    ] {
+        let remaining: i64 = connection
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM {table} WHERE json_type({column}, '{path}') IS NOT NULL"
+                ),
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining, 0);
+    }
+}
+
+#[test]
+fn research_metric_removal_migration_purges_values_and_snapshot_fields() {
+    let connection = Connection::open_in_memory().unwrap();
+    connection
+        .execute_batch(
+            r#"CREATE TABLE nutrient_definitions (
+               id TEXT PRIMARY KEY,
+               code TEXT NOT NULL UNIQUE,
+               name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+               unit TEXT NOT NULL,
+               built_in INTEGER NOT NULL,
+               sort_order INTEGER NOT NULL,
+               category TEXT NOT NULL DEFAULT 'nutrition',
+               archived_at TEXT
              );
              CREATE TABLE ingredient_nutrient_values (
                ingredient_variant_id TEXT NOT NULL,
@@ -184,74 +293,173 @@ fn sweetness_rows_upgrade_to_selected_research_template_values() {
                value TEXT,
                PRIMARY KEY (ingredient_variant_id, nutrient_definition_id)
              );
-             CREATE TABLE ingredient_variant_sweetness (
-               ingredient_variant_id TEXT PRIMARY KEY,
-               basis TEXT NOT NULL,
-               content TEXT,
-               relative_factor TEXT
+             CREATE TABLE recipe_drafts (
+               id TEXT PRIMARY KEY,
+               calculation_json TEXT
+             );
+             CREATE TABLE recipe_versions (
+               id TEXT PRIMARY KEY,
+               snapshot_json TEXT NOT NULL
+             );
+             CREATE TRIGGER recipe_versions_no_update
+             BEFORE UPDATE ON recipe_versions
+             BEGIN
+               SELECT RAISE(ABORT, 'recipe versions are immutable');
+             END;
+             CREATE TABLE agent_recipe_proposals (
+               id TEXT PRIMARY KEY,
+               payload_json TEXT NOT NULL,
+               evaluation_json TEXT NOT NULL
              );
              INSERT INTO nutrient_definitions
                (id, code, name, unit, built_in, sort_order, category)
-             VALUES ('old-template', 'custom:old', '理论甜度（蔗糖=1）', '分', 0, 9, 'research');
-             INSERT INTO ingredient_variants (id, density_g_per_ml)
-             VALUES ('ww', NULL), ('wv', '0.5'), ('missing-density', NULL);
-             INSERT INTO ingredient_variant_sweetness
-               (ingredient_variant_id, basis, content, relative_factor)
              VALUES
-               ('ww', 'w_w_percent', '10', '2'),
-               ('wv', 'w_v_per_100ml', '10', '2'),
-               ('missing-density', 'w_v_per_100ml', '10', '2');",
+               ('lactose', 'custom:lactose', '乳糖', 'g', 0, 10, 'nutrition'),
+               ('polyphenol', 'custom:polyphenol', '总多酚', 'mg', 0, 11, 'research');
+             INSERT INTO ingredient_nutrient_values
+               (ingredient_variant_id, nutrient_definition_id, value)
+             VALUES
+               ('variant-1', 'lactose', '2'),
+               ('variant-1', 'polyphenol', '20');
+             INSERT INTO recipe_drafts (id, calculation_json)
+             VALUES (
+               'draft-1',
+               '{"nutrients":[{"nutrientDefinitionId":"lactose","category":"nutrition"},{"nutrientDefinitionId":"polyphenol","category":"research"}]}'
+             );
+             INSERT INTO recipe_versions (id, snapshot_json)
+             VALUES (
+               'version-1',
+               '{"calculation":{"nutrients":[{"nutrientDefinitionId":"lactose","category":"nutrition"},{"nutrientDefinitionId":"polyphenol","category":"research"}]},"items":[{"kind":"ingredient","ingredient":{"nutrientsPer100g":{"lactose":"2","polyphenol":"20"},"nutrientUnits":{"lactose":"g","polyphenol":"mg"}}}]}'
+             );
+             INSERT INTO agent_recipe_proposals (id, payload_json, evaluation_json)
+             VALUES (
+               'proposal-1',
+               '{"requirements":[{"nutrientDefinitionId":"lactose","name":"乳糖"},{"nutrientDefinitionId":"polyphenol","name":"总多酚"}]}',
+               '{"calculation":{"nutrients":[{"nutrientDefinitionId":"lactose","category":"nutrition"},{"nutrientDefinitionId":"polyphenol","category":"research"}]},"requirementStatuses":[{"name":"乳糖","status":"met"},{"name":"总多酚","status":"met"}]}'
+             );"#,
         )
         .unwrap();
 
     connection
         .execute_batch(include_str!(
-            "../migrations/0013_sweetness_research_template.sql"
+            "../migrations/0015_remove_research_metrics.sql"
         ))
         .unwrap();
 
-    assert!(!table_exists(&connection, "ingredient_variant_sweetness"));
-    let system_definition: (String, String, String) = connection
+    let definition_count: i64 = connection
         .query_row(
-            "SELECT name, unit, category FROM nutrient_definitions
-             WHERE id = 'theoretical_sweetness'",
+            "SELECT COUNT(*) FROM nutrient_definitions WHERE category = 'research'",
             [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| row.get(0),
+        )
+        .unwrap();
+    let value_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM ingredient_nutrient_values WHERE nutrient_definition_id = 'polyphenol'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(definition_count, 0);
+    assert_eq!(value_count, 0);
+
+    let proposal_json: (String, String) = connection
+        .query_row(
+            "SELECT payload_json, evaluation_json FROM agent_recipe_proposals WHERE id = 'proposal-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .unwrap();
     assert_eq!(
-        system_definition,
-        ("理论甜度（蔗糖=1）".into(), "倍".into(), "research".into())
-    );
-    let old_name: String = connection
-        .query_row(
-            "SELECT name FROM nutrient_definitions WHERE id = 'old-template'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(old_name, "理论甜度（蔗糖=1）（旧模板 old-template）");
-
-    for (variant_id, expected) in [("ww", Some(0.2)), ("wv", Some(0.4))] {
-        let value: Option<f64> = connection
+        connection
             .query_row(
-                "SELECT CAST(value AS REAL) FROM ingredient_nutrient_values
-                 WHERE ingredient_variant_id = ?1
-                   AND nutrient_definition_id = 'theoretical_sweetness'",
-                [variant_id],
+                "SELECT json_array_length(?1, '$.requirements')",
+                [&proposal_json.0],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT json_extract(?1, '$.requirements[0].nutrientDefinitionId')",
+                [&proposal_json.0],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap(),
+        "lactose"
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT json_array_length(?1, '$.requirementStatuses')",
+                [&proposal_json.1],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+
+    for (table, column, path) in [
+        ("recipe_drafts", "calculation_json", "$.nutrients"),
+        (
+            "recipe_versions",
+            "snapshot_json",
+            "$.calculation.nutrients",
+        ),
+        (
+            "agent_recipe_proposals",
+            "evaluation_json",
+            "$.calculation.nutrients",
+        ),
+    ] {
+        let retired_count: i64 = connection
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM {table}, json_each({column}, '{path}')
+                     WHERE json_extract(value, '$.nutrientDefinitionId') = 'polyphenol'"
+                ),
+                [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(value, expected);
+        assert_eq!(retired_count, 0);
     }
-    let missing_density_is_unknown: bool = connection
+
+    let snapshot: String = connection
         .query_row(
-            "SELECT value IS NULL FROM ingredient_nutrient_values
-             WHERE ingredient_variant_id = 'missing-density'
-               AND nutrient_definition_id = 'theoretical_sweetness'",
+            "SELECT snapshot_json FROM recipe_versions WHERE id = 'version-1'",
             [],
             |row| row.get(0),
         )
         .unwrap();
-    assert!(missing_density_is_unknown);
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT json_extract(?1, '$.items[0].ingredient.nutrientsPer100g.lactose')",
+                [&snapshot],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap(),
+        "2"
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT json_type(?1, '$.items[0].ingredient.nutrientsPer100g.polyphenol') IS NULL",
+                [&snapshot],
+                |row| row.get::<_, bool>(0),
+            )
+            .unwrap(),
+        true
+    );
+    assert!(
+        connection
+            .execute(
+                "UPDATE recipe_versions SET snapshot_json = snapshot_json WHERE id = 'version-1'",
+                [],
+            )
+            .is_err()
+    );
 }

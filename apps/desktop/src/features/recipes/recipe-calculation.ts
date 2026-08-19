@@ -56,6 +56,7 @@ interface AllergenSource {
 interface GraphContext {
   graph: Record<string, RecipeVersionNode>;
   allergensByIngredientId: Map<string, AllergenSource>;
+  activeNutrientIds: Set<string>;
   nutrientUnits: Map<string, string>;
   sourceItemByIngredientId: Map<string, string>;
   builtInNutrientIds: Set<string>;
@@ -68,23 +69,24 @@ interface ConvertedIngredient {
 }
 
 const ROOT_VERSION_ID = "__draft_root__";
-const RETIRED_NUTRIENT_DEFINITION_IDS = new Set(["theoretical_sweetness"]);
 
 export function calculateRecipeDraft(
   request: RecipeCalculationRequest,
 ): RecipeCalculationResult {
   const definitions = new Map(
     request.nutrientDefinitions
-      .filter((definition) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(definition.id))
+      .filter((definition) => definition.category === "nutrition")
       .map((definition) => [definition.id, definition]),
   );
   const context: GraphContext = {
     graph: {},
     allergensByIngredientId: new Map(),
+    activeNutrientIds: new Set(definitions.keys()),
     nutrientUnits: new Map(
-      request.nutrientDefinitions
-        .filter((definition) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(definition.id))
-        .map((definition) => [definition.id, definition.unit]),
+      [...definitions.values()].map((definition) => [
+        definition.id,
+        definition.unit,
+      ]),
     ),
     sourceItemByIngredientId: new Map(),
     builtInNutrientIds: new Set(
@@ -261,7 +263,7 @@ export function calculateRecipeDraft(
     );
   });
   const nutrientDefinitions = collectNutrientDefinitions(
-    request.nutrientDefinitions,
+    [...definitions.values()],
     context.nutrientUnits,
   );
   const nutrientEstimates = Object.entries(
@@ -420,7 +422,7 @@ function buildReferencedGraph(
           unique([
             ...context.builtInNutrientIds,
             ...Object.keys(item.ingredient.nutrientsPer100g).filter(
-              (nutrientId) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(nutrientId),
+              (nutrientId) => context.activeNutrientIds.has(nutrientId),
             ),
           ]).map((nutrientId) => [
             nutrientId,
@@ -449,7 +451,7 @@ function buildReferencedGraph(
         for (const [id, unit] of Object.entries(
           item.ingredient.nutrientUnits,
         )) {
-          if (RETIRED_NUTRIENT_DEFINITION_IDS.has(id)) continue;
+          if (!context.activeNutrientIds.has(id)) continue;
           context.nutrientUnits.set(id, unit);
         }
       } else {
@@ -504,10 +506,7 @@ function convertCurrentIngredient(
   const nutrientUnits: Record<string, string> = {};
   const provided = new Map(
     variant.nutrition.values
-      .filter(
-        (value) =>
-          !RETIRED_NUTRIENT_DEFINITION_IDS.has(value.nutrientDefinitionId),
-      )
+      .filter((value) => definitions.has(value.nutrientDefinitionId))
       .map((value) => [value.nutrientDefinitionId, value.value]),
   );
   const nutrientIds = new Set([

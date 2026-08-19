@@ -60,7 +60,6 @@ async function createFormula(api: BrowserDemoApi, name: string) {
 async function updateMilk(
   api: BrowserDemoApi,
   overrides: Partial<IngredientVariant> = {},
-  theoreticalSweetnessFactor?: string,
 ) {
   const groups = await api.listMaterialGroups();
   const group = groups.find((item) => item.name === "脱脂乳粉");
@@ -94,17 +93,10 @@ async function updateMilk(
     nutrition:
       overrides.nutrition ?? {
         basis: "per_100g",
-        values: definitions.flatMap((definition) => {
-          if (definition.id === "theoretical_sweetness") {
-            return theoreticalSweetnessFactor === undefined
-              ? []
-              : [{ nutrientDefinitionId: definition.id, value: theoreticalSweetnessFactor }];
-          }
-          return [{
-            nutrientDefinitionId: definition.id,
-            value: values[definition.code] ?? "0",
-          }];
-        }),
+        values: definitions.map((definition) => ({
+          nutrientDefinitionId: definition.id,
+          value: values[definition.code] ?? "0",
+        })),
       },
     allergens:
       overrides.allergens ?? {
@@ -140,13 +132,12 @@ async function addMilk(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("RecipeWorkbench live results", () => {
-  it("shows every selected custom item beyond eight rows plus research sweetness", async () => {
+  it("shows every selected custom nutrient beyond eight rows", async () => {
     const api = createApi();
     await api.createNutrientDefinition("乳糖", "g", "nutrition");
     await api.createNutrientDefinition("钾", "mg", "nutrition");
     await api.createNutrientDefinition("钙", "mg", "nutrition");
-    await api.createNutrientDefinition("总多酚", "mg", "research");
-    await updateMilk(api, {}, "0.1");
+    await updateMilk(api);
     await createFormula(api, "自定义指标展示");
     const user = userEvent.setup();
     render(<RecipeWorkbench api={api} />);
@@ -154,12 +145,10 @@ describe("RecipeWorkbench live results", () => {
     await addMilk(user);
 
     const results = screen.getByRole("complementary", { name: "实时结果" });
-    for (const name of ["乳糖", "钾", "钙", "总多酚"]) {
+    for (const name of ["乳糖", "钾", "钙"]) {
       expect(await within(results).findByText(name)).toBeTruthy();
     }
-    expect(within(results).getByText("研发指标")).toBeTruthy();
-    expect(within(results).getByText("理论甜度")).toBeTruthy();
-    expect(within(results).getAllByText("10 g")).toHaveLength(2);
+    expect(within(results).queryByText("研发指标")).toBeNull();
   });
 
   it("shows per-100g and batch nutrition, cost, yield and both allergen classes", async () => {

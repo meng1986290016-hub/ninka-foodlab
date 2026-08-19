@@ -6,6 +6,7 @@ interface VariantRowProps {
   onArchive: (variant: IngredientVariant) => void;
   onCopy?: ((variant: IngredientVariant) => void) | undefined;
   onEdit?: ((variant: IngredientVariant) => void) | undefined;
+  onViewGaps?: ((variant: IngredientVariant) => void) | undefined;
   onSelectionChange: (variant: IngredientVariant, selected: boolean) => void;
   selected: boolean;
   variant: IngredientVariant;
@@ -28,6 +29,7 @@ export function VariantRow({
   onArchive,
   onCopy,
   onEdit,
+  onViewGaps,
   onSelectionChange,
   selected,
   variant,
@@ -69,9 +71,20 @@ export function VariantRow({
         <small>更新于 {formattedDate}</small>
       </td>
       <td className="variant-completeness-cell">
-        <span className={completenessClass(variant.completeness.percent)}>
-          {variant.completeness.percent}%
-        </span>
+        {variant.completeness.percent >= 100 || onViewGaps === undefined ? (
+          <span className={completenessClass(variant.completeness.percent)}>
+            {variant.completeness.percent}%
+          </span>
+        ) : (
+          <button
+            aria-label={`查看 ${recordName} 缺少的数据`}
+            className={`${completenessClass(variant.completeness.percent)} data-quality-trigger`}
+            onClick={() => onViewGaps(variant)}
+            type="button"
+          >
+            {variant.completeness.percent}% · 查看缺失
+          </button>
+        )}
       </td>
       <td className="mono-cell variant-date-cell">
         {formattedDate}

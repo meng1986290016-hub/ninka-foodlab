@@ -13,8 +13,18 @@ import { recipeVersionOutputMass } from "../../api/recipe-output-mass";
 import type {
   IngredientVariant,
   MaterialGroup,
+  NutrientDefinition,
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import {
+  buildVariantDataGapReport,
+  buildVersionDataGapReport,
+} from "../data-quality/data-quality";
+import { loadRecipeVersionClosure } from "./recipe-current-price";
 
 interface RecipeIngredientPickerProps {
   api: DesktopApi;
@@ -58,6 +68,11 @@ export function RecipeIngredientPicker({
     useState<IngredientSort>("updated");
   const [groups, setGroups] = useState<MaterialGroup[]>([]);
   const [versions, setVersions] = useState<RecipeVersion[]>([]);
+  const [nutrientDefinitions, setNutrientDefinitions] = useState<
+    NutrientDefinition[]
+  >([]);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +93,9 @@ export function RecipeIngredientPicker({
     void Promise.all([
       api.listMaterialGroups(),
       api.listRecipes(),
+      api.listNutrientDefinitions(),
     ])
-      .then(async ([materialGroups, recipes]) => {
+      .then(async ([materialGroups, recipes, definitions]) => {
         const semiFinished = recipes.filter(
           (summary) =>
             summary.recipe.kind === "semi_finished" &&
@@ -96,6 +112,7 @@ export function RecipeIngredientPicker({
         if (!active) return;
         setGroups(materialGroups);
         setVersions(loadedVersions);
+        setNutrientDefinitions(definitions);
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -254,6 +271,30 @@ export function RecipeIngredientPicker({
     onClose();
   }
 
+  function openVariantGaps(group: MaterialGroup, variant: IngredientVariant) {
+    setDataDrawer({
+      kind: "gaps",
+      report: buildVariantDataGapReport(group.name, variant, nutrientDefinitions),
+      initialGrouping: "field",
+    });
+  }
+
+  async function openVersionGaps(version: RecipeVersion) {
+    try {
+      const referencedVersions = await loadRecipeVersionClosure(
+        (id) => api.getRecipeVersion(id),
+        version,
+      );
+      setDataDrawer({
+        kind: "gaps",
+        report: buildVersionDataGapReport({ rootVersion: version, referencedVersions }),
+        initialGrouping: "source",
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "缺失数据详情无法读取");
+    }
+  }
+
   return (
     <div
       aria-label="关闭原料选择器"
@@ -381,6 +422,7 @@ export function RecipeIngredientPicker({
           ) : tab === "ingredients" ? (
             <IngredientResults
               groups={visibleGroups}
+              onViewGaps={openVariantGaps}
               onSelect={(group, variant) =>
                 setSelection({ kind: "ingredient", group, variant })
               }
@@ -388,6 +430,7 @@ export function RecipeIngredientPicker({
             />
           ) : (
             <VersionResults
+              onViewGaps={(version) => void openVersionGaps(version)}
               onSelect={(version) =>
                 setSelection({ kind: "version", version })
               }
@@ -422,6 +465,10 @@ export function RecipeIngredientPicker({
           </div>
         </footer>
       </section>
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </div>
   );
 }
@@ -430,12 +477,14 @@ interface IngredientResultsProps {
   groups: MaterialGroup[];
   selection: Selection | null;
   onSelect(group: MaterialGroup, variant: IngredientVariant): void;
+  onViewGaps(group: MaterialGroup, variant: IngredientVariant): void;
 }
 
 function IngredientResults({
   groups,
   selection,
   onSelect,
+  onViewGaps,
 }: IngredientResultsProps) {
   if (groups.length === 0) {
     return <p className="recipe-picker__state">没有符合条件的供应商原料。</p>;
@@ -486,15 +535,21 @@ function IngredientResults({
                 </span>
                 <span>{priceLabel(variant)}</span>
                 <span>{keyNutrient(variant)}</span>
-                <span
-                  className={
-                    variant.completeness.percent >= 100
-                      ? "recipe-data-status is-complete"
-                      : "recipe-data-status has-warning"
-                  }
-                >
-                  {variant.completeness.percent}%
-                </span>
+                {variant.completeness.percent >= 100 ? (
+                  <span className="recipe-data-status is-complete">100%</span>
+                ) : (
+                  <button
+                    className="data-quality-trigger recipe-data-status has-warning"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onViewGaps(group, variant);
+                    }}
+                    type="button"
+                  >
+                    {variant.completeness.percent}% · 查看缺失
+                  </button>
+                )}
                 <span>{variant.updatedAt.slice(0, 10)}</span>
               </label>
             );
@@ -509,12 +564,14 @@ interface VersionResultsProps {
   versions: RecipeVersion[];
   selection: Selection | null;
   onSelect(version: RecipeVersion): void;
+  onViewGaps(version: RecipeVersion): void;
 }
 
 function VersionResults({
   versions,
   selection,
   onSelect,
+  onViewGaps,
 }: VersionResultsProps) {
   if (versions.length === 0) {
     return <p className="recipe-picker__state">暂无可引用的半成品正式版本。</p>;
@@ -555,9 +612,21 @@ function VersionResults({
               </span>
             </span>
             <span>{output}g</span>
-            <span className="recipe-data-status is-complete">
-              {version.snapshot.calculation.completeness.percent}%
-            </span>
+            {version.snapshot.calculation.completeness.percent >= 100 ? (
+              <span className="recipe-data-status is-complete">100%</span>
+            ) : (
+              <button
+                className="data-quality-trigger recipe-data-status has-warning"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onViewGaps(version);
+                }}
+                type="button"
+              >
+                {version.snapshot.calculation.completeness.percent}% · 查看缺失
+              </button>
+            )}
             <span>{version.createdAt.slice(0, 10)}</span>
           </label>
         );

@@ -20,6 +20,9 @@ export function evaluateBrowserAgentRecipe(
   evaluation: AgentRecipeProposalEvaluation;
 } {
   const payload = structuredClone(input);
+  definitions = definitions.filter(
+    (definition) => definition.category === "nutrition",
+  );
   if (!payload.productName.trim()) {
     throw new DesktopApiError("invalid_input", "请填写产品名称");
   }

@@ -163,7 +163,7 @@ export function IngredientImportPreview({
                                     ...candidate,
                                     category: event.target.value === ""
                                       ? null
-                                      : event.target.value as "nutrition" | "research",
+                                      : ("nutrition" as const),
                                   }
                                 : candidate,
                             );
@@ -173,7 +173,6 @@ export function IngredientImportPreview({
                         >
                           <option value="">请选择分类</option>
                           <option value="nutrition">营养相关</option>
-                          <option value="research">研发指标</option>
                         </select>
                       </label>
                     ) : null}

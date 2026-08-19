@@ -73,6 +73,20 @@ fn validation_requires_explicit_basis_and_price_unit() {
 }
 
 #[test]
+fn validation_rejects_retired_research_metric_category() {
+    let mut review = valid_review();
+    review.nutrients[0].category = Some("research".into());
+
+    let issues = validate_review(&review);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| { issue.field_path.as_deref() == Some("nutrients.0.category") })
+    );
+}
+
+#[test]
 fn normalization_trims_text_and_deduplicates_allergens_case_insensitively() {
     let mut review = valid_review();
     review.material_name = "  脱脂乳粉  ".into();

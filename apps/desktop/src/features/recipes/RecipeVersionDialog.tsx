@@ -15,6 +15,7 @@ interface RecipeVersionDialogProps {
   versionNumber: number;
   onClose(): void;
   onConfirm(): void;
+  onViewGaps?(): void;
 }
 
 export function RecipeVersionDialog({
@@ -26,6 +27,7 @@ export function RecipeVersionDialog({
   versionNumber,
   onClose,
   onConfirm,
+  onViewGaps,
 }: RecipeVersionDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -172,7 +174,20 @@ export function RecipeVersionDialog({
               </div>
               <div>
                 <dt>数据完整度</dt>
-                <dd>{snapshot.calculation.completeness.percent}%</dd>
+                <dd>
+                  {snapshot.calculation.completeness.percent >= 100 ||
+                  onViewGaps === undefined ? (
+                    `${snapshot.calculation.completeness.percent}%`
+                  ) : (
+                    <button
+                      className="data-quality-trigger"
+                      onClick={onViewGaps}
+                      type="button"
+                    >
+                      {snapshot.calculation.completeness.percent}% · 查看缺失
+                    </button>
+                  )}
+                </dd>
               </div>
             </dl>
             {preparation.input.dependencyVersionIds.length > 0 ? (

@@ -52,7 +52,7 @@ export function IngredientImportDrawer({
           .filter((nutrient) => nutrient.definitionId === null)
           .map((nutrient) => [
             `${nutrient.name}\u0000${nutrient.unit}\u0000${nutrient.category ?? ""}`,
-            `${nutrient.name}（${nutrient.unit}，${nutrient.category === "research" ? "研发指标" : "营养相关"}）`,
+            `${nutrient.name}（${nutrient.unit}，营养相关）`,
           ]),
       ).values(),
     ];

@@ -18,7 +18,10 @@ import { IngredientLibrary } from "./features/ingredients/IngredientLibrary";
 import { ImportedVariantReview } from "./features/ingredients/ImportedVariantReview";
 import { NutritionLabelWorkspace } from "./features/labels/NutritionLabelWorkspace";
 import { RecipeLibrary } from "./features/recipes/RecipeLibrary";
-import { RecipeWorkbench } from "./features/recipes/RecipeWorkbench";
+import {
+  RecipeWorkbench,
+  type RecipeIngredientEditRequest,
+} from "./features/recipes/RecipeWorkbench";
 import { SampleSheetWorkspace } from "./features/recipes/SampleSheetWorkspace";
 import type { SampleSheetLaunch } from "./features/recipes/sample-sheet-source";
 import type { RecipeAgentWorkbenchContext } from "./features/recipes/recipe-agent-analysis";
@@ -68,6 +71,12 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     useState<SampleSheetLaunch | null>(null);
   const [recipeAgentContext, setRecipeAgentContext] =
     useState<RecipeAgentWorkbenchContext | null>(null);
+  const [ingredientEditSession, setIngredientEditSession] = useState<
+    (RecipeIngredientEditRequest & { key: string }) | null
+  >(null);
+  const [resumeNutritionItemId, setResumeNutritionItemId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     let active = true;
@@ -85,7 +94,29 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     setSampleSheetLaunch(null);
     if (page !== "recipe-library") setActiveRecipeId(null);
     if (page !== "recipe-library") setRecipeAgentContext(null);
+    setIngredientEditSession(null);
+    setResumeNutritionItemId(null);
     setActivePage(page);
+  }
+
+  function openIngredientEditor(request: RecipeIngredientEditRequest) {
+    setIngredientEditSession({
+      ...request,
+      key: `${request.recipeId}:${request.itemId}:${Date.now()}`,
+    });
+    setActivePage("ingredients");
+  }
+
+  function returnFromIngredientEditor() {
+    const session = ingredientEditSession;
+    if (session === null) return;
+    setIngredientRefreshToken((current) => current + 1);
+    setDraftRefreshToken((current) => current + 1);
+    setRecipeRefreshToken((current) => current + 1);
+    setActiveRecipeId(session.recipeId);
+    setResumeNutritionItemId(session.itemId);
+    setIngredientEditSession(null);
+    setActivePage("recipe-library");
   }
 
   function configureAgent(section: "general" | "models") {
@@ -181,6 +212,8 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
         ) : activePage === "ingredients" ? (
           <IngredientLibrary
             api={desktopApi}
+            editLaunch={ingredientEditSession}
+            onEditLaunchFinished={returnFromIngredientEditor}
             refreshToken={ingredientRefreshToken}
           />
         ) : activePage === "recipe-library" ? (
@@ -223,8 +256,13 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
                   setRecipeRefreshToken((current) => current + 1);
                 }}
                 onOpenAgent={() => setAgentOpen(true)}
+                onEditIngredient={openIngredientEditor}
                 onOpenSampleSheet={setSampleSheetLaunch}
+                onResumeNutritionConsumed={() =>
+                  setResumeNutritionItemId(null)
+                }
                 recipeId={activeRecipeId}
+                resumeNutritionItemId={resumeNutritionItemId}
               />
             ) : activeNutritionLabel ? (
               <NutritionLabelWorkspace

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import type { DesktopApi } from "../../api/desktop-api";
 import type { MaterialNeed } from "../../api/agent-recipe-types";
@@ -7,9 +7,18 @@ import type {
   IngredientVariant,
   MaterialGroup,
   MaterialGroupInput,
+  NutrientDefinition,
   VariantComparison,
 } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import {
+  buildVariantDataGapReport,
+  type DataGapEntry,
+} from "../data-quality/data-quality";
 import { IngredientExchangeMenu } from "../imports/IngredientExchangeMenu";
 import { IngredientImportDrawer } from "../imports/IngredientImportDrawer";
 import { IngredientTable } from "./IngredientTable";
@@ -21,6 +30,12 @@ import { MaterialNeedList } from "./MaterialNeedList";
 
 interface IngredientLibraryProps {
   api: DesktopApi;
+  editLaunch?: {
+    key: string;
+    materialGroupId: string;
+    ingredientVariantId: string;
+  } | null;
+  onEditLaunchFinished?(): void;
   refreshToken?: number;
 }
 
@@ -40,6 +55,8 @@ interface VariantSelection {
 
 export function IngredientLibrary({
   api,
+  editLaunch = null,
+  onEditLaunchFinished,
   refreshToken = 0,
 }: IngredientLibraryProps) {
   const [query, setQuery] = useState("");
@@ -55,12 +72,28 @@ export function IngredientLibrary({
   const [needsLoading, setNeedsLoading] = useState(false);
   const [needsError, setNeedsError] = useState<string | null>(null);
   const [filePicker] = useState(createImportFilePicker);
+  const processedEditLaunchRef = useRef<string | null>(null);
+  const [nutrientDefinitions, setNutrientDefinitions] = useState<
+    NutrientDefinition[]
+  >([]);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
   const { archiveVariant, error, loading, materialGroups, refresh } =
     useIngredients(api, deferredQuery);
 
   useEffect(() => {
     if (refreshToken > 0) refresh();
   }, [refreshToken]);
+
+  useEffect(() => {
+    let active = true;
+    void api.listNutrientDefinitions().then((definitions) => {
+      if (active) setNutrientDefinitions(definitions);
+    });
+    return () => {
+      active = false;
+    };
+  }, [api, refreshToken]);
 
   async function refreshNeeds() {
     setNeedsLoading(true);
@@ -83,6 +116,27 @@ export function IngredientLibrary({
     setComparisonError(null);
     setEditor(nextEditor);
   }
+
+  useEffect(() => {
+    if (
+      editLaunch === null ||
+      loading ||
+      processedEditLaunchRef.current === editLaunch.key
+    ) {
+      return;
+    }
+    const group = materialGroups.find(
+      (candidate) => candidate.id === editLaunch.materialGroupId,
+    );
+    const variant = group?.variants.find(
+      (candidate) => candidate.id === editLaunch.ingredientVariantId,
+    );
+    if (group === undefined || variant === undefined) return;
+    processedEditLaunchRef.current = editLaunch.key;
+    setTab("materials");
+    setActiveGroupId(group.id);
+    openEditor({ kind: "variant", group, variant });
+  }, [editLaunch, loading, materialGroups]);
 
   async function handleCreateGroup(input: MaterialGroupInput) {
     const group = await api.createMaterialGroup(input);
@@ -110,6 +164,9 @@ export function IngredientLibrary({
     refresh();
     setActiveGroupId(group.id);
     setEditor(null);
+    if (editLaunch?.ingredientVariantId === variant.id) {
+      onEditLaunchFinished?.();
+    }
   }
 
   async function handleArchiveVariant(variant: IngredientVariant) {
@@ -123,6 +180,37 @@ export function IngredientLibrary({
       return;
     }
     await archiveVariant(variant);
+  }
+
+  function openVariantGaps(group: MaterialGroup, variant: IngredientVariant) {
+    setDataDrawer({
+      kind: "gaps",
+      report: buildVariantDataGapReport(
+        group.name,
+        variant,
+        nutrientDefinitions,
+      ),
+      initialGrouping: "field",
+    });
+  }
+
+  function editIngredientFromGap(entry: DataGapEntry) {
+    if (
+      entry.materialGroupId === null ||
+      entry.ingredientVariantId === null
+    ) {
+      return;
+    }
+    const group = materialGroups.find(
+      (candidate) => candidate.id === entry.materialGroupId,
+    );
+    const variant = group?.variants.find(
+      (candidate) => candidate.id === entry.ingredientVariantId,
+    );
+    if (group === undefined || variant === undefined) return;
+    setDataDrawer(null);
+    setActiveGroupId(group.id);
+    openEditor({ kind: "variant", group, variant });
   }
 
   function selectGroup(groupId: string) {
@@ -269,6 +357,7 @@ export function IngredientLibrary({
           onEditVariant={(group, variant) =>
             openEditor({ kind: "variant", group, variant })
           }
+          onViewVariantGaps={openVariantGaps}
           onSelectGroup={selectGroup}
           onVariantSelectionChange={changeVariantSelection}
           selectedVariantIds={selection?.ids ?? new Set()}
@@ -304,7 +393,17 @@ export function IngredientLibrary({
               ? `来源：Agent 待补充原料需求\n用途：${editor.need.purpose}\n期望规格：${editor.need.desiredSpecification}\n缺失原因：${editor.need.missingReason}`
               : ""
           }
-          onCancel={() => setEditor(null)}
+          onCancel={() => {
+            const launchedVariantId = editLaunch?.ingredientVariantId;
+            const editorVariantId = editor.variant?.id;
+            setEditor(null);
+            if (
+              launchedVariantId !== undefined &&
+              editorVariantId === launchedVariantId
+            ) {
+              onEditLaunchFinished?.();
+            }
+          }}
           onSaved={(variant) => void handleVariantSaved(editor.group, variant, editor.need)}
           variant={editor.variant}
         />
@@ -316,6 +415,11 @@ export function IngredientLibrary({
           onClose={() => setComparison(null)}
         />
       ) : null}
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+        onEditIngredient={editIngredientFromGap}
+      />
       {importing ? (
         <IngredientImportDrawer
           api={api}

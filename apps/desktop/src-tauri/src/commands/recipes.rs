@@ -525,10 +525,6 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         nutrient_cells(before, "nutrition"),
         nutrient_cells(after, "nutrition"),
     );
-    let research_changes = comparison_rows(
-        nutrient_cells(before, "research"),
-        nutrient_cells(after, "research"),
-    );
     let cost_changes = comparison_rows(cost_cells(before), cost_cells(after));
     let target_changes = comparison_rows(target_cells(before), target_cells(after));
     let allergen_changes = comparison_rows(allergen_cells(before), allergen_cells(after));
@@ -537,7 +533,6 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         "after": version_reference(after),
         "itemChanges": item_changes,
         "nutritionChanges": nutrition_changes,
-        "researchChanges": research_changes,
         "costChanges": cost_changes,
         "targetChanges": target_changes,
         "allergenChanges": allergen_changes,

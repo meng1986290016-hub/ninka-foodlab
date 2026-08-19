@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS recipe_versions_no_update;
+
 DELETE FROM ingredient_nutrient_values
 WHERE nutrient_definition_id = 'theoretical_sweetness';
 
@@ -19,3 +21,9 @@ UPDATE agent_recipe_proposals
 SET evaluation_json = json_remove(evaluation_json, '$.calculation.sweetness')
 WHERE json_valid(evaluation_json)
   AND json_type(evaluation_json, '$.calculation.sweetness') IS NOT NULL;
+
+CREATE TRIGGER recipe_versions_no_update
+BEFORE UPDATE ON recipe_versions
+BEGIN
+  SELECT RAISE(ABORT, 'recipe versions are immutable');
+END;

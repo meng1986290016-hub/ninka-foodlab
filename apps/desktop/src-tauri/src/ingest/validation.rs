@@ -105,9 +105,7 @@ pub fn validate_review(review: &ReviewedIngredientImportDraft) -> Vec<ImportIssu
                 &mut issues,
             );
         }
-        if nutrient.definition_id.is_none()
-            && !matches!(nutrient.category.as_deref(), Some("nutrition" | "research"))
-        {
+        if nutrient.definition_id.is_none() && nutrient.category.as_deref() != Some("nutrition") {
             error(
                 ImportIssueCode::MissingRequired,
                 &format!("nutrients.{index}.category"),

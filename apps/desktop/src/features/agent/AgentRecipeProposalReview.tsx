@@ -11,6 +11,11 @@ import type { MaterialGroup } from "../../api/types";
 import type { RecipeSummary, RecipeVersion } from "../../api/recipe-types";
 import { recipeSchemeName } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
+import {
+  DataQualityDrawer,
+  type DataQualityDrawerContent,
+} from "../data-quality/DataQualityDrawer";
+import { buildCalculationDataGapReport } from "../data-quality/data-quality";
 
 interface AgentRecipeProposalReviewProps {
   api: DesktopApi;
@@ -38,6 +43,8 @@ export function AgentRecipeProposalReview({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [dataDrawer, setDataDrawer] =
+    useState<DataQualityDrawerContent | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -150,7 +157,38 @@ export function AgentRecipeProposalReview({
           <div className="agent-proposal-review__summary">
             <span>当前投料 <strong>{evaluation.calculation.inputMassGrams} g</strong></span>
             <span>预计成本 <strong>¥{Number(evaluation.calculation.cost.batchTotal).toFixed(2)}</strong></span>
-            <span>完整度 <strong>{evaluation.calculation.completeness.percent}%</strong></span>
+            <span>
+              完整度{" "}
+              {evaluation.calculation.completeness.percent >= 100 ? (
+                <strong>100%</strong>
+              ) : (
+                <button
+                  className="data-quality-trigger"
+                  onClick={() => {
+                    const itemNames = new Map(
+                      payload.items.map((item) => [
+                        item.id,
+                        item.kind === "ingredient"
+                          ? `${item.materialName}（${item.supplierName}${item.modelOrSpecification ? ` · ${item.modelOrSpecification}` : ""}）`
+                          : `${item.materialName}（待补充原料）`,
+                      ]),
+                    );
+                    setDataDrawer({
+                      kind: "gaps",
+                      report: buildCalculationDataGapReport(
+                        payload.productName,
+                        evaluation.calculation,
+                        itemNames,
+                      ),
+                      initialGrouping: "source",
+                    });
+                  }}
+                  type="button"
+                >
+                  <strong>{evaluation.calculation.completeness.percent}%</strong> · 查看缺失
+                </button>
+              )}
+            </span>
           </div>
 
           <div className="agent-proposal-review__table-wrap">
@@ -211,6 +249,10 @@ export function AgentRecipeProposalReview({
           <button className="button button--primary" disabled={busy || (destinationKind === "alternative" && (!sourceVersionId || !schemeName.trim()))} onClick={() => void accept()} type="button">{busy ? "正在处理…" : "创建为工作草稿"}</button>
         </footer>
       </section>
+      <DataQualityDrawer
+        content={dataDrawer}
+        onClose={() => setDataDrawer(null)}
+      />
     </div>
   );
 }

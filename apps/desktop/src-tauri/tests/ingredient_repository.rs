@@ -85,10 +85,9 @@ impl Fixture {
 fn migration_seeds_the_eight_builtin_nutrients() {
     let fixture = Fixture::new();
     let definitions = fixture.repo.list_nutrient_definitions().unwrap();
-    assert_eq!(definitions.len(), 9);
+    assert_eq!(definitions.len(), 8);
     assert_eq!(definitions[0].id, "energy");
     assert_eq!(definitions[7].id, "sodium");
-    assert_eq!(definitions[8].id, "theoretical_sweetness");
 }
 
 #[test]
@@ -165,19 +164,24 @@ fn unknown_and_confirmed_zero_round_trip_distinctly() {
 }
 
 #[test]
-fn custom_and_system_research_templates_are_selected_per_variant() {
+fn custom_nutrition_templates_are_selected_per_variant_and_research_is_rejected() {
     let mut fixture = Fixture::new();
     let lactose = fixture
         .repo
         .create_nutrient_definition("乳糖", "g", "nutrition")
         .unwrap();
-    let research = fixture
+    let rejected = fixture
         .repo
         .create_nutrient_definition("总多酚", "mg", "research")
+        .unwrap_err();
+    assert_eq!(rejected.code(), "invalid_input");
+    let custom = fixture
+        .repo
+        .create_nutrient_definition("总多酚", "mg", "nutrition")
         .unwrap();
     let renamed = fixture
         .repo
-        .update_nutrient_definition(&research.id, "总酚", "mg", "research")
+        .update_nutrient_definition(&custom.id, "总酚", "mg", "nutrition")
         .unwrap();
     assert_eq!(renamed.name, "总酚");
 
@@ -199,12 +203,8 @@ fn custom_and_system_research_templates_are_selected_per_variant() {
             value: Some("0".into()),
         },
         VariantNutritionValue {
-            nutrient_definition_id: research.id.clone(),
+            nutrient_definition_id: custom.id.clone(),
             value: None,
-        },
-        VariantNutritionValue {
-            nutrient_definition_id: "theoretical_sweetness".into(),
-            value: Some("0.8".into()),
         },
     ]);
     let saved = fixture.repo.save_variant(selected).unwrap();
@@ -214,18 +214,7 @@ fn custom_and_system_research_templates_are_selected_per_variant() {
             .nutrition
             .values
             .iter()
-            .find(|value| value.nutrient_definition_id == "theoretical_sweetness")
-            .unwrap()
-            .value
-            .as_deref(),
-        Some("0.8")
-    );
-    assert_eq!(
-        saved
-            .nutrition
-            .values
-            .iter()
-            .find(|value| value.nutrient_definition_id == research.id)
+            .find(|value| value.nutrient_definition_id == custom.id)
             .unwrap()
             .value,
         None
@@ -233,12 +222,12 @@ fn custom_and_system_research_templates_are_selected_per_variant() {
 
     let locked = fixture
         .repo
-        .update_nutrient_definition(&research.id, "多酚", "mg", "research")
+        .update_nutrient_definition(&custom.id, "多酚", "mg", "nutrition")
         .unwrap_err();
     assert_eq!(locked.code(), "reference_conflict");
     fixture
         .repo
-        .archive_nutrient_definition(&research.id)
+        .archive_nutrient_definition(&custom.id)
         .unwrap();
     assert!(
         fixture
@@ -246,7 +235,7 @@ fn custom_and_system_research_templates_are_selected_per_variant() {
             .list_nutrient_definitions()
             .unwrap()
             .iter()
-            .find(|definition| definition.id == research.id)
+            .find(|definition| definition.id == custom.id)
             .unwrap()
             .archived_at
             .is_some()
@@ -259,7 +248,7 @@ fn custom_and_system_research_templates_are_selected_per_variant() {
             .nutrition
             .values
             .iter()
-            .any(|value| value.nutrient_definition_id == research.id)
+            .any(|value| value.nutrient_definition_id == custom.id)
     );
 }
 
@@ -444,7 +433,7 @@ fn settings_drafts_and_database_status_round_trip_json() {
 
     let status = fixture.repo.database_status().unwrap();
     assert_eq!(status.mode, "sqlite");
-    assert_eq!(status.schema_version, 13);
+    assert_eq!(status.schema_version, 15);
     assert!(status.healthy);
 }
 

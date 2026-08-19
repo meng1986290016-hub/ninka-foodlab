@@ -22,6 +22,8 @@ interface RecipeItemTableProps {
   onReplaceMaterialNeed(id: string): void;
   onUnitChange(id: string, unit: RecipeItemUnit): void;
   onUpgradeVersion(id: string, version: RecipeVersion): void;
+  onViewGaps?(item: RecipeDraftItem): void;
+  onViewNutrition?(item: RecipeDraftItem): void;
 }
 
 const units: RecipeItemUnit[] = ["mg", "g", "kg", "mL", "L"];
@@ -38,6 +40,8 @@ export function RecipeItemTable({
   onReplaceMaterialNeed,
   onUnitChange,
   onUpgradeVersion,
+  onViewGaps,
+  onViewNutrition,
 }: RecipeItemTableProps) {
   const [focusedAmountId, setFocusedAmountId] = useState<string | null>(null);
   const totalMassGrams = formulaMassGrams(items);
@@ -111,7 +115,22 @@ export function RecipeItemTable({
                       </span>
                     </td>
                     <td className="recipe-identity-cell">
-                      <strong>{label}</strong>
+                      {item.kind === "material_need" || !onViewNutrition ? (
+                        <strong>{label}</strong>
+                      ) : (
+                        <a
+                          aria-label={`查看${label}的营养信息`}
+                          className="data-quality-trigger recipe-nutrition-link"
+                          href="#nutrition-detail"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            onViewNutrition(item);
+                          }}
+                        >
+                          <strong>{label}</strong>
+                          <Icon name="nutrition" size={15} />
+                        </a>
+                      )}
                       <span>
                         {itemDetail(item)}
                         {item.kind === "material_need" &&
@@ -196,6 +215,7 @@ export function RecipeItemTable({
                         {completeness(
                           item,
                           missingData[item.id] ?? [],
+                          onViewGaps,
                         )}
                         {dataIssue ? (
                           <small
@@ -318,9 +338,22 @@ function formulaMassGrams(items: RecipeDraftItem[]) {
 function completeness(
   item: RecipeDraftItem,
   missingData: string[],
+  onViewGaps: RecipeItemTableProps["onViewGaps"],
 ) {
   if (item.kind === "recipe_version") {
-    return <span className="recipe-data-status is-complete">版本固定</span>;
+    const incomplete = missingData.length > 0;
+    return (
+      <a
+        className={`data-quality-trigger recipe-data-status ${incomplete ? "has-warning" : "is-complete"}`}
+        href="#data-quality"
+        onClick={(event) => {
+          event.preventDefault();
+          onViewGaps?.(item);
+        }}
+      >
+        {incomplete ? "部分数据" : "版本固定"}
+      </a>
+    );
   }
   if (item.kind === "material_need") {
     return (
@@ -336,12 +369,19 @@ function completeness(
   const percent = item.ingredientVariant.completeness.percent;
   return (
     <>
-      <span
+      <a
         className={
-          missingData.length === 0 && percent >= 100
-            ? "recipe-data-status is-complete"
-            : "recipe-data-status has-warning"
+          `data-quality-trigger recipe-data-status ${
+            missingData.length === 0 && percent >= 100
+              ? "is-complete"
+              : "has-warning"
+          }`
         }
+        href="#data-quality"
+        onClick={(event) => {
+          event.preventDefault();
+          onViewGaps?.(item);
+        }}
         title={[
           ...missingData,
           ...item.ingredientVariant.completeness.missingFields,
@@ -358,7 +398,7 @@ function completeness(
         {missingData.length === 0 && percent >= 100
           ? "完整"
           : `${percent}%`}
-      </span>
+      </a>
       {missingData.length > 0 ? (
         <small>
           缺少：{missingData.slice(0, 3).join("、")}

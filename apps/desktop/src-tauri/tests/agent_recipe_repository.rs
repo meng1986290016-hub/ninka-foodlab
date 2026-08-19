@@ -26,18 +26,7 @@ use food_rd_desktop::{
     },
 };
 use rusqlite::Connection;
-use serde::Deserialize;
 use serde_json::json;
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SweetnessParityFixture {
-    ingredient_mass_grams: String,
-    other_mass_grams: String,
-    relative_factor: String,
-    expected_total_sucrose_equivalent_grams: String,
-    expected_per100g_sucrose_equivalent: String,
-}
 
 fn temporary_database(name: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
@@ -235,47 +224,5 @@ fn changed_ingredient_data_marks_a_proposal_stale_without_partial_writes() {
         AgentRecipeProposalStatus::PendingReview
     );
 
-    fs::remove_file(path).unwrap();
-}
-
-#[test]
-fn rust_agent_sweetness_matches_shared_deterministic_fixture() {
-    let fixture: SweetnessParityFixture = serde_json::from_str(include_str!(
-        "../../../../test-fixtures/sweetness-parity.json"
-    ))
-    .unwrap();
-    let path = temporary_database("sweetness-parity");
-    let variant = seed_ingredient(&path);
-    Connection::open(&path)
-        .unwrap()
-        .execute(
-            "INSERT INTO ingredient_nutrient_values
-             (ingredient_variant_id, nutrient_definition_id, value)
-             VALUES (?1, 'theoretical_sweetness', ?2)",
-            rusqlite::params![variant.id, fixture.relative_factor],
-        )
-        .unwrap();
-    let ingredients = IngredientRepository::open(&path).unwrap();
-    let refreshed = ingredients.get_variant(&variant.id).unwrap();
-    let mut payload = proposal_payload(&refreshed);
-    if let AgentRecipeProposalItem::Ingredient { amount, .. } = &mut payload.items[0] {
-        *amount = fixture.ingredient_mass_grams;
-    }
-    if let AgentRecipeProposalItem::MaterialNeed { amount, .. } = &mut payload.items[1] {
-        *amount = fixture.other_mass_grams;
-    }
-
-    let (_, evaluation) = normalize_and_evaluate(&ingredients, payload).unwrap();
-    assert_eq!(
-        evaluation["calculation"]["sweetness"]["totalSucroseEquivalentGrams"],
-        fixture.expected_total_sucrose_equivalent_grams
-    );
-    assert_eq!(
-        evaluation["calculation"]["sweetness"]["per100gSucroseEquivalent"],
-        fixture.expected_per100g_sucrose_equivalent
-    );
-    assert_eq!(evaluation["calculation"]["sweetness"]["status"], "complete");
-
-    drop(ingredients);
     fs::remove_file(path).unwrap();
 }

@@ -7146,7 +7146,8 @@ tbody tr:hover {
   font-size: 14px;
 }
 
-.recipe-batch-bar input:focus {
+.recipe-batch-bar input:focus,
+.recipe-batch-bar select:focus {
   border-color: var(--color-focus);
   box-shadow: 0 0 0 2px rgb(11 131 80 / 10%);
 }
@@ -7166,7 +7167,7 @@ tbody tr:hover {
 
 .recipe-batch-value--computed {
   min-height: 58px;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(62px, 1fr) auto;
   align-content: center;
   gap: 1px 6px;
   padding: 7px 10px;
@@ -7189,6 +7190,31 @@ tbody tr:hover {
   color: var(--color-accent);
   font-size: 16px;
   font-weight: 680;
+}
+
+.recipe-batch-bar .recipe-batch-unit {
+  display: flex;
+  grid-template-columns: none;
+  justify-self: end;
+  gap: 4px;
+}
+
+.recipe-batch-unit > span {
+  color: var(--color-ink-muted);
+  font-size: 10px;
+}
+
+.recipe-batch-unit select {
+  height: 30px;
+  min-width: 58px;
+  padding: 0 24px 0 9px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 12px;
 }
 
 .recipe-batch-value--computed em {

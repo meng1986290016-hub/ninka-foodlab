@@ -553,11 +553,34 @@ describe("RecipeWorkbench", () => {
 
     const currentInputTotal = screen.getByLabelText("当前投料合计");
     expect(currentInputTotal.tagName).toBe("OUTPUT");
-    expect(currentInputTotal.textContent).toContain("1000");
+    expect(within(currentInputTotal).getByText("1")).toBeTruthy();
+    expect(
+      (within(currentInputTotal).getByRole("combobox", {
+        name: "批量单位",
+      }) as HTMLSelectElement).value,
+    ).toBe("kg");
     expect(currentInputTotal.textContent).toContain("由下方配方用量自动汇总");
     expect(screen.getByText("25.00%")).toBeTruthy();
     expect(screen.getByText("75.00%")).toBeTruthy();
     expect(screen.queryByText("锁定")).toBeNull();
     expect(screen.queryByText("补足")).toBeNull();
+
+    const finished = screen.getByRole("textbox", {
+      name: "出成重量",
+    });
+    await user.type(finished, "0.9");
+    expect(screen.getByText("90%")).toBeTruthy();
+
+    const batchUnit = within(currentInputTotal).getByRole("combobox", {
+      name: "批量单位",
+    });
+    await user.selectOptions(batchUnit, "g");
+    expect(
+      (screen.getByRole("textbox", {
+        name: "出成重量",
+      }) as HTMLInputElement).value,
+    ).toBe("900");
+    expect(within(currentInputTotal).getByText("1000")).toBeTruthy();
+    expect(screen.getByText("90%")).toBeTruthy();
   });
 });

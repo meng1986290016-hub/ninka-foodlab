@@ -55,6 +55,7 @@ interface RecipeWorkbenchProps {
 }
 
 type NarrowView = "formula" | "results" | "allergens";
+type BatchMassUnit = "g" | "kg";
 
 export function RecipeWorkbench({
   api,
@@ -288,6 +289,8 @@ function RecipeEditor({
   const [versionNotice, setVersionNotice] = useState<string | null>(
     null,
   );
+  const [batchMassUnitOverride, setBatchMassUnitOverride] =
+    useState<BatchMassUnit | null>(null);
   const calculate = useCallback(
     (draft: Parameters<typeof calculateRecipeDraft>[0]["draft"]) =>
       calculateRecipeDraft({
@@ -743,6 +746,9 @@ function RecipeEditor({
   }
 
   const inputMass = formulaInputMass(draft.items);
+  const batchMassUnit =
+    batchMassUnitOverride ?? preferredBatchMassUnit(inputMass);
+  const displayedInputMass = displayBatchMass(inputMass, batchMassUnit);
   const visibleIssues = draft.calculationIssues.filter(
     (issue) =>
       issue.code !== "non_positive_value" || inputMass !== "0",
@@ -811,38 +817,47 @@ function RecipeEditor({
               aria-label="当前投料合计"
               className="recipe-batch-value recipe-batch-value--computed"
             >
-              <span>当前投料合计</span>
-              <strong>{inputMass}</strong>
-              <small>g</small>
+              <span>投料合计</span>
+              <strong>{displayedInputMass}</strong>
+              <label className="recipe-batch-unit">
+                <span>单位</span>
+                <select
+                  aria-label="批量单位"
+                  onChange={(event) =>
+                    setBatchMassUnitOverride(
+                      event.target.value as BatchMassUnit,
+                    )
+                  }
+                  value={batchMassUnit}
+                >
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                </select>
+              </label>
               <em>由下方配方用量自动汇总</em>
             </output>
             <label>
               <span>出成重量</span>
-              <input
-                aria-label="出成重量"
-                inputMode="decimal"
-                onChange={(event) =>
+              <FinishedMassInput
+                key={batchMassUnit}
+                onChange={(finishedMassGrams) =>
                   dispatch({
                     type: "patch",
-                    patch: {
-                      finishedMassGrams:
-                        event.target.value === ""
-                          ? null
-                          : event.target.value,
-                    },
+                    patch: { finishedMassGrams },
                   })
                 }
                 placeholder="未填写"
-                value={draft.finishedMassGrams ?? ""}
+                unit={batchMassUnit}
+                valueGrams={draft.finishedMassGrams}
               />
-              <small>g</small>
+              <small>{batchMassUnit}</small>
             </label>
             <span className="recipe-batch-value">
               <span>得率</span>
               <strong>{yieldLabel}</strong>
             </span>
             <p className="recipe-batch-help">
-              出成重量用于折算得率、每100g营养和单位成本；未填写时按当前投料合计计算。
+              单位只影响显示和输入，内部仍按克精确保存与计算；出成重量用于折算得率、每100g营养和单位成本，未填写时按投料合计计算。
             </p>
           </div>
 
@@ -942,7 +957,7 @@ function RecipeEditor({
 
       <div className="recipe-sticky-summary">
         <span>
-          投料 {inputMass}g
+          投料 {displayedInputMass}{batchMassUnit}
           <i />
           成本 ¥{displayNumber(calculation?.cost.batchTotal ?? "0")}
         </span>
@@ -1262,6 +1277,76 @@ function createItemId() {
     `recipe-item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function FinishedMassInput({
+  onChange,
+  placeholder,
+  unit,
+  valueGrams,
+}: {
+  onChange(valueGrams: string | null): void;
+  placeholder: string;
+  unit: BatchMassUnit;
+  valueGrams: string | null;
+}) {
+  const [editingValue, setEditingValue] = useState<string | null>(null);
+  const displayValue =
+    editingValue ??
+    (valueGrams === null ? "" : displayBatchMass(valueGrams, unit));
+
+  return (
+    <input
+      aria-label="出成重量"
+      inputMode="decimal"
+      onBlur={() => setEditingValue(null)}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setEditingValue(nextValue);
+        if (nextValue === "") {
+          onChange(null);
+          return;
+        }
+        const grams = batchMassToGrams(nextValue, unit);
+        if (grams !== null) onChange(grams);
+      }}
+      onFocus={() => setEditingValue(displayValue)}
+      placeholder={placeholder}
+      value={displayValue}
+    />
+  );
+}
+
+function preferredBatchMassUnit(grams: string): BatchMassUnit {
+  try {
+    return new Decimal(grams).gte(1000) ? "kg" : "g";
+  } catch {
+    return "g";
+  }
+}
+
+function displayBatchMass(grams: string, unit: BatchMassUnit) {
+  try {
+    const value = new Decimal(grams);
+    if (!value.isFinite()) return grams;
+    return unit === "kg"
+      ? value.dividedBy(1000).toDecimalPlaces(3).toString()
+      : value.toDecimalPlaces(2).toString();
+  } catch {
+    return grams;
+  }
+}
+
+function batchMassToGrams(value: string, unit: BatchMassUnit) {
+  const normalized = value.trim();
+  if (!/^[+-]?(?:\d+|\d*\.\d+)$/.test(normalized)) return null;
+  try {
+    const amount = new Decimal(normalized);
+    if (!amount.isFinite()) return null;
+    return (unit === "kg" ? amount.times(1000) : amount).toString();
+  } catch {
+    return null;
+  }
+}
+
 function formulaInputMass(items: RecipeDraftItem[]) {
   let total = new Decimal(0);
   for (const item of items) {
@@ -1276,7 +1361,7 @@ function formulaInputMass(items: RecipeDraftItem[]) {
     if (!converted.ok) return "—";
     total = total.add(converted.value);
   }
-  return displayNumber(total.toString());
+  return total.toString();
 }
 
 function collectMissingData(

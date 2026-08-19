@@ -230,6 +230,50 @@ describe("recipe desktop API", () => {
     ]);
   });
 
+  it("rejects excessive finished mass without overwriting the saved browser draft or creating a version", async () => {
+    const api = new BrowserDemoApi({
+      storage: new MemoryStorage(),
+      createId: (() => {
+        let sequence = 0;
+        return () => `mass-limit-id-${++sequence}`;
+      })(),
+      now: () => "2026-08-19T10:00:00.000Z",
+    });
+    const recipe = await api.createRecipe({
+      name: "出成重量边界",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const validDraftInput = draftInput(recipe.id, "1000", "0", "有效草稿");
+    validDraftInput.finishedMassGrams = "900";
+    const saved = await api.saveRecipeDraft(validDraftInput);
+
+    const invalidDraftInput = structuredClone(validDraftInput);
+    invalidDraftInput.finishedMassGrams = "1000.000000000000000001";
+    await expect(api.saveRecipeDraft(invalidDraftInput)).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "出成重量不能大于投料合计",
+    });
+    expect((await api.getRecipeDraft(recipe.id))?.finishedMassGrams).toBe("900");
+
+    const invalidSnapshot = snapshot(recipe, "1000", "0", "无效版本");
+    invalidSnapshot.finishedMassGrams = "1000.000000000000000001";
+    await expect(
+      api.createRecipeVersion({
+        recipeId: recipe.id,
+        sourceDraftId: saved.id,
+        basedOnVersionId: null,
+        snapshot: invalidSnapshot,
+        dependencyVersionIds: [],
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "出成重量不能大于投料合计",
+    });
+    expect(await api.listRecipeVersions(recipe.id)).toHaveLength(0);
+  });
+
   it("restores an archived browser recipe without changing its versions", async () => {
     const storage = new MemoryStorage();
     let sequence = 0;

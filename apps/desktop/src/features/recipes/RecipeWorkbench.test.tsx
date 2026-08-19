@@ -583,4 +583,101 @@ describe("RecipeWorkbench", () => {
     expect(within(currentInputTotal).getByText("1000")).toBeTruthy();
     expect(screen.getByText("90%")).toBeTruthy();
   });
+
+  it("shows an immediate error and blocks formal version saving when finished mass exceeds input", async () => {
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "出成校验配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    render(<RecipeWorkbench api={api} recipeId={recipe.id} />);
+    await screen.findByDisplayValue("出成校验配方");
+    await addIngredient(user, "脱脂乳粉");
+
+    const amount = screen.getByRole("textbox", {
+      name: "脱脂乳粉用量",
+    });
+    await user.clear(amount);
+    await user.type(amount, "1000");
+    await waitFor(
+      async () => {
+        expect(await api.getRecipeDraft(recipe.id)).toMatchObject({
+          calculation: { inputMassGrams: "1000" },
+          finishedMassGrams: null,
+        });
+      },
+      { timeout: 1800 },
+    );
+
+    const finishedMass = screen.getByRole("textbox", {
+      name: "出成重量",
+    });
+    await user.type(finishedMass, "1.001");
+
+    expect(
+      await screen.findByText("出成重量不能大于投料合计"),
+    ).toBeTruthy();
+    expect(finishedMass.getAttribute("aria-invalid")).toBe("true");
+    expect(
+      screen.getByText("存在无效输入，已保留本地草稿"),
+    ).toBeTruthy();
+
+    const inputTotal = screen.getByLabelText("当前投料合计");
+    await user.selectOptions(
+      within(inputTotal).getByRole("combobox", { name: "批量单位" }),
+      "g",
+    );
+    expect(
+      (screen.getByRole("textbox", {
+        name: "出成重量",
+      }) as HTMLInputElement).value,
+    ).toBe("1001");
+    expect(
+      screen.getByRole("textbox", { name: "出成重量" }).getAttribute(
+        "aria-invalid",
+      ),
+    ).toBe("true");
+
+    await waitFor(
+      async () => {
+        expect((await api.getRecipeDraft(recipe.id))?.finishedMassGrams).toBeNull();
+      },
+      { timeout: 1800 },
+    );
+    await user.click(
+      screen.getByRole("button", { name: "保存为正式版本" }),
+    );
+    const blockedDialog = await screen.findByRole("dialog", {
+      name: "正式版本保存检查",
+    });
+    expect(
+      within(blockedDialog).getByText("出成重量不能大于投料合计"),
+    ).toBeTruthy();
+    expect(await api.listRecipeVersions(recipe.id)).toHaveLength(0);
+
+    await user.click(
+      within(blockedDialog).getByRole("button", { name: "返回修改" }),
+    );
+    const correctedFinishedMass = screen.getByRole("textbox", {
+      name: "出成重量",
+    });
+    await user.clear(correctedFinishedMass);
+    await user.type(correctedFinishedMass, "1000");
+    await waitFor(() =>
+      expect(
+        screen.queryByText("出成重量不能大于投料合计"),
+      ).toBeNull(),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "保存为正式版本" }),
+    );
+    expect(
+      await screen.findByRole("dialog", {
+        name: "确认保存正式版本",
+      }),
+    ).toBeTruthy();
+  });
 });

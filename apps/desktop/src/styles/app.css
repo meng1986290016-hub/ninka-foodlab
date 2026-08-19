@@ -7168,6 +7168,24 @@ tbody tr:hover {
   font-size: 14px;
 }
 
+.recipe-finished-mass-input {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.recipe-batch-bar input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 5%, var(--color-surface));
+}
+
+.recipe-batch-bar .recipe-finished-mass-error {
+  color: var(--color-danger);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .recipe-batch-bar input:focus,
 .recipe-batch-bar select:focus {
   border-color: var(--color-focus);

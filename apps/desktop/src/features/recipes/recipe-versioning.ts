@@ -8,6 +8,10 @@ import type {
   RecipeVersionSnapshot,
 } from "../../api/recipe-types";
 import type { RecipeCalculationResult } from "./recipe-calculation";
+import {
+  FINISHED_MASS_EXCEEDS_INPUT_MESSAGE,
+  finishedMassExceedsInput,
+} from "./recipe-mass-validation";
 
 export interface RecipeVersionValidationIssue {
   field: string;
@@ -126,6 +130,18 @@ export function validateFormalVersionInput(
     issues.push({
       field: "出成重量",
       message: "出成重量必须是大于 0 的有效数字",
+    });
+  }
+  if (
+    calculation.ok &&
+    finishedMassExceedsInput(
+      draft.finishedMassGrams,
+      calculation.value.calculation.inputMassGrams,
+    )
+  ) {
+    issues.push({
+      field: "出成重量",
+      message: FINISHED_MASS_EXCEEDS_INPUT_MESSAGE,
     });
   }
   if (draft.items.length === 0) {

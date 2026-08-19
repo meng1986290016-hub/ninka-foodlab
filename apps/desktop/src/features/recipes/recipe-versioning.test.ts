@@ -252,4 +252,38 @@ describe("recipe formal version preparation", () => {
       "当前成本为部分估算，版本会保留缺失价格",
     ]);
   });
+
+  it("blocks a version whose finished mass exceeds the actual input total", () => {
+    const workingDraft = draft();
+    workingDraft.finishedMassGrams = "100.000000000000000001";
+
+    const blocked = prepareRecipeVersion({
+      recipe: recipe(),
+      recipeName: "草莓酸奶",
+      draft: workingDraft,
+      sourceDraftId: workingDraft.id,
+      calculation: successfulResult(),
+    });
+
+    expect(blocked).toEqual({
+      ok: false,
+      issues: [
+        {
+          field: "出成重量",
+          message: "出成重量不能大于投料合计",
+        },
+      ],
+    });
+
+    workingDraft.finishedMassGrams = "100.000000000000000000";
+    expect(
+      prepareRecipeVersion({
+        recipe: recipe(),
+        recipeName: "草莓酸奶",
+        draft: workingDraft,
+        sourceDraftId: workingDraft.id,
+        calculation: successfulResult(),
+      }).ok,
+    ).toBe(true);
+  });
 });

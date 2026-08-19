@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
@@ -753,6 +754,11 @@ function RecipeEditor({
     (issue) =>
       issue.code !== "non_positive_value" || inputMass !== "0",
   );
+  const finishedMassIssue = visibleIssues.find(
+    (issue) =>
+      issue.field === "finishedMassGrams" &&
+      issue.severity === "error",
+  );
   const calculation = draft.calculation;
   const missingData = collectMissingData(calculation, visibleIssues);
   const yieldLabel =
@@ -839,6 +845,7 @@ function RecipeEditor({
             <label>
               <span>出成重量</span>
               <FinishedMassInput
+                error={finishedMassIssue?.message ?? null}
                 key={batchMassUnit}
                 onChange={(finishedMassGrams) =>
                   dispatch({
@@ -1287,40 +1294,52 @@ function createItemId() {
 }
 
 function FinishedMassInput({
+  error,
   onChange,
   placeholder,
   unit,
   valueGrams,
 }: {
+  error: string | null;
   onChange(valueGrams: string | null): void;
   placeholder: string;
   unit: BatchMassUnit;
   valueGrams: string | null;
 }) {
+  const errorId = useId();
   const [editingValue, setEditingValue] = useState<string | null>(null);
   const displayValue =
     editingValue ??
     (valueGrams === null ? "" : displayBatchMass(valueGrams, unit));
 
   return (
-    <input
-      aria-label="出成重量"
-      inputMode="decimal"
-      onBlur={() => setEditingValue(null)}
-      onChange={(event) => {
-        const nextValue = event.target.value;
-        setEditingValue(nextValue);
-        if (nextValue === "") {
-          onChange(null);
-          return;
-        }
-        const grams = batchMassToGrams(nextValue, unit);
-        if (grams !== null) onChange(grams);
-      }}
-      onFocus={() => setEditingValue(displayValue)}
-      placeholder={placeholder}
-      value={displayValue}
-    />
+    <span className="recipe-finished-mass-input">
+      <input
+        aria-describedby={error === null ? undefined : errorId}
+        aria-invalid={error === null ? undefined : "true"}
+        aria-label="出成重量"
+        inputMode="decimal"
+        onBlur={() => setEditingValue(null)}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setEditingValue(nextValue);
+          if (nextValue === "") {
+            onChange(null);
+            return;
+          }
+          const grams = batchMassToGrams(nextValue, unit);
+          if (grams !== null) onChange(grams);
+        }}
+        onFocus={() => setEditingValue(displayValue)}
+        placeholder={placeholder}
+        value={displayValue}
+      />
+      {error === null ? null : (
+        <small className="recipe-finished-mass-error" id={errorId} role="alert">
+          {error}
+        </small>
+      )}
+    </span>
   );
 }
 

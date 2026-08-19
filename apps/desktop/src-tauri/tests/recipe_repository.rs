@@ -242,6 +242,35 @@ fn version_reference_uses_actual_input_when_finished_mass_is_missing() {
 }
 
 #[test]
+fn excessive_finished_mass_cannot_overwrite_a_draft_or_create_a_version() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("出成重量边界", RecipeKind::Formula))
+        .unwrap();
+    let mut valid_draft = draft_input(&recipe.id);
+    valid_draft.payload["finishedMassGrams"] = json!("900");
+    let saved = repository.save_draft(valid_draft).unwrap();
+
+    let mut invalid_draft = draft_input(&recipe.id);
+    invalid_draft.payload["finishedMassGrams"] = json!("1000.000000000000000001");
+    let draft_error = repository.save_draft(invalid_draft).unwrap_err();
+    assert_eq!(draft_error.code(), "invalid_input");
+    assert_eq!(draft_error.message(), "出成重量不能大于投料合计");
+    assert_eq!(
+        repository.get_draft(&recipe.id).unwrap().unwrap().payload["finishedMassGrams"],
+        "900"
+    );
+
+    let mut invalid_version = version_input(&recipe.id, &saved.id, Vec::new());
+    invalid_version.snapshot["finishedMassGrams"] = json!("1000.000000000000000001");
+    invalid_version.snapshot["calculation"]["inputMassGrams"] = json!("1000");
+    let version_error = repository.create_version(invalid_version).unwrap_err();
+    assert_eq!(version_error.code(), "invalid_input");
+    assert_eq!(version_error.message(), "出成重量不能大于投料合计");
+    assert!(repository.list_versions(&recipe.id).unwrap().is_empty());
+}
+
+#[test]
 fn unreferenced_version_can_be_deleted_without_reusing_its_number() {
     let mut repository = controlled_repository();
     let recipe = repository

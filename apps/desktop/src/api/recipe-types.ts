@@ -264,6 +264,7 @@ export interface RecipeCalculationIssue {
     | "invalid_number"
     | "negative_value"
     | "non_positive_value"
+    | "finished_mass_exceeds_input"
     | "missing_density"
     | "invalid_unit"
     | "missing_price"

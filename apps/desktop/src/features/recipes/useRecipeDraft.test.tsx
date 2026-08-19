@@ -372,6 +372,75 @@ describe("recipe draft state and autosave", () => {
     expect(api.saveRecipeDraft).not.toHaveBeenCalled();
   });
 
+  it("keeps an excessive finished mass only in the recovery draft until corrected", async () => {
+    const api = mockApi();
+    const { result } = renderHook(() =>
+      useRecipeDraft(api, "recipe-1", {
+        calculate: successfulCalculation,
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    vi.mocked(api.saveDraft).mockClear();
+    vi.mocked(api.saveRecipeDraft).mockClear();
+
+    act(() => {
+      result.current.dispatch({
+        type: "patch",
+        patch: {
+          finishedMassGrams: "100.000000000000000001",
+        },
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.draft.calculationIssues).toContainEqual(
+        expect.objectContaining({
+          code: "finished_mass_exceeds_input",
+          field: "finishedMassGrams",
+        }),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.saveNow();
+    });
+    expect(api.saveDraft).toHaveBeenCalledWith(
+      RECIPE_EDITOR_DRAFT_KIND,
+      "recipe-1",
+      RECIPE_EDITOR_DRAFT_VERSION,
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          finishedMassGrams: "100.000000000000000001",
+        }),
+      }),
+    );
+    expect(api.saveRecipeDraft).not.toHaveBeenCalled();
+
+    vi.mocked(api.saveDraft).mockClear();
+    act(() => {
+      result.current.dispatch({
+        type: "patch",
+        patch: { finishedMassGrams: "100.000000000000000000" },
+      });
+    });
+    await waitFor(() =>
+      expect(
+        result.current.draft.calculationIssues.some(
+          (issue) => issue.code === "finished_mass_exceeds_input",
+        ),
+      ).toBe(false),
+    );
+
+    await act(async () => {
+      await result.current.saveNow();
+    });
+    expect(api.saveDraft).toHaveBeenCalled();
+    expect(api.saveRecipeDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finishedMassGrams: "100.000000000000000000",
+      }),
+    );
+  });
+
   it("keeps the last valid result when deterministic calculation reports a domain error", async () => {
     const calculate = vi.fn(
       (draft: RecipeDraft): RecipeCalculationResult => {

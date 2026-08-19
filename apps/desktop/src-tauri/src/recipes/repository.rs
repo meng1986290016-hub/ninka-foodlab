@@ -1,7 +1,8 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, str::FromStr, sync::Arc};
 
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
+use rust_decimal::Decimal;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -917,6 +918,7 @@ fn validate_draft_input(
     if !input.payload.is_object() {
         return Err(domain("invalid_input", "配方草稿必须是结构化对象"));
     }
+    validate_finished_mass_limit(&input.payload, input.calculation.as_ref())?;
     if let Some(version_id) = input.based_on_version_id.as_deref() {
         assert_version_belongs_to_recipe(connection, version_id, &input.recipe_id)?;
     }
@@ -937,6 +939,7 @@ fn validate_version_input_before_transaction(
     if input.snapshot_schema_version <= 0 || !input.snapshot.is_object() {
         return Err(domain("invalid_input", "配方版本快照无效"));
     }
+    validate_finished_mass_limit(&input.snapshot, input.snapshot.get("calculation"))?;
     let (draft_recipe_id, draft_payload_json) = connection
         .query_row(
             "SELECT recipe_id, payload_json FROM recipe_drafts WHERE id = ?1",
@@ -992,6 +995,31 @@ fn validate_version_input_before_transaction(
                 "不能引用当前配方自身或间接引用当前配方的半成品版本",
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_finished_mass_limit(
+    data: &Value,
+    calculation: Option<&Value>,
+) -> Result<(), RepositoryError> {
+    let Some(finished_mass_value) = data.get("finishedMassGrams") else {
+        return Ok(());
+    };
+    if finished_mass_value.is_null() {
+        return Ok(());
+    }
+    let finished_mass = finished_mass_value
+        .as_str()
+        .and_then(|value| Decimal::from_str(value).ok())
+        .ok_or_else(|| domain("invalid_input", "配方重量数据无效"))?;
+    let input_mass = calculation
+        .and_then(|value| value.get("inputMassGrams"))
+        .and_then(Value::as_str)
+        .and_then(|value| Decimal::from_str(value).ok())
+        .ok_or_else(|| domain("invalid_input", "配方实际投料合计无效"))?;
+    if finished_mass > input_mass {
+        return Err(domain("invalid_input", "出成重量不能大于投料合计"));
     }
     Ok(())
 }

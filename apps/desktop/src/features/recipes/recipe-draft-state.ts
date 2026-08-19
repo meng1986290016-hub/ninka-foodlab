@@ -10,6 +10,7 @@ import type {
   RecipeTarget,
 } from "../../api/recipe-types";
 import type { RecipeCalculationResult } from "./recipe-calculation";
+import { finishedMassLimitIssue } from "./recipe-mass-validation";
 
 export interface RecipeDraftEditorState {
   draft: RecipeDraft;
@@ -204,9 +205,25 @@ export function settleRecipeDraft(
     };
   }
   if (calculate === undefined) {
+    const limitIssue = finishedMassLimitIssue(
+      draft.finishedMassGrams,
+      draft.calculation?.inputMassGrams,
+    );
     return {
-      draft,
-      canSaveFormalDraft: true,
+      draft:
+        limitIssue === null
+          ? draft
+          : {
+              ...draft,
+              calculationIssues: [
+                ...draft.calculationIssues.filter(
+                  (issue) =>
+                    issue.code !== "finished_mass_exceeds_input",
+                ),
+                limitIssue,
+              ],
+            },
+      canSaveFormalDraft: limitIssue === null,
     };
   }
 
@@ -221,14 +238,21 @@ export function settleRecipeDraft(
         canSaveFormalDraft: true,
       };
     }
+    const limitIssue = finishedMassLimitIssue(
+      draft.finishedMassGrams,
+      result.value.calculation.inputMassGrams,
+    );
     return {
       draft: {
         ...draft,
         targetBatchGrams: result.value.calculation.inputMassGrams,
         calculation: result.value.calculation,
-        calculationIssues: result.warnings,
+        calculationIssues:
+          limitIssue === null
+            ? result.warnings
+            : [...result.warnings, limitIssue],
       },
-      canSaveFormalDraft: true,
+      canSaveFormalDraft: limitIssue === null,
     };
   } catch {
     return {

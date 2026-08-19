@@ -3,6 +3,7 @@ import {
   researchReportDocumentHash,
   type ResearchReportExportFormat,
 } from "@food-rd/core";
+import Decimal from "decimal.js";
 import type {
   AgentEvent,
   AgentConversation,
@@ -1559,6 +1560,10 @@ export class BrowserDemoApi implements DesktopApi {
     if (recipeSchemeStatus(recipe) === "inactive") {
       throw new DesktopApiError("invalid_state", "已停用配方不能保存草稿");
     }
+    assertFinishedMassWithinInput(
+      input.finishedMassGrams,
+      input.calculation?.inputMassGrams,
+    );
     if (input.basedOnVersionId !== null) {
       const source = this.findRecipeVersion(state, input.basedOnVersionId);
       if (source.recipeId !== recipe.id) {
@@ -1639,6 +1644,10 @@ export class BrowserDemoApi implements DesktopApi {
     ) {
       throw new DesktopApiError("invalid_input", "配方版本快照无效");
     }
+    assertFinishedMassWithinInput(
+      input.snapshot.finishedMassGrams,
+      input.snapshot.calculation.inputMassGrams,
+    );
     if (new Set(input.dependencyVersionIds).size !== input.dependencyVersionIds.length) {
       throw new DesktopApiError("invalid_input", "半成品版本不能重复引用");
     }
@@ -4033,6 +4042,32 @@ export class BrowserDemoApi implements DesktopApi {
       updatedAt: variant.updatedAt,
       archivedAt: group.archivedAt,
     };
+  }
+}
+
+function assertFinishedMassWithinInput(
+  finishedMassGrams: string | null,
+  inputMassGrams: string | null | undefined,
+) {
+  if (finishedMassGrams === null) return;
+  if (inputMassGrams == null) {
+    throw new DesktopApiError("invalid_input", "配方实际投料合计无效");
+  }
+  try {
+    const finishedMass = new Decimal(finishedMassGrams);
+    const inputMass = new Decimal(inputMassGrams);
+    if (!finishedMass.isFinite() || !inputMass.isFinite()) {
+      throw new DesktopApiError("invalid_input", "配方重量数据无效");
+    }
+    if (finishedMass.gt(inputMass)) {
+      throw new DesktopApiError(
+        "invalid_input",
+        "出成重量不能大于投料合计",
+      );
+    }
+  } catch (cause) {
+    if (cause instanceof DesktopApiError) throw cause;
+    throw new DesktopApiError("invalid_input", "配方重量数据无效");
   }
 }
 

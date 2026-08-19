@@ -57,7 +57,11 @@ export function RecipeHeader({
   const [moreOpen, setMoreOpen] = useState(false);
   const [veryNarrow, setVeryNarrow] = useState(false);
   const invalidInput = draft.calculationIssues.some((issue) =>
-    ["invalid_number", "negative_value"].includes(issue.code) ||
+    [
+      "invalid_number",
+      "negative_value",
+      "finished_mass_exceeds_input",
+    ].includes(issue.code) ||
       (issue.code === "non_positive_value" && hasFormulaInput),
   );
   const inactive = recipeSchemeStatus(recipe) === "inactive";

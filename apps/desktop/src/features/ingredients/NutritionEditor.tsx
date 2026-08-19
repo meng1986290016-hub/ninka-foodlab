@@ -44,22 +44,27 @@ export function NutritionEditor({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const values = new Map(
-    nutrition.values.map((value) => [value.nutrientDefinitionId, value.value]),
+  const values = useMemo(
+    () =>
+      new Map(
+        nutrition.values.map((value) => [
+          value.nutrientDefinitionId,
+          value.value,
+        ]),
+      ),
+    [nutrition.values],
   );
-  const selectedIds = new Set(values.keys());
+  const selectedIds = useMemo(() => new Set(values.keys()), [values]);
   const visibleDefinitions = definitions.filter(
     (definition) =>
-      (category === "nutrition" && definition.builtIn) ||
-      (!definition.builtIn &&
-        definition.category === category &&
+      definition.category === category &&
+      ((category === "nutrition" && definition.builtIn) ||
         selectedIds.has(definition.id)),
   );
   const availableDefinitions = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("zh-CN");
     return definitions.filter(
       (definition) =>
-        !definition.builtIn &&
         definition.category === category &&
         definition.archivedAt === null &&
         !selectedIds.has(definition.id) &&
@@ -194,6 +199,17 @@ export function NutritionEditor({
 
   return (
     <div className="nutrition-editor">
+      <div className="editor-section-heading field--full">
+        <div>
+          <h3>{category === "nutrition" ? "营养成分" : "研发指标"}</h3>
+          <p>
+            {category === "nutrition"
+              ? "维护标签与配方计算需要的基础营养数据。"
+              : "只选择当前原料需要的指标；理论甜度直接填写相对蔗糖倍数。"}
+          </p>
+        </div>
+      </div>
+
       {showBasis ? (
         <label className="field field--full">
           <span>营养数据基准</span>
@@ -210,11 +226,7 @@ export function NutritionEditor({
             <option value="per_100ml">每 100 mL</option>
           </select>
         </label>
-      ) : (
-        <p className="data-helper field--full">
-          自定义研发含量项沿用“营养成分”页设置的数据基准。
-        </p>
-      )}
+      ) : null}
 
       {showBasis && nutrition.basis === "per_100ml" && !densityGPerMl ? (
         <p className="nutrition-warning" role="status">
@@ -224,7 +236,7 @@ export function NutritionEditor({
 
       <div className="nutrition-table field--full">
         <div className="nutrition-table__header">
-          <span>{category === "nutrition" ? "营养成分" : "研发含量项"}</span>
+          <span>{category === "nutrition" ? "营养成分" : "已选研发指标"}</span>
           <span>数值</span>
           <span>单位</span>
           <span aria-hidden="true" />
@@ -245,7 +257,7 @@ export function NutritionEditor({
               value={values.get(definition.id) ?? ""}
             />
             <span className="nutrition-unit">{definition.unit}</span>
-            {definition.builtIn ? (
+            {definition.builtIn && category === "nutrition" ? (
               <span />
             ) : (
               <button
@@ -260,13 +272,17 @@ export function NutritionEditor({
           </div>
         ))}
         {visibleDefinitions.length === 0 ? (
-          <p className="data-helper">尚未选择研发含量项。</p>
+          <p className="data-helper">尚未选择研发指标。</p>
         ) : null}
       </div>
 
       {allowCustomDefinition ? (
         <div className="custom-definition-picker field--full">
-          <label className="field">
+          <div className="custom-definition-picker__heading">
+            <strong>添加指标</strong>
+            <span>从模板选择，或创建一个可供其他原料复用的模板。</span>
+          </div>
+          <label className="field field--full">
             <span>搜索已有模板</span>
             <input
               onChange={(event) => setSearch(event.target.value)}
@@ -274,50 +290,54 @@ export function NutritionEditor({
               value={search}
             />
           </label>
-          <label className="field">
-            <span>选择复用</span>
-            <select
-              onChange={(event) => setSelectedDefinitionId(event.target.value)}
-              value={selectedDefinitionId}
+          <div className="custom-definition-picker__select-row">
+            <label className="field">
+              <span>选择模板</span>
+              <select
+                onChange={(event) => setSelectedDefinitionId(event.target.value)}
+                value={selectedDefinitionId}
+              >
+                <option value="">请选择</option>
+                {availableDefinitions.map((definition) => (
+                  <option key={definition.id} value={definition.id}>
+                    {definition.name}（{definition.unit}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="button button--secondary"
+              disabled={selectedDefinitionId === ""}
+              onClick={() => {
+                const definition = definitions.find(
+                  (item) => item.id === selectedDefinitionId,
+                );
+                if (definition) attachDefinition(definition);
+              }}
+              type="button"
             >
-              <option value="">请选择</option>
-              {availableDefinitions.map((definition) => (
-                <option key={definition.id} value={definition.id}>
-                  {definition.name}（{definition.unit}）
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="button button--secondary"
-            disabled={selectedDefinitionId === ""}
-            onClick={() => {
-              const definition = definitions.find(
-                (item) => item.id === selectedDefinitionId,
-              );
-              if (definition) attachDefinition(definition);
-            }}
-            type="button"
-          >
-            添加到当前原料
-          </button>
-          <button
-            className="text-button"
-            onClick={() => {
-              resetDefinitionForm();
-              setAdding(true);
-            }}
-            type="button"
-          >
-            新建全局模板
-          </button>
-          <button
-            className="text-button"
-            onClick={() => setManaging((current) => !current)}
-            type="button"
-          >
-            {managing ? "收起模板管理" : "管理模板"}
-          </button>
+              添加
+            </button>
+          </div>
+          <div className="custom-definition-picker__links">
+            <button
+              className="text-button"
+              onClick={() => {
+                resetDefinitionForm();
+                setAdding(true);
+              }}
+              type="button"
+            >
+              新建全局模板
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setManaging((current) => !current)}
+              type="button"
+            >
+              {managing ? "收起模板管理" : "管理模板"}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -410,8 +430,10 @@ export function NutritionEditor({
         </p>
       ) : null}
 
-      <p className="data-helper">
-        留空表示未知；输入 0 表示已经确认数值为 0。未选择的自定义项不会参与配方汇总。
+      <p className="data-helper nutrition-editor__footnote">
+        {category === "research"
+          ? "理论甜度以蔗糖=1：白砂糖填 1，其他原料填写其整体相对甜度。留空表示未知，0 表示确认无甜味。"
+          : "留空表示未知；输入 0 表示已经确认数值为 0。未选择的自定义项不会参与配方汇总。"}
       </p>
     </div>
   );

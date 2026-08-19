@@ -163,6 +163,55 @@ describe("BrowserDemoApi", () => {
     });
   });
 
+  it("migrates legacy sweetness inputs into the reusable research template", async () => {
+    await api.listMaterialGroups();
+    const stored = JSON.parse(
+      storage.getItem("food-rd.browser-demo.v8") ?? "null",
+    ) as {
+      nutrientDefinitions: Array<{ id: string }>;
+      materialGroups: Array<{
+        variants: Array<{
+          sweetness?: unknown;
+          nutrition: {
+            values: Array<{
+              nutrientDefinitionId: string;
+              value: string | null;
+            }>;
+          };
+        }>;
+      }>;
+    };
+    stored.nutrientDefinitions = stored.nutrientDefinitions.filter(
+      (definition) => definition.id !== "theoretical_sweetness",
+    );
+    const variant = stored.materialGroups[0]?.variants[0];
+    if (variant === undefined) throw new Error("missing demo variant");
+    variant.sweetness = {
+      basis: "w_w_percent",
+      content: "10",
+      relativeFactor: "2",
+    };
+    storage.setItem("food-rd.browser-demo.v8", JSON.stringify(stored));
+
+    const reopened = new BrowserDemoApi({ storage });
+    const groups = await reopened.listMaterialGroups();
+    const migrated = groups[0]?.variants[0];
+
+    expect(
+      migrated?.nutrition.values.find(
+        (value) =>
+          value.nutrientDefinitionId === "theoretical_sweetness",
+      )?.value,
+    ).toBe("0.2");
+    expect(await reopened.listNutrientDefinitions()).toContainEqual(
+      expect.objectContaining({
+        id: "theoretical_sweetness",
+        category: "research",
+        unit: "倍",
+      }),
+    );
+  });
+
   it("commits every ready demo draft with one atomic browser write", async () => {
     let sequence = 0;
     const atomicApi = new BrowserDemoApi({

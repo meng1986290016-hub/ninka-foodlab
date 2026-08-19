@@ -12,7 +12,6 @@ import { AllergenEditor } from "../imports/AllergenEditor";
 import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { IngredientDraftNotice } from "./IngredientDraftNotice";
 import { NutritionEditor } from "./NutritionEditor";
-import { SweetnessEditor } from "./SweetnessEditor";
 import { useIngredientDraft } from "./useIngredientDraft";
 import { VariantBasicFields } from "./VariantBasicFields";
 
@@ -37,7 +36,6 @@ function emptyInput(groupId: string): IngredientVariantInput {
     source: "",
     researchNotes: "",
     nutrition: { basis: "per_100g", values: [] },
-    sweetness: null,
     allergens: { contains: [], mayContain: [] },
   };
 }
@@ -65,7 +63,6 @@ function toInput(
       basis: variant.nutrition.basis,
       values: variant.nutrition.values.map((value) => ({ ...value })),
     },
-    sweetness: variant.sweetness ? { ...variant.sweetness } : null,
     allergens: {
       contains: [...variant.allergens.contains],
       mayContain: [...variant.allergens.mayContain],
@@ -84,22 +81,25 @@ function withDefinitions(
     ]),
   );
   const builtInValues = definitions
-    .filter((definition) => definition.builtIn)
+    .filter(
+      (definition) => definition.builtIn && definition.category === "nutrition",
+    )
     .map((definition) => ({
       nutrientDefinitionId: definition.id,
       value: values.get(definition.id) ?? null,
     }));
-  const selectedCustomValues = input.nutrition.values.filter((value) =>
+  const selectedAdditionalValues = input.nutrition.values.filter((value) =>
     definitions.some(
       (definition) =>
-        definition.id === value.nutrientDefinitionId && !definition.builtIn,
+        definition.id === value.nutrientDefinitionId &&
+        !(definition.builtIn && definition.category === "nutrition"),
     ),
   );
   return {
     ...input,
     nutrition: {
       ...input.nutrition,
-      values: [...builtInValues, ...selectedCustomValues],
+      values: [...builtInValues, ...selectedAdditionalValues],
     },
   };
 }
@@ -331,11 +331,6 @@ export function VariantEditor({
             onDefinitionUpdated={updateDefinition}
             onDefinitionArchived={markDefinitionArchived}
             showBasis={false}
-          />
-          <SweetnessEditor
-            densityGPerMl={input.densityGPerMl}
-            onChange={(sweetness) => changeInput({ ...input, sweetness })}
-            sweetness={input.sweetness ?? null}
           />
         </div>
 

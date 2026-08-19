@@ -36,6 +36,7 @@ import type {
   AgentRecipeProposal,
   MaterialNeed,
 } from "./agent-recipe-types";
+import Decimal from "decimal.js";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
@@ -46,7 +47,8 @@ export const BROWSER_V6_KEY = "food-rd.browser-demo.v6";
 export const BROWSER_V7_KEY = "food-rd.browser-demo.v7";
 export const BROWSER_V8_KEY = "food-rd.browser-demo.v8";
 export const BROWSER_V9_KEY = "food-rd.browser-demo.v9";
-export const BROWSER_SCHEMA_VERSION = 9;
+export const BROWSER_V10_KEY = "food-rd.browser-demo.v10";
+export const BROWSER_SCHEMA_VERSION = 10;
 
 export interface LegacyState {
   schemaVersion: 1;
@@ -122,6 +124,11 @@ export interface BrowserStateV9
   schemaVersion: 9;
   agentRecipeProposals: Record<string, AgentRecipeProposal>;
   materialNeeds: Record<string, MaterialNeed>;
+}
+
+export interface BrowserStateV10
+  extends Omit<BrowserStateV9, "schemaVersion"> {
+  schemaVersion: 10;
 }
 
 export interface MigrationContext {
@@ -328,13 +335,12 @@ export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
     Partial<Pick<BrowserStateV9, "agentRecipeProposals" | "materialNeeds">>;
   return {
     ...state,
-    schemaVersion: BROWSER_SCHEMA_VERSION,
+    schemaVersion: 9,
     materialGroups: state.materialGroups.map((group) => ({
       ...group,
       variants: group.variants.map((variant) => ({
         ...variant,
         allergens: variant.allergens ?? { contains: [], mayContain: [] },
-        sweetness: variant.sweetness ?? null,
       })),
     })),
     nutrientDefinitions: state.nutrientDefinitions.map((definition) => ({
@@ -347,18 +353,126 @@ export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
   };
 }
 
+const theoreticalSweetnessDefinition: NutrientDefinition = {
+  id: "theoretical_sweetness",
+  code: "theoretical_sweetness",
+  name: "理论甜度（蔗糖=1）",
+  unit: "倍",
+  builtIn: true,
+  sortOrder: 1000,
+  category: "research",
+  archivedAt: null,
+};
+
+function legacySweetnessFactor(
+  variant: IngredientVariant & {
+    sweetness?: {
+      basis: "w_w_percent" | "w_v_per_100ml";
+      content: string | null;
+      relativeFactor: string | null;
+    } | null;
+  },
+): string | null | undefined {
+  const legacy = variant.sweetness;
+  if (legacy === undefined || legacy === null) return undefined;
+  if (legacy.content === null || legacy.relativeFactor === null) return null;
+  try {
+    const content = new Decimal(legacy.content);
+    const factor = new Decimal(legacy.relativeFactor);
+    if (legacy.basis === "w_w_percent") {
+      return content.mul(factor).div(100).toString();
+    }
+    if (variant.densityGPerMl === null) return null;
+    const density = new Decimal(variant.densityGPerMl);
+    if (!density.isFinite() || !density.isPositive()) return null;
+    return content.mul(factor).div(density).div(100).toString();
+  } catch {
+    return null;
+  }
+}
+
+export function migrateV9ToV10(state: BrowserStateV9): BrowserStateV10 {
+  const preservedDefinitions = state.nutrientDefinitions.map((definition) =>
+    definition.id !== theoreticalSweetnessDefinition.id &&
+    definition.name === theoreticalSweetnessDefinition.name
+      ? {
+          ...definition,
+          name: `${definition.name}（旧模板 ${definition.id}）`,
+        }
+      : definition,
+  );
+  return {
+    ...state,
+    schemaVersion: BROWSER_SCHEMA_VERSION,
+    nutrientDefinitions: preservedDefinitions.some(
+      (definition) => definition.id === theoreticalSweetnessDefinition.id,
+    )
+      ? preservedDefinitions.map((definition) =>
+          definition.id === theoreticalSweetnessDefinition.id
+            ? theoreticalSweetnessDefinition
+            : definition,
+        )
+      : [...preservedDefinitions, theoreticalSweetnessDefinition],
+    materialGroups: state.materialGroups.map((group) => ({
+      ...group,
+      variants: group.variants.map((variant) => {
+        const legacyVariant = variant as IngredientVariant & {
+          sweetness?: {
+            basis: "w_w_percent" | "w_v_per_100ml";
+            content: string | null;
+            relativeFactor: string | null;
+          } | null;
+        };
+        const migratedFactor = legacySweetnessFactor(legacyVariant);
+        const { sweetness: _legacySweetness, ...cleanVariant } = legacyVariant;
+        if (
+          migratedFactor === undefined ||
+          cleanVariant.nutrition.values.some(
+            (value) => value.nutrientDefinitionId === theoreticalSweetnessDefinition.id,
+          )
+        ) {
+          return cleanVariant;
+        }
+        return {
+          ...cleanVariant,
+          nutrition: {
+            ...cleanVariant.nutrition,
+            values: [
+              ...cleanVariant.nutrition.values,
+              {
+                nutrientDefinitionId: theoreticalSweetnessDefinition.id,
+                value: migratedFactor,
+              },
+            ],
+          },
+        };
+      }),
+    })),
+  };
+}
+
 export function readBrowserState(
   storage: Storage,
   initialLegacyState: () => LegacyState,
   context: MigrationContext,
-): BrowserStateV9 {
-  const v9 = storage.getItem(BROWSER_V9_KEY);
-  if (v9 !== null) {
-    const parsed = JSON.parse(v9) as BrowserStateV9;
+): BrowserStateV10 {
+  const v10 = storage.getItem(BROWSER_V10_KEY);
+  if (v10 !== null) {
+    const parsed = JSON.parse(v10) as BrowserStateV10;
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
     return parsed;
+  }
+  const v9 = storage.getItem(BROWSER_V9_KEY);
+  if (v9 !== null) {
+    const parsed = JSON.parse(v9) as BrowserStateV9;
+    if (parsed.schemaVersion !== 9) {
+      throw new Error("unsupported browser schema");
+    }
+    const migrated = migrateV9ToV10(parsed);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
 
   const v8 = storage.getItem(BROWSER_V8_KEY);
@@ -367,7 +481,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 8) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(parsed);
+    const migrated = migrateV9ToV10(migrateV8ToV9(parsed));
     if (
       !("agentRecipeProposals" in parsed) ||
       !("materialNeeds" in parsed)
@@ -383,7 +497,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 7) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(parsed));
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(parsed)));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -394,7 +508,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 6) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(parsed)));
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(parsed))));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -405,7 +519,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 5) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(parsed))));
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(parsed)))));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -416,9 +530,9 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 4) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(
       migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(parsed))),
-    ));
+    )));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -429,13 +543,13 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 3) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(
       migrateV6ToV7(
         migrateV5ToV6(
           migrateV4ToV5(migrateV3ToV4(parsed, context)),
         ),
       ),
-    ));
+    )));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -446,7 +560,7 @@ export function readBrowserState(
     if (parsed.schemaVersion !== 2) {
       throw new Error("unsupported browser schema");
     }
-    const migrated = migrateV8ToV9(migrateV7ToV8(
+    const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(
       migrateV6ToV7(
         migrateV5ToV6(
           migrateV4ToV5(
@@ -454,7 +568,7 @@ export function readBrowserState(
           ),
         ),
       ),
-    ));
+    )));
     writeBrowserState(storage, migrated);
     return migrated;
   }
@@ -466,7 +580,7 @@ export function readBrowserState(
   if (legacy.schemaVersion !== 1) {
     throw new Error("unsupported legacy browser schema");
   }
-  const migrated = migrateV8ToV9(migrateV7ToV8(
+  const migrated = migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(
     migrateV6ToV7(
       migrateV5ToV6(
         migrateV4ToV5(
@@ -477,14 +591,14 @@ export function readBrowserState(
         ),
       ),
     ),
-  ));
+  )));
   writeBrowserState(storage, migrated);
   return migrated;
 }
 
-export function writeBrowserState(storage: Storage, state: BrowserStateV9) {
+export function writeBrowserState(storage: Storage, state: BrowserStateV10) {
   // Keep the historical browser key readable by existing open-source demos,
-  // while the in-memory schema and the payload fields are version 9.
+  // while the in-memory schema and the payload fields are version 10.
   storage.setItem(
     BROWSER_V8_KEY,
     JSON.stringify({ ...state, schemaVersion: 8 }),

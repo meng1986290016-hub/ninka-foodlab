@@ -6,7 +6,6 @@ import type { NutritionBasis, PriceUnit } from "../../api/types";
 import { AllergenEditor } from "./AllergenEditor";
 import { ImportIssueList } from "./ImportIssueList";
 import { SourceAttachmentList } from "./SourceAttachmentList";
-import { SweetnessEditor } from "../ingredients/SweetnessEditor";
 
 interface IngredientImportPreviewProps {
   drafts: IngredientImportDraft[];
@@ -183,11 +182,6 @@ export function IngredientImportPreview({
                 <p className="data-helper">留空表示未知；输入 0 表示已确认为 0。</p>
               </div>
 
-              <SweetnessEditor
-                densityGPerMl={review.densityGPerMl}
-                onChange={(sweetness) => update("sweetness", sweetness)}
-                sweetness={review.sweetness ?? null}
-              />
 
               <AllergenEditor
                 onChange={(allergens) => {

@@ -232,16 +232,11 @@ export function RecipeVersionComparisonPanel({
                 afterVersion={comparison.after.versionNumber}
                 beforeVersion={comparison.before.versionNumber}
                 emptyLabel="研发指标没有变化"
-                rows={comparison.researchChanges ?? []}
-                title="研发指标（每 100g）"
-                tone="nutrition"
-              />
-              <ComparisonSection
-                afterVersion={comparison.after.versionNumber}
-                beforeVersion={comparison.before.versionNumber}
-                emptyLabel="理论甜度没有变化"
-                rows={comparison.sweetnessChanges ?? []}
-                title="理论甜度（研发估算）"
+                rows={[
+                  ...(comparison.researchChanges ?? []),
+                  ...(comparison.sweetnessChanges ?? []),
+                ]}
+                title="研发指标与理论甜度"
                 tone="nutrition"
               />
               <ComparisonSection

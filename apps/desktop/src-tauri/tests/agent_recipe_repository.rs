@@ -34,8 +34,6 @@ use serde_json::json;
 struct SweetnessParityFixture {
     ingredient_mass_grams: String,
     other_mass_grams: String,
-    basis: String,
-    content: String,
     relative_factor: String,
     expected_total_sucrose_equivalent_grams: String,
     expected_per100g_sucrose_equivalent: String,
@@ -83,7 +81,6 @@ fn seed_ingredient(
                     value: Some("35".into()),
                 }],
             },
-            sweetness: None,
             allergens: IngredientVariantAllergens {
                 contains: vec!["乳".into()],
                 may_contain: Vec::new(),
@@ -252,15 +249,10 @@ fn rust_agent_sweetness_matches_shared_deterministic_fixture() {
     Connection::open(&path)
         .unwrap()
         .execute(
-            "INSERT INTO ingredient_variant_sweetness
-             (ingredient_variant_id, basis, content, relative_factor)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![
-                variant.id,
-                fixture.basis,
-                fixture.content,
-                fixture.relative_factor
-            ],
+            "INSERT INTO ingredient_nutrient_values
+             (ingredient_variant_id, nutrient_definition_id, value)
+             VALUES (?1, 'theoretical_sweetness', ?2)",
+            rusqlite::params![variant.id, fixture.relative_factor],
         )
         .unwrap();
     let ingredients = IngredientRepository::open(&path).unwrap();

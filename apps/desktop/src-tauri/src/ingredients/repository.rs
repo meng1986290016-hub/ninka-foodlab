@@ -13,9 +13,9 @@ use crate::database::{self, migrations};
 
 use super::model::{
     Category, DataCompleteness, DatabaseStatus, DraftRecord, IngredientSourceAttachment,
-    IngredientSweetness, IngredientVariant, IngredientVariantAllergens, IngredientVariantInput,
-    MaterialGroup, MaterialGroupInput, NutrientDefinition, Supplier, VariantComparison,
-    VariantComparisonRow, VariantNutrition, VariantNutritionValue,
+    IngredientVariant, IngredientVariantAllergens, IngredientVariantInput, MaterialGroup,
+    MaterialGroupInput, NutrientDefinition, Supplier, VariantComparison, VariantComparisonRow,
+    VariantNutrition, VariantNutritionValue,
 };
 
 const DECIMAL_ERROR: &str = "请输入不带单位的非负数值";
@@ -449,7 +449,6 @@ impl IngredientRepository {
             source: source.source,
             research_notes: source.research_notes,
             nutrition: source.nutrition,
-            sweetness: source.sweetness,
             allergens: source.allergens,
             duplicate_confirmed: false,
         })
@@ -522,7 +521,7 @@ impl IngredientRepository {
         ];
         for definition in self.list_nutrient_definitions()? {
             let nutrient_id = definition.id.clone();
-            if !definition.built_in
+            if !(definition.built_in && definition.category == "nutrition")
                 && !variants.iter().any(|variant| {
                     variant
                         .nutrition
@@ -547,41 +546,6 @@ impl IngredientRepository {
                         .and_then(|value| value.value.clone())
                 },
             ));
-        }
-        if variants.iter().any(|variant| variant.sweetness.is_some()) {
-            rows.extend([
-                comparison_row(
-                    &variants,
-                    "sweetnessBasis",
-                    "甜度含量基准",
-                    None,
-                    |variant| variant.sweetness.as_ref().map(|value| value.basis.clone()),
-                ),
-                comparison_row(
-                    &variants,
-                    "sweetnessContent",
-                    "甜味物质含量",
-                    None,
-                    |variant| {
-                        variant
-                            .sweetness
-                            .as_ref()
-                            .and_then(|value| value.content.clone())
-                    },
-                ),
-                comparison_row(
-                    &variants,
-                    "sweetnessRelativeFactor",
-                    "相对甜度倍数（蔗糖=1）",
-                    None,
-                    |variant| {
-                        variant
-                            .sweetness
-                            .as_ref()
-                            .and_then(|value| value.relative_factor.clone())
-                    },
-                ),
-            ]);
         }
         Ok(VariantComparison {
             material_group_id: material_group_id.to_string(),
@@ -910,15 +874,6 @@ fn normalize_and_validate_variant(
         value.value = nullable_text(value.value.take());
         validate_decimal(&value.value, &value.nutrient_definition_id)?;
     }
-    if let Some(sweetness) = &mut input.sweetness {
-        if !matches!(sweetness.basis.as_str(), "w_w_percent" | "w_v_per_100ml") {
-            return Err(RepositoryError::domain("invalid_input", "甜度含量基准无效"));
-        }
-        sweetness.content = nullable_text(sweetness.content.take());
-        sweetness.relative_factor = nullable_text(sweetness.relative_factor.take());
-        validate_decimal(&sweetness.content, "sweetness.content")?;
-        validate_decimal(&sweetness.relative_factor, "sweetness.relativeFactor")?;
-    }
     input.allergens.contains = normalized_unique(&input.allergens.contains);
     input.allergens.may_contain = normalized_unique(&input.allergens.may_contain);
     let contains = input
@@ -984,23 +939,6 @@ pub(crate) fn save_variant_in_transaction(
              (ingredient_variant_id, nutrient_definition_id, value)
              VALUES (?1, ?2, ?3)",
             params![id, value.nutrient_definition_id, value.value],
-        )?;
-    }
-    transaction.execute(
-        "DELETE FROM ingredient_variant_sweetness WHERE ingredient_variant_id = ?1",
-        [&id],
-    )?;
-    if let Some(sweetness) = &input.sweetness {
-        transaction.execute(
-            "INSERT INTO ingredient_variant_sweetness
-             (ingredient_variant_id, basis, content, relative_factor)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![
-                id,
-                sweetness.basis,
-                sweetness.content,
-                sweetness.relative_factor
-            ],
         )?;
     }
     transaction.execute(
@@ -1382,20 +1320,6 @@ fn hydrate_variant(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let sweetness = connection
-        .query_row(
-            "SELECT basis, content, relative_factor
-             FROM ingredient_variant_sweetness WHERE ingredient_variant_id = ?1",
-            [&raw.id],
-            |row| {
-                Ok(IngredientSweetness {
-                    basis: row.get(0)?,
-                    content: row.get(1)?,
-                    relative_factor: row.get(2)?,
-                })
-            },
-        )
-        .optional()?;
     Ok(IngredientVariant {
         id: raw.id,
         material_group_id: raw.material_group_id,
@@ -1412,7 +1336,6 @@ fn hydrate_variant(
             basis: raw.nutrition_basis,
             values,
         },
-        sweetness,
         allergens,
         source_attachments,
         completeness,
@@ -1459,7 +1382,9 @@ fn calculate_completeness(
     if variant.nutrition_basis == "per_100ml" && variant.density_g_per_ml.is_none() {
         missing_fields.push("密度".to_string());
     }
-    let built_ins = definitions.iter().filter(|definition| definition.built_in);
+    let built_ins = definitions
+        .iter()
+        .filter(|definition| definition.built_in && definition.category == "nutrition");
     let built_in_count = built_ins.clone().count();
     for definition in built_ins {
         if value_map

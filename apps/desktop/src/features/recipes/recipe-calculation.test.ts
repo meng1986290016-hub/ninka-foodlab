@@ -23,6 +23,16 @@ const nutrients: NutrientDefinition[] = [
     archivedAt: null,
   },
   {
+    id: "theoretical_sweetness",
+    code: "theoretical_sweetness",
+    name: "理论甜度（蔗糖=1）",
+    unit: "倍",
+    builtIn: true,
+    sortOrder: 1000,
+    category: "research",
+    archivedAt: null,
+  },
+  {
     id: "sugars",
     code: "sugars",
     name: "糖",
@@ -315,17 +325,19 @@ describe("recipe calculation adapter", () => {
   it("uses total input or finished mass for theoretical sweetness and reports partial data", () => {
     const sucrose = variant({
       id: "variant-sucrose",
-      sweetness: {
-        basis: "w_w_percent",
-        content: "10",
-        relativeFactor: "1",
+      nutrition: {
+        basis: "per_100g",
+        values: [
+          { nutrientDefinitionId: "protein", value: "0" },
+          { nutrientDefinitionId: "sugars", value: "10" },
+          { nutrientDefinitionId: "theoretical_sweetness", value: "0.1" },
+        ],
       },
     });
     const filler = variant({
       id: "variant-filler",
       supplierId: "supplier-b",
       supplierName: "供应商B",
-      sweetness: null,
     });
     const inputBasis = calculate(draft([
       ingredientItem(sucrose, { id: "item-sucrose", amount: "100" }),
@@ -344,20 +356,22 @@ describe("recipe calculation adapter", () => {
       });
     }
 
-    const missingDensity = variant({
+    const unknownSweetness = variant({
       id: "variant-high-intensity",
       supplierId: "supplier-c",
       supplierName: "供应商C",
-      densityGPerMl: null,
-      sweetness: {
-        basis: "w_v_per_100ml",
-        content: "1",
-        relativeFactor: "200",
+      nutrition: {
+        basis: "per_100g",
+        values: [
+          { nutrientDefinitionId: "protein", value: "0" },
+          { nutrientDefinitionId: "sugars", value: "0" },
+          { nutrientDefinitionId: "theoretical_sweetness", value: null },
+        ],
       },
     });
     const finishedBasis = calculate(draft([
       ingredientItem(sucrose, { id: "item-sucrose", amount: "100" }),
-      ingredientItem(missingDensity, {
+      ingredientItem(unknownSweetness, {
         id: "item-high-intensity",
         position: 1,
         amount: "10",
@@ -434,13 +448,11 @@ describe("recipe calculation adapter", () => {
               supplierName: "糖业A",
               modelOrSpecification: "",
               densityGPerMl: null,
-              nutrientsPer100g: { sugars: "100" },
-              nutrientUnits: { sugars: "g" },
-              sweetness: {
-                basis: "w_w_percent",
-                content: "100",
-                relativeFactor: "1",
+              nutrientsPer100g: {
+                sugars: "100",
+                theoretical_sweetness: "1",
               },
+              nutrientUnits: { sugars: "g", theoretical_sweetness: "倍" },
               pricePerKg: "8",
               allergens: {
                 contains: [],

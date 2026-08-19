@@ -22,7 +22,7 @@ export function RecipeTargetEditor({
   onChange,
 }: RecipeTargetEditorProps) {
   const targetNutrients = nutrientDefinitions.filter(
-    (definition) => definition.builtIn,
+    (definition) => definition.builtIn && definition.category === "nutrition",
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [metricKey, setMetricKey] = useState("");

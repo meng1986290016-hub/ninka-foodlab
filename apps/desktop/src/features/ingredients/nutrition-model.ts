@@ -11,7 +11,9 @@ export function calculateCompleteness(
   definitions: NutrientDefinition[],
 ): DataCompleteness {
   const builtIns = definitions
-    .filter((definition) => definition.builtIn)
+    .filter(
+      (definition) => definition.builtIn && definition.category === "nutrition",
+    )
     .sort((left, right) => left.sortOrder - right.sortOrder);
   const values = new Map(
     input.nutrition.values.map((value) => [
@@ -104,7 +106,7 @@ export function buildVariantComparison(
       .slice()
       .filter(
         (definition) =>
-          definition.builtIn ||
+          (definition.builtIn && definition.category === "nutrition") ||
           selected.some((variant) =>
             variant.nutrition.values.some(
               (value) => value.nutrientDefinitionId === definition.id,
@@ -124,33 +126,11 @@ export function buildVariantComparison(
           return value == null || value === "" ? null : value;
         }),
       })),
-    {
-      key: "sweetnessBasis",
-      label: "甜度含量基准",
-      unit: null,
-      values: valuesFor((variant) => variant.sweetness?.basis ?? null),
-    },
-    {
-      key: "sweetnessContent",
-      label: "甜味物质含量",
-      unit: null,
-      values: valuesFor((variant) => variant.sweetness?.content ?? null),
-    },
-    {
-      key: "sweetnessRelativeFactor",
-      label: "相对甜度倍数（蔗糖=1）",
-      unit: null,
-      values: valuesFor(
-        (variant) => variant.sweetness?.relativeFactor ?? null,
-      ),
-    },
   ];
 
   return {
     materialGroupId: group.id,
     variants: selected,
-    rows: selected.some((variant) => variant.sweetness)
-      ? rows
-      : rows.filter((row) => !row.key.startsWith("sweetness")),
+    rows,
   };
 }

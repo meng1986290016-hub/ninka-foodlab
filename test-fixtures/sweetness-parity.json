@@ -1,9 +1,7 @@
 {
   "ingredientMassGrams": "90",
   "otherMassGrams": "10",
-  "basis": "w_w_percent",
-  "content": "10",
-  "relativeFactor": "1",
+  "relativeFactor": "0.1",
   "expectedTotalSucroseEquivalentGrams": "9",
   "expectedPer100gSucroseEquivalent": "9"
 }

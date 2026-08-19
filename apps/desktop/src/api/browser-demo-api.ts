@@ -47,7 +47,7 @@ import type {
 } from "./import-types";
 import {
   BROWSER_SCHEMA_VERSION,
-  type BrowserStateV9 as BrowserStateV5,
+  type BrowserStateV10 as BrowserStateV5,
   type LegacyState,
   readBrowserState,
   writeBrowserState,
@@ -575,14 +575,15 @@ function demoReview(
     priceUnit: "kg",
     densityGPerMl: null,
     nutritionBasis: "per_100g",
-    nutrients: definitions.filter((definition) => definition.builtIn).map((definition) => ({
+    nutrients: definitions.filter(
+      (definition) => definition.builtIn && definition.category === "nutrition",
+    ).map((definition) => ({
       definitionId: definition.id,
       name: definition.name,
       unit: definition.unit,
       value: null,
       category: definition.category,
     })),
-    sweetness: null,
     containsAllergens: [],
     mayContainAllergens: [],
     source: displayName,
@@ -668,13 +669,6 @@ function normalizeImportReview(
       value: nullableText(nutrient.value),
       category: nutrient.category ?? null,
     })),
-    sweetness: review.sweetness
-      ? {
-          ...review.sweetness,
-          content: nullableText(review.sweetness.content),
-          relativeFactor: nullableText(review.sweetness.relativeFactor),
-        }
-      : null,
     containsAllergens: review.containsAllergens.map((value) => value.trim()).filter(Boolean),
     mayContainAllergens: review.mayContainAllergens
       .map((value) => value.trim())
@@ -732,38 +726,6 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
         row: null,
         column: null,
       });
-    }
-  }
-  if (normalized.sweetness) {
-    if (
-      normalized.sweetness.basis !== "w_w_percent" &&
-      normalized.sweetness.basis !== "w_v_per_100ml"
-    ) {
-      issues.push({
-        code: "invalid_basis",
-        severity: "error",
-        message: "甜度含量基准必须为 w/w 或 w/v",
-        fieldPath: "sweetness.basis",
-        sourceName: null,
-        row: null,
-        column: null,
-      });
-    }
-    for (const [fieldPath, value] of [
-      ["sweetness.content", normalized.sweetness.content],
-      ["sweetness.relativeFactor", normalized.sweetness.relativeFactor],
-    ] as const) {
-      if (value !== null && !DECIMAL_PATTERN.test(value)) {
-        issues.push({
-          code: "invalid_decimal",
-          severity: "error",
-          message: "请输入不带单位的非负数值",
-          fieldPath,
-          sourceName: null,
-          row: null,
-          column: null,
-        });
-      }
     }
   }
   return issues;
@@ -3051,14 +3013,6 @@ export class BrowserDemoApi implements DesktopApi {
           value: nullableText(value.value),
         })),
       },
-      sweetness:
-        input.sweetness == null
-          ? null
-          : {
-              basis: input.sweetness.basis,
-              content: nullableText(input.sweetness.content),
-              relativeFactor: nullableText(input.sweetness.relativeFactor),
-            },
       allergens: {
         contains: [...(input.allergens?.contains ?? [])],
         mayContain: [...(input.allergens?.mayContain ?? [])],
@@ -3082,7 +3036,6 @@ export class BrowserDemoApi implements DesktopApi {
       source: normalizedInput.source,
       researchNotes: normalizedInput.researchNotes,
       nutrition: normalizedInput.nutrition,
-      sweetness: normalizedInput.sweetness ?? null,
       allergens: normalizedInput.allergens ?? { contains: [], mayContain: [] },
       sourceAttachments: previous?.sourceAttachments ?? [],
       completeness,
@@ -3116,7 +3069,6 @@ export class BrowserDemoApi implements DesktopApi {
       source: source.source,
       researchNotes: source.researchNotes,
       nutrition: source.nutrition,
-      sweetness: source.sweetness ? { ...source.sweetness } : null,
       allergens: {
         contains: [...source.allergens.contains],
         mayContain: [...source.allergens.mayContain],
@@ -3889,7 +3841,6 @@ export class BrowserDemoApi implements DesktopApi {
         basis: review.nutritionBasis ?? "per_100g",
         values: nutritionValues,
       },
-      sweetness: review.sweetness ?? null,
       allergens: {
         contains: review.containsAllergens,
         mayContain: review.mayContainAllergens,
@@ -3910,7 +3861,6 @@ export class BrowserDemoApi implements DesktopApi {
       source: input.source,
       researchNotes: input.researchNotes,
       nutrition: input.nutrition,
-      sweetness: input.sweetness ?? null,
       allergens: input.allergens ?? { contains: [], mayContain: [] },
       sourceAttachments: draft.attachments.map((attachment) => ({ ...attachment })),
       completeness: calculateCompleteness(input, state.nutrientDefinitions),
@@ -3950,19 +3900,6 @@ export class BrowserDemoApi implements DesktopApi {
     this.validateDecimal(input.densityGPerMl, "densityGPerMl");
     for (const value of input.nutrition.values) {
       this.validateDecimal(value.value, value.nutrientDefinitionId);
-    }
-    if (input.sweetness) {
-      if (
-        input.sweetness.basis !== "w_w_percent" &&
-        input.sweetness.basis !== "w_v_per_100ml"
-      ) {
-        throw new DesktopApiError("invalid_input", "甜度含量基准无效");
-      }
-      this.validateDecimal(input.sweetness.content, "sweetness.content");
-      this.validateDecimal(
-        input.sweetness.relativeFactor,
-        "sweetness.relativeFactor",
-      );
     }
   }
 

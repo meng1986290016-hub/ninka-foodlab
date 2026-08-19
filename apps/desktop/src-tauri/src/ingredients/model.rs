@@ -54,14 +54,6 @@ pub struct VariantNutrition {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IngredientSweetness {
-    pub basis: String,
-    pub content: Option<String>,
-    pub relative_factor: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DataCompleteness {
     pub percent: i64,
     pub missing_fields: Vec<String>,
@@ -100,7 +92,6 @@ pub struct IngredientVariant {
     pub source: String,
     pub research_notes: String,
     pub nutrition: VariantNutrition,
-    pub sweetness: Option<IngredientSweetness>,
     pub allergens: IngredientVariantAllergens,
     pub source_attachments: Vec<IngredientSourceAttachment>,
     pub completeness: DataCompleteness,
@@ -150,8 +141,6 @@ pub struct IngredientVariantInput {
     #[serde(default)]
     pub research_notes: String,
     pub nutrition: VariantNutrition,
-    #[serde(default)]
-    pub sweetness: Option<IngredientSweetness>,
     #[serde(default)]
     pub allergens: IngredientVariantAllergens,
     #[serde(default)]

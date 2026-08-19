@@ -1,9 +1,10 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, str::FromStr};
 
+use rust_decimal::Decimal;
 use rust_xlsxwriter::{DataValidation, Workbook};
 use thiserror::Error;
 
-use crate::ingredients::model::{IngredientSweetness, NutrientDefinition};
+use crate::ingredients::model::NutrientDefinition;
 
 use super::{
     IngestError,
@@ -15,7 +16,7 @@ use super::{
     validation::normalize_review,
 };
 
-pub const TEMPLATE_HEADERS: [&str; 24] = [
+pub const TEMPLATE_HEADERS: [&str; 21] = [
     "通用原料名称",
     "分类",
     "供应商名称",
@@ -32,9 +33,6 @@ pub const TEMPLATE_HEADERS: [&str; 24] = [
     "糖(g)",
     "膳食纤维(g)",
     "钠(mg)",
-    "甜度含量基准",
-    "甜味物质含量",
-    "相对甜度倍数(蔗糖=1)",
     "含有过敏原",
     "可能含有过敏原",
     "数据来源",
@@ -283,38 +281,14 @@ pub fn parse_ingredient_table(
             });
         }
 
-        let sweetness_basis_raw = cell(row, &headers, "甜度含量基准").trim();
-        let sweetness_content_raw = cell(row, &headers, "甜味物质含量").trim();
-        let sweetness_factor_raw = cell(row, &headers, "相对甜度倍数(蔗糖=1)").trim();
-        let sweetness = if sweetness_basis_raw.is_empty()
-            && sweetness_content_raw.is_empty()
-            && sweetness_factor_raw.is_empty()
-        {
-            None
-        } else {
-            let basis = match sweetness_basis_raw {
-                "w/w" | "w_w_percent" => "w_w_percent",
-                "w/v" | "w_v_per_100ml" => "w_v_per_100ml",
-                value => value,
-            };
-            Some(IngredientSweetness {
-                basis: basis.to_string(),
-                content: decimal_or_unknown_cell(
-                    sweetness_content_raw,
-                    "甜味物质含量",
-                    "sweetness.content",
-                    human_row,
-                    &mut row_issues,
-                ),
-                relative_factor: decimal_or_unknown_cell(
-                    sweetness_factor_raw,
-                    "相对甜度倍数(蔗糖=1)",
-                    "sweetness.relativeFactor",
-                    human_row,
-                    &mut row_issues,
-                ),
-            })
-        };
+        append_legacy_sweetness(
+            row,
+            &headers,
+            density_g_per_ml.as_deref(),
+            human_row,
+            &mut nutrients,
+            &mut row_issues,
+        );
         let contains_allergens = split_allergens(cell(row, &headers, "含有过敏原"));
         let may_contain_allergens = split_allergens(cell(row, &headers, "可能含有过敏原"));
         let normalized_contains = contains_allergens
@@ -351,7 +325,6 @@ pub fn parse_ingredient_table(
             density_g_per_ml,
             nutrition_basis,
             nutrients,
-            sweetness,
             contains_allergens,
             may_contain_allergens,
             source: cell(row, &headers, "数据来源").trim().to_string(),
@@ -376,7 +349,10 @@ pub fn write_template(
 ) -> Result<(), IngestError> {
     let custom_columns = definitions
         .iter()
-        .filter(|definition| !definition.built_in && definition.archived_at.is_none())
+        .filter(|definition| {
+            definition.archived_at.is_none()
+                && (!definition.built_in || definition.category == "research")
+        })
         .map(custom_column_from_definition)
         .collect::<Vec<_>>();
     let headers = headers_with_custom(&custom_columns);
@@ -467,25 +443,6 @@ fn review_to_row(
             .unwrap_or_default()
     }));
     row.extend([
-        review
-            .sweetness
-            .as_ref()
-            .map(|sweetness| match sweetness.basis.as_str() {
-                "w_w_percent" => "w/w".into(),
-                "w_v_per_100ml" => "w/v".into(),
-                value => value.into(),
-            })
-            .unwrap_or_default(),
-        review
-            .sweetness
-            .as_ref()
-            .and_then(|sweetness| sweetness.content.clone())
-            .unwrap_or_default(),
-        review
-            .sweetness
-            .as_ref()
-            .and_then(|sweetness| sweetness.relative_factor.clone())
-            .unwrap_or_default(),
         review.contains_allergens.join("、"),
         review.may_contain_allergens.join("、"),
         review.source.clone(),
@@ -544,23 +501,6 @@ fn write_xlsx(path: &Path, rows: &[Vec<String>], add_validations: bool) -> Resul
         worksheet
             .add_data_validation(1, 7, 10_000, 7, &bases)
             .map_err(|_| export_error())?;
-        if let Some(sweetness_column) = rows
-            .first()
-            .and_then(|headers| headers.iter().position(|header| header == "甜度含量基准"))
-        {
-            let sweetness_bases = DataValidation::new()
-                .allow_list_strings(&["w/w", "w/v"])
-                .map_err(|_| export_error())?;
-            worksheet
-                .add_data_validation(
-                    1,
-                    sweetness_column as u16,
-                    10_000,
-                    sweetness_column as u16,
-                    &sweetness_bases,
-                )
-                .map_err(|_| export_error())?;
-        }
     }
     workbook.save(path).map_err(|_| export_error())
 }
@@ -634,6 +574,87 @@ fn decimal_or_unknown_cell(
     } else {
         Some(value.to_string())
     }
+}
+
+fn append_legacy_sweetness(
+    row: &[String],
+    headers: &HashMap<String, usize>,
+    density_g_per_ml: Option<&str>,
+    human_row: u64,
+    nutrients: &mut Vec<ImportedNutrientValue>,
+    issues: &mut Vec<ImportIssue>,
+) {
+    const DEFINITION_ID: &str = "theoretical_sweetness";
+    let basis = cell(row, headers, "甜度含量基准").trim();
+    let content = cell(row, headers, "甜味物质含量").trim();
+    let factor = cell(row, headers, "相对甜度倍数(蔗糖=1)").trim();
+    if basis.is_empty() && content.is_empty() && factor.is_empty() {
+        return;
+    }
+    if nutrients.iter().any(|nutrient| {
+        nutrient.definition_id.as_deref() == Some(DEFINITION_ID)
+            || nutrient.name == "理论甜度（蔗糖=1）"
+    }) {
+        return;
+    }
+
+    let direct_factor = decimal_or_unknown_cell(
+        factor,
+        "相对甜度倍数(蔗糖=1)",
+        "nutrients.theoretical_sweetness.value",
+        human_row,
+        issues,
+    );
+    let value = if basis.is_empty() && content.is_empty() {
+        direct_factor
+    } else {
+        let content = decimal_or_unknown_cell(
+            content,
+            "甜味物质含量",
+            "legacySweetness.content",
+            human_row,
+            issues,
+        );
+        match (content, direct_factor) {
+            (Some(content), Some(factor)) => {
+                let content = Decimal::from_str(&content).ok();
+                let factor = Decimal::from_str(&factor).ok();
+                match (basis, content, factor) {
+                    ("w/w" | "w_w_percent", Some(content), Some(factor)) => Some(
+                        (content * factor / Decimal::from(100))
+                            .normalize()
+                            .to_string(),
+                    ),
+                    ("w/v" | "w_v_per_100ml", Some(content), Some(factor)) => density_g_per_ml
+                        .and_then(|density| Decimal::from_str(density).ok())
+                        .filter(|density| !density.is_zero())
+                        .map(|density| {
+                            (content * factor / density / Decimal::from(100))
+                                .normalize()
+                                .to_string()
+                        }),
+                    _ => {
+                        issues.push(cell_issue(
+                            ImportIssueCode::InvalidBasis,
+                            human_row,
+                            "甜度含量基准",
+                            "legacySweetness.basis",
+                            "旧版甜度含量基准必须为 w/w 或 w/v",
+                        ));
+                        None
+                    }
+                }
+            }
+            _ => None,
+        }
+    };
+    nutrients.push(ImportedNutrientValue {
+        definition_id: Some(DEFINITION_ID.into()),
+        name: "理论甜度（蔗糖=1）".into(),
+        unit: "倍".into(),
+        value,
+        category: Some("research".into()),
+    });
 }
 
 fn parse_custom_header(header: &str) -> Option<CustomColumn> {

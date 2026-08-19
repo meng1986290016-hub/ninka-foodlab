@@ -1,7 +1,6 @@
 import type {
   DataCompleteness,
   EntityId,
-  IngredientSweetness,
   IngredientVariant,
   NutrientDefinitionCategory,
 } from "./types";
@@ -304,7 +303,6 @@ export interface RecipeIngredientSnapshot {
   densityGPerMl: RecipeDecimal | null;
   nutrientsPer100g: Record<EntityId, RecipeDecimal | null>;
   nutrientUnits: Record<EntityId, string>;
-  sweetness?: IngredientSweetness | null;
   pricePerKg: RecipeDecimal | null;
   allergens: RecipeAllergenSummary;
   source: string;

@@ -8,17 +8,12 @@ import {
 } from "./decimal.js";
 import { fail, ok, type CalcResult } from "./result.js";
 
-export type SweetnessBasis = "w_w_percent" | "w_v_per_100ml";
+export const THEORETICAL_SWEETNESS_DEFINITION_ID = "theoretical_sweetness";
 
 export interface SweetnessComponentInput {
   id: string;
   massGrams: DecimalString;
-  densityGPerMl?: DecimalString | null;
-  sweetness: {
-    basis: SweetnessBasis;
-    content: DecimalString | null;
-    relativeFactor: DecimalString | null;
-  };
+  relativeFactor: DecimalString | null;
 }
 
 export interface SweetnessInput {
@@ -69,31 +64,17 @@ export function calculateSweetness(
     if (!mass.ok) return mass;
     configuredMass = configuredMass.add(mass.value);
 
-    const { sweetness } = component;
-    if (sweetness.content === null || sweetness.relativeFactor === null) {
+    if (component.relativeFactor === null) {
       missingComponentIds.push(component.id);
       continue;
     }
-    const content = parseNonNegative(sweetness.content, "sweetness.content");
-    if (!content.ok) return content;
     const factor = parseNonNegative(
-      sweetness.relativeFactor,
-      "sweetness.relativeFactor",
+      component.relativeFactor,
+      "relativeFactor",
     );
     if (!factor.ok) return factor;
-
-    let contentPer100g = content.value;
-    if (sweetness.basis === "w_v_per_100ml") {
-      if (component.densityGPerMl === null || component.densityGPerMl === undefined) {
-        missingComponentIds.push(component.id);
-        continue;
-      }
-      const density = parsePositive(component.densityGPerMl, "densityGPerMl");
-      if (!density.ok) return density;
-      contentPer100g = content.value.div(density.value);
-    }
     totalEquivalent = totalEquivalent.add(
-      contentPer100g.mul(factor.value).mul(mass.value).div(100),
+      factor.value.mul(mass.value),
     );
     knownCount += 1;
   }

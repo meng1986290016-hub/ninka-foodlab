@@ -1,7 +1,6 @@
 import type {
   EntityId,
   IngredientSourceAttachment,
-  IngredientSweetness,
   IngredientVariant,
   NutrientDefinitionCategory,
   NutritionBasis,
@@ -84,7 +83,6 @@ export interface ReviewedIngredientImportDraft {
   densityGPerMl: string | null;
   nutritionBasis: NutritionBasis | null;
   nutrients: ImportedNutrientValue[];
-  sweetness?: IngredientSweetness | null;
   containsAllergens: string[];
   mayContainAllergens: string[];
   source: string;

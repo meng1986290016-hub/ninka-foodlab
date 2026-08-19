@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use food_rd_desktop::ingredients::{
     model::{
-        IngredientSweetness, IngredientVariantAllergens, IngredientVariantInput,
-        MaterialGroupInput, VariantNutrition, VariantNutritionValue,
+        IngredientVariantAllergens, IngredientVariantInput, MaterialGroupInput, VariantNutrition,
+        VariantNutritionValue,
     },
     repository::IngredientRepository,
 };
@@ -75,7 +75,6 @@ impl Fixture {
                     },
                 ],
             },
-            sweetness: None,
             allergens: IngredientVariantAllergens::default(),
             duplicate_confirmed: false,
         }
@@ -86,9 +85,10 @@ impl Fixture {
 fn migration_seeds_the_eight_builtin_nutrients() {
     let fixture = Fixture::new();
     let definitions = fixture.repo.list_nutrient_definitions().unwrap();
-    assert_eq!(definitions.len(), 8);
+    assert_eq!(definitions.len(), 9);
     assert_eq!(definitions[0].id, "energy");
     assert_eq!(definitions[7].id, "sodium");
+    assert_eq!(definitions[8].id, "theoretical_sweetness");
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn unknown_and_confirmed_zero_round_trip_distinctly() {
 }
 
 #[test]
-fn custom_templates_are_selected_per_variant_and_sweetness_round_trips() {
+fn custom_and_system_research_templates_are_selected_per_variant() {
     let mut fixture = Fixture::new();
     let lactose = fixture
         .repo
@@ -202,17 +202,23 @@ fn custom_templates_are_selected_per_variant_and_sweetness_round_trips() {
             nutrient_definition_id: research.id.clone(),
             value: None,
         },
+        VariantNutritionValue {
+            nutrient_definition_id: "theoretical_sweetness".into(),
+            value: Some("0.8".into()),
+        },
     ]);
-    selected.sweetness = Some(IngredientSweetness {
-        basis: "w_v_per_100ml".into(),
-        content: Some("10".into()),
-        relative_factor: Some("0.8".into()),
-    });
     let saved = fixture.repo.save_variant(selected).unwrap();
     assert_eq!(saved.completeness, completeness_before);
     assert_eq!(
-        saved.sweetness.as_ref().unwrap().content.as_deref(),
-        Some("10")
+        saved
+            .nutrition
+            .values
+            .iter()
+            .find(|value| value.nutrient_definition_id == "theoretical_sweetness")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("0.8")
     );
     assert_eq!(
         saved
@@ -438,7 +444,7 @@ fn settings_drafts_and_database_status_round_trip_json() {
 
     let status = fixture.repo.database_status().unwrap();
     assert_eq!(status.mode, "sqlite");
-    assert_eq!(status.schema_version, 12);
+    assert_eq!(status.schema_version, 13);
     assert!(status.healthy);
 }
 

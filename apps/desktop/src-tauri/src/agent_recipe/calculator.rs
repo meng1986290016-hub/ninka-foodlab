@@ -15,6 +15,8 @@ use crate::{
     },
 };
 
+const THEORETICAL_SWEETNESS_DEFINITION_ID: &str = "theoretical_sweetness";
+
 pub fn normalize_and_evaluate(
     ingredients: &IngredientRepository,
     mut payload: AgentRecipeProposalPayload,
@@ -57,7 +59,7 @@ pub fn evaluate(
     let mut nutrient_missing = BTreeMap::<String, Vec<String>>::new();
     let mut tracked_nutrient_ids = definitions
         .iter()
-        .filter(|definition| definition.built_in)
+        .filter(|definition| definition.built_in && definition.category == "nutrition")
         .map(|definition| definition.id.clone())
         .collect::<BTreeSet<_>>();
     let mut sweetness_total = Decimal::ZERO;
@@ -75,7 +77,10 @@ pub fn evaluate(
         match item {
             AgentRecipeProposalItem::MaterialNeed { id, .. } => {
                 missing_cost_ids.push(id.clone());
-                for definition in definitions.iter().filter(|definition| definition.built_in) {
+                for definition in definitions
+                    .iter()
+                    .filter(|definition| definition.built_in && definition.category == "nutrition")
+                {
                     *nutrient_tracked_mass
                         .entry(definition.id.clone())
                         .or_default() += mass;
@@ -108,7 +113,9 @@ pub fn evaluate(
                     })
                     .collect::<BTreeMap<_, _>>();
                 for definition in definitions.iter().filter(|definition| {
-                    definition.built_in || provided.contains_key(definition.id.as_str())
+                    definition.id != THEORETICAL_SWEETNESS_DEFINITION_ID
+                        && ((definition.built_in && definition.category == "nutrition")
+                            || provided.contains_key(definition.id.as_str()))
                 }) {
                     tracked_nutrient_ids.insert(definition.id.clone());
                     *nutrient_tracked_mass
@@ -159,28 +166,16 @@ pub fn evaluate(
                         "message": "原料按每100mL记录营养，但缺少密度", "field": "densityGPerMl", "itemId": id
                     }));
                 }
-                if let Some(sweetness) = &variant.sweetness {
+                if provided.contains_key(THEORETICAL_SWEETNESS_DEFINITION_ID) {
                     sweetness_configured += 1;
-                    let content = sweetness
-                        .content
-                        .as_deref()
+                    let factor = provided
+                        .get(THEORETICAL_SWEETNESS_DEFINITION_ID)
+                        .copied()
+                        .flatten()
                         .and_then(|value| Decimal::from_str(value).ok());
-                    let factor = sweetness
-                        .relative_factor
-                        .as_deref()
-                        .and_then(|value| Decimal::from_str(value).ok());
-                    let content_per_100g = match (content, factor) {
-                        (Some(content), Some(_)) if sweetness.basis == "w_w_percent" => {
-                            Some(content)
-                        }
-                        (Some(content), Some(_)) if sweetness.basis == "w_v_per_100ml" => {
-                            density.map(|density| content / density)
-                        }
-                        _ => None,
-                    };
-                    match (content_per_100g, factor) {
-                        (Some(content), Some(factor)) => {
-                            sweetness_total += content * factor * mass / Decimal::from(100);
+                    match factor {
+                        Some(factor) => {
+                            sweetness_total += factor * mass;
                             sweetness_known += 1;
                         }
                         _ => sweetness_missing.push(id.clone()),

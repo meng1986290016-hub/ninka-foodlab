@@ -9,11 +9,7 @@ describe("calculateSweetness", () => {
         {
           id: "sucrose",
           massGrams: "10",
-          sweetness: {
-            basis: "w_w_percent",
-            content: "100",
-            relativeFactor: "1",
-          },
+          relativeFactor: "1",
         },
       ],
       finishedMassGrams: "100",
@@ -26,28 +22,18 @@ describe("calculateSweetness", () => {
     expect(result.value.status).toBe("complete");
   });
 
-  it("converts w/v content with density and preserves partial results", () => {
+  it("preserves partial results when a selected factor is unknown", () => {
     const result = calculateSweetness({
       components: [
         {
           id: "syrup",
           massGrams: "25",
-          densityGPerMl: "1.25",
-          sweetness: {
-            basis: "w_v_per_100ml",
-            content: "50",
-            relativeFactor: "1",
-          },
+          relativeFactor: "0.4",
         },
         {
           id: "unknown",
           massGrams: "10",
-          densityGPerMl: null,
-          sweetness: {
-            basis: "w_v_per_100ml",
-            content: "20",
-            relativeFactor: "1",
-          },
+          relativeFactor: null,
         },
       ],
       finishedMassGrams: "100",
@@ -67,11 +53,7 @@ describe("calculateSweetness", () => {
         {
           id: "sweetener",
           massGrams: "1",
-          sweetness: {
-            basis: "w_w_percent",
-            content: null,
-            relativeFactor: "600",
-          },
+          relativeFactor: null,
         },
       ],
     });
@@ -88,11 +70,7 @@ describe("calculateSweetness", () => {
         {
           id: "sucrose-solution",
           massGrams: "100",
-          sweetness: {
-            basis: "w_w_percent",
-            content: "10",
-            relativeFactor: "1",
-          },
+          relativeFactor: "0.1",
         },
       ],
       totalInputMassGrams: "200",

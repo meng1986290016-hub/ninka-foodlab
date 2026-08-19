@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { THEORETICAL_SWEETNESS_DEFINITION_ID } from "@food-rd/core";
 
 import type {
   AgentRecipeProposalEvaluation,
@@ -50,7 +51,11 @@ export function evaluateBrowserAgentRecipe(
   const nutrientTrackedMass = new Map<string, Decimal>();
   const nutrientMissing = new Map<string, string[]>();
   const trackedNutrientIds = new Set(
-    definitions.filter((definition) => definition.builtIn).map((definition) => definition.id),
+    definitions
+      .filter(
+        (definition) => definition.builtIn && definition.category === "nutrition",
+      )
+      .map((definition) => definition.id),
   );
   let sweetnessTotal = new Decimal(0);
   let sweetnessConfigured = 0;
@@ -61,7 +66,9 @@ export function evaluateBrowserAgentRecipe(
     const itemMass = mass(item.amount, item.unit);
     if (item.kind === "material_need") {
       missingCostIds.push(item.id);
-      for (const definition of definitions.filter((value) => value.builtIn)) {
+      for (const definition of definitions.filter(
+        (value) => value.builtIn && value.category === "nutrition",
+      )) {
         pushMap(nutrientMissing, definition.id, item.id);
         nutrientTrackedMass.set(
           definition.id,
@@ -90,7 +97,9 @@ export function evaluateBrowserAgentRecipe(
       ]),
     );
     for (const definition of definitions.filter(
-      (value) => value.builtIn || provided.has(value.id),
+      (value) =>
+        value.id !== THEORETICAL_SWEETNESS_DEFINITION_ID &&
+        ((value.builtIn && value.category === "nutrition") || provided.has(value.id)),
     )) {
       trackedNutrientIds.add(definition.id);
       nutrientTrackedMass.set(
@@ -147,28 +156,16 @@ export function evaluateBrowserAgentRecipe(
         itemId: item.id,
       });
     }
-    if (variant.sweetness) {
+    if (provided.has(THEORETICAL_SWEETNESS_DEFINITION_ID)) {
       sweetnessConfigured += 1;
-      const content = variant.sweetness.content === null
+      const source = provided.get(THEORETICAL_SWEETNESS_DEFINITION_ID) ?? null;
+      const factor = source === null
         ? null
-        : new Decimal(variant.sweetness.content);
-      const factor = variant.sweetness.relativeFactor === null
-        ? null
-        : new Decimal(variant.sweetness.relativeFactor);
-      const contentPer100g =
-        content === null || factor === null
-          ? null
-          : variant.sweetness.basis === "w_w_percent"
-            ? content
-            : density === null
-              ? null
-              : content.div(density);
-      if (contentPer100g === null || factor === null) {
+        : new Decimal(source);
+      if (factor === null) {
         sweetnessMissing.push(item.id);
       } else {
-        sweetnessTotal = sweetnessTotal.add(
-          contentPer100g.mul(factor).mul(itemMass).div(100),
-        );
+        sweetnessTotal = sweetnessTotal.add(factor.mul(itemMass));
         sweetnessKnown += 1;
       }
     }

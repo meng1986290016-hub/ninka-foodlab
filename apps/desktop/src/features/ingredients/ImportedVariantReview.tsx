@@ -20,7 +20,6 @@ import { ImportIssueList } from "../imports/ImportIssueList";
 import { DraftSourceEvidence } from "../imports/DraftSourceEvidence";
 import { SourceAttachmentList } from "../imports/SourceAttachmentList";
 import { NutritionEditor } from "./NutritionEditor";
-import { SweetnessEditor } from "./SweetnessEditor";
 import { VariantBasicFields } from "./VariantBasicFields";
 
 interface ImportedVariantReviewProps {
@@ -48,7 +47,6 @@ function cloneReview(
     ...review,
     nutritionBasis,
     nutrients: review.nutrients.map((nutrient) => ({ ...nutrient })),
-    sweetness: review.sweetness ? { ...review.sweetness } : null,
     containsAllergens: [...review.containsAllergens],
     mayContainAllergens: [...review.mayContainAllergens],
   };
@@ -121,13 +119,16 @@ export function ImportedVariantReview({
       nutrition: {
         basis: review.nutritionBasis ?? "per_100g",
         values: definitions
-          .filter((definition) => definition.builtIn || values.has(definition.id))
+          .filter(
+            (definition) =>
+              (definition.builtIn && definition.category === "nutrition") ||
+              values.has(definition.id),
+          )
           .map((definition) => ({
             nutrientDefinitionId: definition.id,
             value: values.get(definition.id) ?? null,
           })),
       },
-      sweetness: review.sweetness ?? null,
       allergens: {
         contains: [...review.containsAllergens],
         mayContain: [...review.mayContainAllergens],
@@ -429,11 +430,6 @@ export function ImportedVariantReview({
             onChange={updateNutrition}
             onDefinitionCreated={() => {}}
             showBasis={false}
-          />
-          <SweetnessEditor
-            densityGPerMl={review.densityGPerMl}
-            onChange={(sweetness) => update("sweetness", sweetness)}
-            sweetness={review.sweetness ?? null}
           />
         </div>
 

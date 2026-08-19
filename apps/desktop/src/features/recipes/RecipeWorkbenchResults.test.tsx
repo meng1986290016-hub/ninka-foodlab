@@ -60,6 +60,7 @@ async function createFormula(api: BrowserDemoApi, name: string) {
 async function updateMilk(
   api: BrowserDemoApi,
   overrides: Partial<IngredientVariant> = {},
+  theoreticalSweetnessFactor?: string,
 ) {
   const groups = await api.listMaterialGroups();
   const group = groups.find((item) => item.name === "脱脂乳粉");
@@ -93,12 +94,18 @@ async function updateMilk(
     nutrition:
       overrides.nutrition ?? {
         basis: "per_100g",
-        values: definitions.map((definition) => ({
-          nutrientDefinitionId: definition.id,
-          value: values[definition.code] ?? "0",
-        })),
+        values: definitions.flatMap((definition) => {
+          if (definition.id === "theoretical_sweetness") {
+            return theoreticalSweetnessFactor === undefined
+              ? []
+              : [{ nutrientDefinitionId: definition.id, value: theoreticalSweetnessFactor }];
+          }
+          return [{
+            nutrientDefinitionId: definition.id,
+            value: values[definition.code] ?? "0",
+          }];
+        }),
       },
-    sweetness: overrides.sweetness ?? variant.sweetness ?? null,
     allergens:
       overrides.allergens ?? {
         contains: ["乳"],
@@ -139,13 +146,7 @@ describe("RecipeWorkbench live results", () => {
     await api.createNutrientDefinition("钾", "mg", "nutrition");
     await api.createNutrientDefinition("钙", "mg", "nutrition");
     await api.createNutrientDefinition("总多酚", "mg", "research");
-    await updateMilk(api, {
-      sweetness: {
-        basis: "w_w_percent",
-        content: "10",
-        relativeFactor: "1",
-      },
-    });
+    await updateMilk(api, {}, "0.1");
     await createFormula(api, "自定义指标展示");
     const user = userEvent.setup();
     render(<RecipeWorkbench api={api} />);
@@ -158,7 +159,7 @@ describe("RecipeWorkbench live results", () => {
     }
     expect(within(results).getByText("研发指标")).toBeTruthy();
     expect(within(results).getByText("理论甜度")).toBeTruthy();
-    expect(within(results).getByText("10 g/100g")).toBeTruthy();
+    expect(within(results).getAllByText("10 g")).toHaveLength(2);
   });
 
   it("shows per-100g and batch nutrition, cost, yield and both allergen classes", async () => {

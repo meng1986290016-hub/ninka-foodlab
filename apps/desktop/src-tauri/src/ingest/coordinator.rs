@@ -523,7 +523,6 @@ impl IngredientIngestCoordinator {
                                     })
                             })
                             .collect(),
-                        sweetness: variant.sweetness,
                         contains_allergens: variant.allergens.contains,
                         may_contain_allergens: variant.allergens.may_contain,
                         source: variant.source,
@@ -712,7 +711,6 @@ fn materialize_review(
                 .ok_or_else(|| IngestError::domain("invalid_input", "缺少营养基准"))?,
             values: nutrition_values,
         },
-        sweetness: review.sweetness.clone(),
         allergens: IngredientVariantAllergens {
             contains: review.contains_allergens.clone(),
             may_contain: review.may_contain_allergens.clone(),
@@ -948,13 +946,6 @@ fn merge_grouped_reviews(
         "nutritionBasis",
         conflicts,
     );
-    if existing.sweetness.is_none() {
-        existing.sweetness = incoming.sweetness.clone();
-    } else if incoming.sweetness.is_some() && existing.sweetness != incoming.sweetness {
-        existing.sweetness = None;
-        record_conflict(conflicts, "sweetness");
-    }
-
     append_distinct_text(&mut existing.source, &incoming.source);
     append_distinct_text(&mut existing.research_notes, &incoming.research_notes);
     existing.duplicate_confirmed |= incoming.duplicate_confirmed;

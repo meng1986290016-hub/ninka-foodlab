@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_twelve() {
+fn fresh_database_applies_latest_schema_version_thirteen() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 12);
+    assert_eq!(schema_version(&connection), 13);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -42,7 +42,6 @@ fn fresh_database_applies_latest_schema_version_twelve() {
         "import_draft_source_links",
         "ingredient_variant_attachments",
         "ingredient_variant_allergens",
-        "ingredient_variant_sweetness",
         "agent_provider_configs",
         "agent_conversations",
         "agent_runs",
@@ -59,6 +58,7 @@ fn fresh_database_applies_latest_schema_version_twelve() {
     ] {
         assert!(table_exists(&connection, table), "missing table {table}");
     }
+    assert!(!table_exists(&connection, "ingredient_variant_sweetness"));
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 12);
+    assert_eq!(schema_version(&connection), 13);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -130,7 +130,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
     assert!(table_exists(&connection, "agent_provider_configs"));
     assert!(table_exists(&connection, "recipe_versions"));
     assert!(table_exists(&connection, "nutrition_label_versions"));
-    assert!(table_exists(&connection, "ingredient_variant_sweetness"));
+    assert!(!table_exists(&connection, "ingredient_variant_sweetness"));
     let migrated_category: String = connection
         .query_row(
             "SELECT category FROM nutrient_definitions WHERE id = 'custom-lactose'",
@@ -157,4 +157,101 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
         )
         .unwrap();
     assert_eq!(confidence_column_count, 1);
+}
+
+#[test]
+fn sweetness_rows_upgrade_to_selected_research_template_values() {
+    let connection = Connection::open_in_memory().unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE nutrient_definitions (
+               id TEXT PRIMARY KEY,
+               code TEXT NOT NULL UNIQUE,
+               name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+               unit TEXT NOT NULL,
+               built_in INTEGER NOT NULL,
+               sort_order INTEGER NOT NULL,
+               category TEXT NOT NULL DEFAULT 'nutrition',
+               archived_at TEXT
+             );
+             CREATE TABLE ingredient_variants (
+               id TEXT PRIMARY KEY,
+               density_g_per_ml TEXT
+             );
+             CREATE TABLE ingredient_nutrient_values (
+               ingredient_variant_id TEXT NOT NULL,
+               nutrient_definition_id TEXT NOT NULL,
+               value TEXT,
+               PRIMARY KEY (ingredient_variant_id, nutrient_definition_id)
+             );
+             CREATE TABLE ingredient_variant_sweetness (
+               ingredient_variant_id TEXT PRIMARY KEY,
+               basis TEXT NOT NULL,
+               content TEXT,
+               relative_factor TEXT
+             );
+             INSERT INTO nutrient_definitions
+               (id, code, name, unit, built_in, sort_order, category)
+             VALUES ('old-template', 'custom:old', '理论甜度（蔗糖=1）', '分', 0, 9, 'research');
+             INSERT INTO ingredient_variants (id, density_g_per_ml)
+             VALUES ('ww', NULL), ('wv', '0.5'), ('missing-density', NULL);
+             INSERT INTO ingredient_variant_sweetness
+               (ingredient_variant_id, basis, content, relative_factor)
+             VALUES
+               ('ww', 'w_w_percent', '10', '2'),
+               ('wv', 'w_v_per_100ml', '10', '2'),
+               ('missing-density', 'w_v_per_100ml', '10', '2');",
+        )
+        .unwrap();
+
+    connection
+        .execute_batch(include_str!(
+            "../migrations/0013_sweetness_research_template.sql"
+        ))
+        .unwrap();
+
+    assert!(!table_exists(&connection, "ingredient_variant_sweetness"));
+    let system_definition: (String, String, String) = connection
+        .query_row(
+            "SELECT name, unit, category FROM nutrient_definitions
+             WHERE id = 'theoretical_sweetness'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        system_definition,
+        ("理论甜度（蔗糖=1）".into(), "倍".into(), "research".into())
+    );
+    let old_name: String = connection
+        .query_row(
+            "SELECT name FROM nutrient_definitions WHERE id = 'old-template'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_name, "理论甜度（蔗糖=1）（旧模板 old-template）");
+
+    for (variant_id, expected) in [("ww", Some(0.2)), ("wv", Some(0.4))] {
+        let value: Option<f64> = connection
+            .query_row(
+                "SELECT CAST(value AS REAL) FROM ingredient_nutrient_values
+                 WHERE ingredient_variant_id = ?1
+                   AND nutrient_definition_id = 'theoretical_sweetness'",
+                [variant_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value, expected);
+    }
+    let missing_density_is_unknown: bool = connection
+        .query_row(
+            "SELECT value IS NULL FROM ingredient_nutrient_values
+             WHERE ingredient_variant_id = 'missing-density'
+               AND nutrient_definition_id = 'theoretical_sweetness'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(missing_density_is_unknown);
 }

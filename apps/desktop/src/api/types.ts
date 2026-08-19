@@ -2,7 +2,6 @@ export type EntityId = string;
 export type PriceUnit = "kg" | "g" | "L" | "mL";
 export type NutritionBasis = "per_100g" | "per_100ml";
 export type NutrientDefinitionCategory = "nutrition" | "research";
-export type SweetnessBasis = "w_w_percent" | "w_v_per_100ml";
 
 export interface Category {
   id: EntityId;
@@ -43,12 +42,6 @@ export interface VariantNutrition {
   values: VariantNutritionValue[];
 }
 
-export interface IngredientSweetness {
-  basis: SweetnessBasis;
-  content: string | null;
-  relativeFactor: string | null;
-}
-
 export interface DataCompleteness {
   percent: number;
   missingFields: string[];
@@ -81,7 +74,6 @@ export interface IngredientVariant {
   source: string;
   researchNotes: string;
   nutrition: VariantNutrition;
-  sweetness?: IngredientSweetness | null;
   allergens: IngredientVariantAllergens;
   sourceAttachments: IngredientSourceAttachment[];
   completeness: DataCompleteness;
@@ -118,7 +110,6 @@ export interface IngredientVariantInput {
   source: string;
   researchNotes: string;
   nutrition: VariantNutrition;
-  sweetness?: IngredientSweetness | null;
   allergens?: IngredientVariantAllergens;
   duplicateConfirmed?: boolean;
 }

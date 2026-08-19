@@ -10,8 +10,6 @@ import type { MaterialGroup, NutrientDefinition } from "./types";
 interface SweetnessParityFixture {
   ingredientMassGrams: string;
   otherMassGrams: string;
-  basis: "w_w_percent" | "w_v_per_100ml";
-  content: string;
   relativeFactor: string;
   expectedTotalSucroseEquivalentGrams: string;
   expectedPer100gSucroseEquivalent: string;
@@ -33,6 +31,16 @@ const definitions: NutrientDefinition[] = [
     builtIn: true,
     sortOrder: 0,
     category: "nutrition",
+    archivedAt: null,
+  },
+  {
+    id: "theoretical_sweetness",
+    code: "theoretical_sweetness",
+    name: "理论甜度（蔗糖=1）",
+    unit: "倍",
+    builtIn: true,
+    sortOrder: 1000,
+    category: "research",
     archivedAt: null,
   },
 ];
@@ -58,12 +66,13 @@ const groups: MaterialGroup[] = [
         researchNotes: "",
         nutrition: {
           basis: "per_100g",
-          values: [{ nutrientDefinitionId: "protein", value: "0" }],
-        },
-        sweetness: {
-          basis: fixture.basis,
-          content: fixture.content,
-          relativeFactor: fixture.relativeFactor,
+          values: [
+            { nutrientDefinitionId: "protein", value: "0" },
+            {
+              nutrientDefinitionId: "theoretical_sweetness",
+              value: fixture.relativeFactor,
+            },
+          ],
         },
         allergens: { contains: [], mayContain: [] },
         sourceAttachments: [],

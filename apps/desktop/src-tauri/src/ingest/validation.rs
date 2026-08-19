@@ -28,11 +28,6 @@ pub fn normalize_review(review: &mut ReviewedIngredientImportDraft) {
             nullable_text(nutrient.category.take()).map(|category| category.to_lowercase());
     }
 
-    if let Some(sweetness) = &mut review.sweetness {
-        sweetness.content = nullable_text(sweetness.content.take());
-        sweetness.relative_factor = nullable_text(sweetness.relative_factor.take());
-    }
-
     review.contains_allergens = normalized_unique(&review.contains_allergens);
     review.may_contain_allergens = normalized_unique(&review.may_contain_allergens);
 }
@@ -119,33 +114,6 @@ pub fn validate_review(review: &ReviewedIngredientImportDraft) -> Vec<ImportIssu
                 "请选择自定义含量项分类",
                 &mut issues,
             );
-        }
-    }
-
-    if let Some(sweetness) = &review.sweetness {
-        if !matches!(sweetness.basis.as_str(), "w_w_percent" | "w_v_per_100ml") {
-            error(
-                ImportIssueCode::InvalidBasis,
-                "sweetness.basis",
-                "甜度含量基准必须为 w/w 或 w/v",
-                &mut issues,
-            );
-        }
-        for (field, value) in [
-            ("sweetness.content", sweetness.content.as_deref()),
-            (
-                "sweetness.relativeFactor",
-                sweetness.relative_factor.as_deref(),
-            ),
-        ] {
-            if value.is_some_and(|item| !is_unsigned_decimal(item)) {
-                error(
-                    ImportIssueCode::InvalidDecimal,
-                    field,
-                    "请输入非负十进制数",
-                    &mut issues,
-                );
-            }
         }
     }
 

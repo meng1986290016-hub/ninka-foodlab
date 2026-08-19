@@ -1101,34 +1101,13 @@ function RecipeResultsInspector({
           ) || calculation.sweetness ? (
             <section className="recipe-result-section">
               <h3>研发指标</h3>
-              {calculation.nutrients.some(
-                (nutrient) => nutrient.category === "research",
-              ) ? (
-                <ResultNutrientRows
-                  nutrients={calculation.nutrients.filter(
-                    (nutrient) => nutrient.category === "research",
-                  )}
-                />
-              ) : null}
-              {calculation.sweetness ? (
-                <div className="recipe-sweetness-result">
-                  <span>理论甜度</span>
-                  <strong>
-                    {calculation.sweetness.status === "unknown"
-                      ? "—"
-                      : `${calculation.sweetness.status === "partial" ? "≈" : ""}${displayNumber(calculation.sweetness.per100gSucroseEquivalent)} g/100g`}
-                  </strong>
-                  <small>蔗糖当量，理论研发估算</small>
-                  {calculation.sweetness.missingItemIds.length > 0 ? (
-                    <small className="is-warning">
-                      待补充：
-                      {calculation.sweetness.missingItemIds
-                        .map((id) => itemNames[id] ?? id)
-                        .join("、")}
-                    </small>
-                  ) : null}
-                </div>
-              ) : null}
+              <ResultNutrientRows
+                itemNames={itemNames}
+                nutrients={calculation.nutrients.filter(
+                  (nutrient) => nutrient.category === "research",
+                )}
+                sweetness={calculation.sweetness ?? null}
+              />
             </section>
           ) : null}
           <section className="recipe-result-section recipe-cost-preview">
@@ -1183,9 +1162,13 @@ function ResultNutrients({
 }
 
 function ResultNutrientRows({
+  itemNames,
   nutrients,
+  sweetness = null,
 }: {
+  itemNames?: Record<string, string>;
   nutrients: RecipeCalculation["nutrients"];
+  sweetness?: RecipeCalculation["sweetness"];
 }) {
   return (
     <>
@@ -1201,6 +1184,32 @@ function ResultNutrientRows({
           <span>{nutrientValue(nutrient, "batch")}</span>
         </div>
       ))}
+      {sweetness ? (
+        <div className="recipe-nutrition-row recipe-nutrition-row--sweetness">
+          <span>
+            理论甜度
+            <small>蔗糖当量</small>
+          </span>
+          <span>
+            {sweetness.status === "unknown"
+              ? "—"
+              : `${sweetness.status === "partial" ? "≈" : ""}${displayNumber(sweetness.per100gSucroseEquivalent)} g`}
+          </span>
+          <span>
+            {sweetness.status === "unknown"
+              ? "—"
+              : `${displayNumber(sweetness.totalSucroseEquivalentGrams)} g`}
+            {sweetness.missingItemIds.length > 0 ? (
+              <small className="is-warning">
+                待补充：
+                {sweetness.missingItemIds
+                  .map((id) => itemNames?.[id] ?? id)
+                  .join("、")}
+              </small>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
     </>
   );
 }

@@ -12,6 +12,7 @@ import type {
 import {
   buildDraftDataGapReport,
   buildVersionDataGapReport,
+  createSnapshotIngredientNutritionDetail,
   createVariantNutritionDetail,
 } from "./data-quality";
 
@@ -148,6 +149,25 @@ describe("data quality diagnostics", () => {
       expect.objectContaining({
         category: "version",
         reason: "下级版本无法读取",
+      }),
+    );
+  });
+
+  it("shows an unrecorded nutrient when an older snapshot omitted the field", () => {
+    const snapshot = snapshotIngredient("legacy", "旧版乳粉", null);
+    const detail = createSnapshotIngredientNutritionDetail(
+      { ...snapshot.ingredient, nutrientsPer100g: {} },
+      new Map([
+        ["lactose", { name: "乳糖", category: "nutrition" as const }],
+      ]),
+      "2026-01-03T00:00:00.000Z",
+    );
+
+    expect(detail.rows).toContainEqual(
+      expect.objectContaining({
+        nutrientDefinitionId: "lactose",
+        value: null,
+        status: "unknown",
       }),
     );
   });

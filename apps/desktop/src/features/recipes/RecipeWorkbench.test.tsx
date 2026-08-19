@@ -337,6 +337,90 @@ describe("RecipeWorkbench", () => {
     expect(screen.getByText("草稿已自动保存")).toBeTruthy();
   });
 
+  it("keeps read-only nutrition available when the recipe is inactive", async () => {
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "已停用配方",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    const firstRender = render(
+      <RecipeWorkbench api={api} recipeId={recipe.id} />,
+    );
+    await screen.findByDisplayValue("已停用配方");
+    await addIngredient(user, "脱脂乳粉");
+    await waitFor(async () => {
+      expect((await api.getRecipeDraft(recipe.id))?.items).toHaveLength(1);
+    });
+    firstRender.unmount();
+
+    await api.updateRecipeScheme(recipe.id, {
+      schemeName: "主配方",
+      schemeStatus: "inactive",
+    });
+    render(<RecipeWorkbench api={api} recipeId={recipe.id} />);
+    const nutritionLink = await screen.findByRole("button", {
+      name: "查看脱脂乳粉的营养信息",
+    });
+    expect(
+      screen
+        .getByRole("group", { name: "已停用配方只读内容" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+
+    await user.click(nutritionLink);
+    const dialog = await screen.findByRole("dialog", { name: "脱脂乳粉" });
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /保存/ })).toBeNull();
+  });
+
+  it("stays in the workbench when saving before ingredient editing fails", async () => {
+    const api = createApi();
+    const recipe = await api.createRecipe({
+      name: "保存失败测试",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const user = userEvent.setup();
+    const onEditIngredient = vi.fn();
+    render(
+      <RecipeWorkbench
+        api={api}
+        onEditIngredient={onEditIngredient}
+        recipeId={recipe.id}
+      />,
+    );
+    await screen.findByDisplayValue("保存失败测试");
+    await addIngredient(user, "白砂糖");
+    await waitFor(async () => {
+      expect((await api.getRecipeDraft(recipe.id))?.items).toHaveLength(1);
+    });
+
+    vi.spyOn(api, "saveDraft").mockRejectedValueOnce(
+      new Error("磁盘写入失败"),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "研发备注" }),
+      "尚未保存",
+    );
+    const itemRow = screen
+      .getAllByRole("row")
+      .find((row) => row.getAttribute("data-recipe-item") === "true")!;
+    await user.click(within(itemRow).getByRole("button", { name: /%/ }));
+    const dialog = await screen.findByRole("dialog", { name: "保存失败测试" });
+    const editButtons = await within(dialog).findAllByRole("button", {
+      name: "去原料库补充",
+    });
+    await user.click(editButtons[0]!);
+
+    expect(onEditIngredient).not.toHaveBeenCalled();
+    expect(await screen.findByText("磁盘写入失败")).toBeTruthy();
+    expect(screen.getByDisplayValue("保存失败测试")).toBeTruthy();
+  });
+
   it("reorders and removes formula rows without changing their supplier identity", async () => {
     const api = createApi();
     const recipe = await api.createRecipe({

@@ -11,6 +11,7 @@ import type {
 import { Icon } from "../../components/Icon";
 
 interface RecipeItemTableProps {
+  disabled?: boolean;
   issues: RecipeCalculationIssue[];
   items: RecipeDraftItem[];
   missingData: Record<string, string[]>;
@@ -29,6 +30,7 @@ interface RecipeItemTableProps {
 const units: RecipeItemUnit[] = ["mg", "g", "kg", "mL", "L"];
 
 export function RecipeItemTable({
+  disabled = false,
   issues,
   items,
   missingData,
@@ -98,7 +100,7 @@ export function RecipeItemTable({
                       <span className="recipe-sort-buttons">
                         <button
                           aria-label={`上移${label}`}
-                          disabled={index === 0}
+                          disabled={disabled || index === 0}
                           onClick={() => onMove(item.id, -1)}
                           type="button"
                         >
@@ -106,7 +108,7 @@ export function RecipeItemTable({
                         </button>
                         <button
                           aria-label={`下移${label}`}
-                          disabled={index === items.length - 1}
+                          disabled={disabled || index === items.length - 1}
                           onClick={() => onMove(item.id, 1)}
                           type="button"
                         >
@@ -118,18 +120,21 @@ export function RecipeItemTable({
                       {item.kind === "material_need" || !onViewNutrition ? (
                         <strong>{label}</strong>
                       ) : (
-                        <a
+                        <span
                           aria-label={`查看${label}的营养信息`}
                           className="data-quality-trigger recipe-nutrition-link"
-                          href="#nutrition-detail"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            onViewNutrition(item);
-                          }}
+                          onClick={() => onViewNutrition(item)}
+                          onKeyDown={(event) =>
+                            activateWithKeyboard(event, () =>
+                              onViewNutrition(item),
+                            )
+                          }
+                          role="button"
+                          tabIndex={0}
                         >
                           <strong>{label}</strong>
                           <Icon name="nutrition" size={15} />
-                        </a>
+                        </span>
                       )}
                       <span>
                         {itemDetail(item)}
@@ -138,6 +143,7 @@ export function RecipeItemTable({
                         item.materialNeed.resolvedIngredientVariantId ? (
                           <button
                             className="recipe-version-upgrade"
+                            disabled={disabled}
                             onClick={() => onReplaceMaterialNeed(item.id)}
                             type="button"
                           >
@@ -148,6 +154,7 @@ export function RecipeItemTable({
                           <button
                             aria-label={`将${label}升级到 V${versionUpgrades[item.id]!.versionNumber}`}
                             className="recipe-version-upgrade"
+                            disabled={disabled}
                             onClick={() =>
                               onUpgradeVersion(
                                 item.id,
@@ -166,6 +173,7 @@ export function RecipeItemTable({
                       <input
                         aria-invalid={amountIssue ? "true" : undefined}
                         aria-label={`${label}用量`}
+                        disabled={disabled}
                         inputMode="decimal"
                         onChange={(event) =>
                           onAmountChange(item.id, event.target.value)
@@ -192,6 +200,7 @@ export function RecipeItemTable({
                     <td>
                       <select
                         aria-label={`${label}单位`}
+                        disabled={disabled}
                         onChange={(event) =>
                           onUnitChange(
                             item.id,
@@ -236,6 +245,7 @@ export function RecipeItemTable({
                       <button
                         aria-label={`删除${label}`}
                         className="recipe-icon-button"
+                        disabled={disabled}
                         onClick={() => onRemove(item.id)}
                         type="button"
                       >
@@ -251,6 +261,7 @@ export function RecipeItemTable({
       </div>
       <button
         className="recipe-add-item-button"
+        disabled={disabled}
         onClick={onAdd}
         type="button"
       >
@@ -343,16 +354,17 @@ function completeness(
   if (item.kind === "recipe_version") {
     const incomplete = missingData.length > 0;
     return (
-      <a
+      <span
         className={`data-quality-trigger recipe-data-status ${incomplete ? "has-warning" : "is-complete"}`}
-        href="#data-quality"
-        onClick={(event) => {
-          event.preventDefault();
-          onViewGaps?.(item);
-        }}
+        onClick={() => onViewGaps?.(item)}
+        onKeyDown={(event) =>
+          activateWithKeyboard(event, () => onViewGaps?.(item))
+        }
+        role="button"
+        tabIndex={0}
       >
         {incomplete ? "部分数据" : "版本固定"}
-      </a>
+      </span>
     );
   }
   if (item.kind === "material_need") {
@@ -369,7 +381,7 @@ function completeness(
   const percent = item.ingredientVariant.completeness.percent;
   return (
     <>
-      <a
+      <span
         className={
           `data-quality-trigger recipe-data-status ${
             missingData.length === 0 && percent >= 100
@@ -377,11 +389,12 @@ function completeness(
               : "has-warning"
           }`
         }
-        href="#data-quality"
-        onClick={(event) => {
-          event.preventDefault();
-          onViewGaps?.(item);
-        }}
+        onClick={() => onViewGaps?.(item)}
+        onKeyDown={(event) =>
+          activateWithKeyboard(event, () => onViewGaps?.(item))
+        }
+        role="button"
+        tabIndex={0}
         title={[
           ...missingData,
           ...item.ingredientVariant.completeness.missingFields,
@@ -398,7 +411,7 @@ function completeness(
         {missingData.length === 0 && percent >= 100
           ? "完整"
           : `${percent}%`}
-      </a>
+      </span>
       {missingData.length > 0 ? (
         <small>
           缺少：{missingData.slice(0, 3).join("、")}
@@ -411,4 +424,13 @@ function completeness(
 
 function isAmountIssue(issue: RecipeCalculationIssue) {
   return issue.field === "amount";
+}
+
+function activateWithKeyboard(
+  event: { key: string; preventDefault(): void },
+  action: () => void,
+) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  action();
 }

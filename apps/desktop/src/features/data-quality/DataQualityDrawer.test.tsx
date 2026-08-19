@@ -1,10 +1,51 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DataQualityDrawer } from "./DataQualityDrawer";
 
 describe("DataQualityDrawer", () => {
+  it("closes from the backdrop and restores focus to its trigger", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)} type="button">
+            查看缺失
+          </button>
+          <DataQualityDrawer
+            content={
+              open
+                ? {
+                    kind: "gaps",
+                    initialGrouping: "source",
+                    report: {
+                      title: "焦点测试",
+                      completenessPercent: 100,
+                      nutrientCoverage: [],
+                      entries: [],
+                    },
+                  }
+                : null
+            }
+            onClose={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+    render(<Harness />);
+
+    const trigger = screen.getByRole("button", { name: "查看缺失" });
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "焦点测试" });
+    expect(document.activeElement).toBe(dialog);
+    fireEvent.mouseDown(dialog.parentElement!);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("groups gaps, exposes the full path and closes with Escape", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

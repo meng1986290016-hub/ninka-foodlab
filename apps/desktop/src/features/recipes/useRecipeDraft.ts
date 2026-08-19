@@ -46,6 +46,7 @@ interface SaveSnapshot {
 
 interface EnqueuedSave {
   snapshot: SaveSnapshot;
+  operation: Promise<void>;
   promise: Promise<void>;
 }
 
@@ -82,6 +83,7 @@ export function useRecipeDraft(
     (
       snapshot: SaveSnapshot,
       reportToState = true,
+      propagateError = false,
     ): Promise<void> => {
       const existing = enqueuedRef.current;
       if (
@@ -89,7 +91,7 @@ export function useRecipeDraft(
         existing.snapshot.revision === snapshot.revision &&
         existing.snapshot.draft === snapshot.draft
       ) {
-        return existing.promise;
+        return propagateError ? existing.operation : existing.promise;
       }
 
       const token = ++nextSaveTokenRef.current;
@@ -145,8 +147,8 @@ export function useRecipeDraft(
             enqueuedRef.current = null;
           }
         });
-      enqueuedRef.current = { snapshot, promise: reported };
-      return reported;
+      enqueuedRef.current = { snapshot, operation, promise: reported };
+      return propagateError ? operation : reported;
     },
     [api, recipeId],
   );
@@ -287,7 +289,7 @@ export function useRecipeDraft(
         canSaveFormalDraft: snapshot.canSaveFormalDraft,
       });
     }
-    await enqueueSave(snapshot);
+    await enqueueSave(snapshot, true, true);
   }, [enqueueSave, options.calculate]);
 
   const copyFromVersion = useCallback(

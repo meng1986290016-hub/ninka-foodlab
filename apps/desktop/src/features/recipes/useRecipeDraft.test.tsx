@@ -201,6 +201,31 @@ afterEach(() => {
 });
 
 describe("recipe draft state and autosave", () => {
+  it("rejects an explicit save when persistence fails", async () => {
+    const api = mockApi({
+      saveDraft: vi.fn(async () => {
+        throw new Error("磁盘写入失败");
+      }),
+    });
+    const { result } = renderHook(() =>
+      useRecipeDraft(api, "recipe-1"),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.dispatch({
+        type: "patch",
+        patch: { markdownNotes: "需要保存的修改" },
+      });
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.saveNow();
+      }),
+    ).rejects.toThrow("磁盘写入失败");
+  });
+
   it("keeps local invalid text but refreshes cached ingredient references", async () => {
     const staleItem = recipeDraft().items[0]!;
     if (staleItem.kind !== "ingredient") throw new Error("missing ingredient fixture");

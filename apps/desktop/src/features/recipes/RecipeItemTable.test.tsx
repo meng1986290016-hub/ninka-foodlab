@@ -132,11 +132,11 @@ describe("RecipeItemTable issue placement", () => {
     );
 
     await user.click(
-      screen.getByRole("link", { name: "查看脱脂乳粉的营养信息" }),
+      screen.getByRole("button", { name: "查看脱脂乳粉的营养信息" }),
     );
     expect(onViewNutrition).toHaveBeenCalledWith(ingredientItem);
 
-    await user.click(screen.getByRole("link", { name: "80%" }));
+    await user.click(screen.getByRole("button", { name: "80%" }));
     expect(onViewGaps).toHaveBeenCalledWith(ingredientItem);
   });
 
@@ -160,7 +160,7 @@ describe("RecipeItemTable issue placement", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: /查看可可粉/ }),
+      screen.queryByRole("button", { name: /查看可可粉/ }),
     ).toBeNull();
   });
 

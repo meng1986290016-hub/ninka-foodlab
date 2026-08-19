@@ -360,6 +360,14 @@ function RecipeEditor({
     [draft, nutrientDefinitions, recipeName, referencedVersions],
   );
 
+  useEffect(() => {
+    setDataDrawer((current) =>
+      current?.kind === "gaps"
+        ? { ...current, report: dataGapReport }
+        : current,
+    );
+  }, [dataGapReport]);
+
   const openNutritionDetail = useCallback(
     (item: RecipeDraftItem) => {
       if (item.kind === "ingredient") {
@@ -941,10 +949,11 @@ function RecipeEditor({
         versionSaving={versionSaving}
       />
 
-      <fieldset
+      <div
         aria-label={inactive ? "已停用配方只读内容" : "配方编辑内容"}
+        aria-disabled={inactive}
         className="recipe-workbench__readonly-scope"
-        disabled={inactive}
+        role="group"
       >
       <div className="recipe-workbench__body">
         <div
@@ -987,6 +996,7 @@ function RecipeEditor({
             <label>
               <span>出成重量</span>
               <FinishedMassInput
+                disabled={inactive}
                 error={finishedMassIssue?.message ?? null}
                 key={batchMassUnit}
                 onChange={(finishedMassGrams) =>
@@ -1024,6 +1034,7 @@ function RecipeEditor({
           />
 
           <RecipeItemTable
+            disabled={inactive}
             issues={draft.calculationIssues}
             items={draft.items}
             missingData={missingData}
@@ -1056,6 +1067,7 @@ function RecipeEditor({
           <div className="recipe-lower-grid">
             <RecipeCostEditor
               additionalCosts={draft.additionalCosts}
+              disabled={inactive}
               issues={draft.calculationIssues}
               onAdditionalCostsChange={(costs) =>
                 dispatch({
@@ -1075,6 +1087,7 @@ function RecipeEditor({
               <h2>研发备注</h2>
               <textarea
                 aria-label="研发备注"
+                disabled={inactive}
                 onChange={(event) =>
                   dispatch({
                     type: "patch",
@@ -1113,7 +1126,7 @@ function RecipeEditor({
           查看实时结果
         </button>
       </div>
-      </fieldset>
+      </div>
 
       <DataQualityDrawer
         content={dataDrawer}
@@ -1422,12 +1435,14 @@ function createItemId() {
 }
 
 function FinishedMassInput({
+  disabled,
   error,
   onChange,
   placeholder,
   unit,
   valueGrams,
 }: {
+  disabled: boolean;
   error: string | null;
   onChange(valueGrams: string | null): void;
   placeholder: string;
@@ -1446,6 +1461,7 @@ function FinishedMassInput({
         aria-describedby={error === null ? undefined : errorId}
         aria-invalid={error === null ? undefined : "true"}
         aria-label="出成重量"
+        disabled={disabled}
         inputMode="decimal"
         onBlur={() => setEditingValue(null)}
         onChange={(event) => {

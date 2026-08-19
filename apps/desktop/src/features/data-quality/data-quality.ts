@@ -117,6 +117,9 @@ export function buildDraftDataGapReport(input: {
   const versionById = new Map(
     input.referencedVersions.map((version) => [version.id, version]),
   );
+  const nutrientDefinitionByName = new Map(
+    input.nutrientDefinitions.map((definition) => [definition.name, definition]),
+  );
   const rootPath: SourcePathNode[] = [
     { id: input.draft.recipeId, kind: "recipe", label: input.recipeName },
   ];
@@ -183,6 +186,43 @@ export function buildDraftDataGapReport(input: {
         materialGroupId: variant.materialGroupId,
         editable: true,
       });
+      if (
+        variant.completeness.percent < 100 &&
+        variant.completeness.missingFields.length === 0
+      ) {
+        collection.entries.push({
+          id: `legacy-completeness:${item.id}`,
+          category: "material",
+          state: "missing",
+          fieldId: null,
+          fieldName: "缺失项明细",
+          reason: "旧记录未保存具体缺失字段，请打开原料版本逐项确认",
+          path,
+          massGrams: mass,
+          ingredientVariantId: variant.id,
+          materialGroupId: variant.materialGroupId,
+          editable: true,
+        });
+      }
+      for (const missingField of variant.completeness.missingFields) {
+        const definition = nutrientDefinitionByName.get(missingField);
+        if (definition === undefined || definition.category !== "nutrition") {
+          continue;
+        }
+        collection.entries.push(
+          leafGap({
+            id: `${definition.id}:${item.id}`,
+            category: "nutrition",
+            fieldId: definition.id,
+            fieldName: definition.name,
+            reason: `${definition.name}尚未录入`,
+            path,
+            massGrams: mass,
+            variant,
+            editable: true,
+          }),
+        );
+      }
       if (
         variant.densityGPerMl === null &&
         (variant.nutrition.basis === "per_100ml" ||
@@ -315,6 +355,24 @@ export function buildVariantDataGapReport(
     ),
   ];
   const entries: DataGapEntry[] = [];
+  if (
+    variant.completeness.percent < 100 &&
+    variant.completeness.missingFields.length === 0
+  ) {
+    entries.push({
+      id: `${variant.id}:legacy-completeness`,
+      category: "material",
+      state: "missing",
+      fieldId: null,
+      fieldName: "缺失项明细",
+      reason: "旧记录未保存具体缺失字段，请打开原料版本逐项确认",
+      path,
+      massGrams: null,
+      ingredientVariantId: variant.id,
+      materialGroupId: variant.materialGroupId,
+      editable: true,
+    });
+  }
   for (const missing of variant.completeness.missingFields) {
     const definition = definitions.find((item) => item.name === missing);
     const category: DataGapCategory =
@@ -507,21 +565,25 @@ export function createSnapshotIngredientNutritionDetail(
   nutrientNames: Map<string, { name: string; category: "nutrition" }>,
   versionCreatedAt: string,
 ): NutritionDetail {
+  const nutrients = recordOrEmpty(ingredient.nutrientsPer100g);
+  const nutrientUnits = recordOrEmpty(ingredient.nutrientUnits);
+  const source = stringOrEmpty(ingredient.source);
   return {
     title: ingredient.materialName || "未知原料",
     subtitle: [ingredient.supplierName || "供应商未记录", ingredient.modelOrSpecification]
       .filter(Boolean)
       .join(" · "),
     basisLabel: "每 100 g",
-    sourceLabel: ingredient.source.trim() || "未记录（来源待核实）",
+    sourceLabel: source.trim() || "未记录（来源待核实）",
     updatedAt: ingredient.ingredientUpdatedAt || versionCreatedAt,
     completenessPercent: null,
-    rows: Object.entries(ingredient.nutrientsPer100g)
-      .filter(([id]) => nutrientNames.has(id))
-      .map(([id, value]) => ({
+    rows: [...nutrientNames.entries()]
+      .map(([id, nutrient]) => {
+        const value = stringOrNull(nutrients[id]);
+        return {
         nutrientDefinitionId: id,
-        name: nutrientNames.get(id)?.name ?? id,
-        unit: ingredient.nutrientUnits[id] ?? "",
+        name: nutrient.name,
+        unit: stringOrEmpty(nutrientUnits[id]),
         value,
         category: "nutrition",
         status:
@@ -531,7 +593,8 @@ export function createSnapshotIngredientNutritionDetail(
               ? "confirmed_zero"
               : "known",
         completenessRatio: value === null ? 0 : 1,
-      })),
+        } satisfies NutritionDetailRow;
+      }),
     note: "该信息来自历史正式版本快照，仅用于查看。",
   };
 }
@@ -553,6 +616,7 @@ function collectVersionLeaves(
     const itemMass = safeDecimal(item.massGrams)?.mul(scale) ?? null;
     if (item.kind === "ingredient") {
       const ingredient = item.ingredient;
+      const nutrients = recordOrEmpty(ingredient.nutrientsPer100g);
       const leafPath = [
         ...path,
         ingredientPathNode(
@@ -566,10 +630,15 @@ function collectVersionLeaves(
         occurrenceId: `${path.map((node) => node.id).join("/")}/${item.id}`,
         path: leafPath,
         massGrams: itemMass,
-        nutrients: ingredient.nutrientsPer100g,
-        pricePerKg: ingredient.pricePerKg,
-        source: ingredient.source,
-        densityGPerMl: ingredient.densityGPerMl,
+        nutrients: Object.fromEntries(
+          Object.entries(nutrients).map(([id, value]) => [
+            id,
+            stringOrNull(value),
+          ]),
+        ),
+        pricePerKg: stringOrNull(ingredient.pricePerKg),
+        source: stringOrEmpty(ingredient.source),
+        densityGPerMl: stringOrNull(ingredient.densityGPerMl),
         conversionBlocked: false,
         ingredientVariantId: ingredient.ingredientVariantId,
         materialGroupId: ingredient.materialGroupId,
@@ -706,7 +775,7 @@ function reportFromCollection(
   return {
     title,
     completenessPercent: calculation?.completeness.percent ?? null,
-    entries,
+    entries: uniqueEntries(entries),
     nutrientCoverage: coverage,
   };
 }
@@ -820,4 +889,32 @@ function isZero(value: string) {
   } catch {
     return false;
   }
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function stringOrEmpty(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function stringOrNull(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function uniqueEntries(entries: DataGapEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = [
+      entry.category,
+      entry.fieldId ?? entry.fieldName,
+      ...entry.path.map((node) => node.id),
+    ].join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

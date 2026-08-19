@@ -9,6 +9,7 @@ import { Icon } from "../../components/Icon";
 
 interface RecipeCostEditorProps {
   additionalCosts: RecipeAdditionalCost[];
+  disabled?: boolean;
   issues: RecipeCalculationIssue[];
   packagingCosts: RecipePackagingCost[];
   onAdditionalCostsChange(items: RecipeAdditionalCost[]): void;
@@ -17,6 +18,7 @@ interface RecipeCostEditorProps {
 
 export function RecipeCostEditor({
   additionalCosts,
+  disabled = false,
   issues,
   packagingCosts,
   onAdditionalCostsChange,
@@ -89,6 +91,7 @@ export function RecipeCostEditor({
                 <span className="recipe-cost-kind">包材</span>
                 <input
                   aria-label="包材名称"
+                  disabled={disabled}
                   onChange={(event) =>
                     updatePackaging(item.id, {
                       name: event.target.value,
@@ -99,6 +102,7 @@ export function RecipeCostEditor({
                 <input
                   aria-invalid={quantityIssue ? "true" : undefined}
                   aria-label={`${item.name || "包材"}数量`}
+                  disabled={disabled}
                   inputMode="decimal"
                   onChange={(event) =>
                     updatePackaging(item.id, {
@@ -111,6 +115,7 @@ export function RecipeCostEditor({
                 <input
                   aria-invalid={unitCostIssue ? "true" : undefined}
                   aria-label={`${item.name || "包材"}单价`}
+                  disabled={disabled}
                   inputMode="decimal"
                   onChange={(event) =>
                     updatePackaging(item.id, {
@@ -124,6 +129,7 @@ export function RecipeCostEditor({
                 <button
                   aria-label={`删除${item.name || "包材"}成本`}
                   className="recipe-icon-button"
+                  disabled={disabled}
                   onClick={() =>
                     onPackagingCostsChange(
                       packagingCosts.filter(
@@ -151,6 +157,7 @@ export function RecipeCostEditor({
                 </span>
                 <input
                   aria-label="其他成本名称"
+                  disabled={disabled}
                   onChange={(event) =>
                     updateAdditional(item.id, {
                       name: event.target.value,
@@ -162,6 +169,7 @@ export function RecipeCostEditor({
                 <input
                   aria-invalid={amountIssue ? "true" : undefined}
                   aria-label={`${item.name || "其他成本"}金额`}
+                  disabled={disabled}
                   inputMode="decimal"
                   onChange={(event) =>
                     updateAdditional(item.id, {
@@ -175,6 +183,7 @@ export function RecipeCostEditor({
                 <button
                   aria-label={`删除${item.name || "其他"}成本`}
                   className="recipe-icon-button"
+                  disabled={disabled}
                   onClick={() =>
                     onAdditionalCostsChange(
                       additionalCosts.filter(
@@ -194,6 +203,7 @@ export function RecipeCostEditor({
 
       <footer className="recipe-cost-actions">
         <button
+          disabled={disabled}
           onClick={() =>
             onPackagingCostsChange([
               ...packagingCosts,
@@ -211,6 +221,7 @@ export function RecipeCostEditor({
           添加包材
         </button>
         <button
+          disabled={disabled}
           onClick={() =>
             onAdditionalCostsChange([
               ...additionalCosts,

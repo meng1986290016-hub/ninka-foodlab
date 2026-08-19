@@ -205,7 +205,7 @@ export function NutritionEditor({
           <p>
             {category === "nutrition"
               ? "维护标签与配方计算需要的基础营养数据。"
-              : "只选择当前原料需要的指标；理论甜度直接填写相对蔗糖倍数。"}
+              : "只选择当前原料需要维护和参与配方汇总的研发指标。"}
           </p>
         </div>
       </div>
@@ -432,7 +432,7 @@ export function NutritionEditor({
 
       <p className="data-helper nutrition-editor__footnote">
         {category === "research"
-          ? "理论甜度以蔗糖=1：白砂糖填 1，其他原料填写其整体相对甜度。留空表示未知，0 表示确认无甜味。"
+          ? "留空表示未知；输入 0 表示已经确认数值为 0。未选择的研发指标不会参与配方汇总。"
           : "留空表示未知；输入 0 表示已经确认数值为 0。未选择的自定义项不会参与配方汇总。"}
       </p>
     </div>

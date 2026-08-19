@@ -75,7 +75,6 @@ export function RecipeVersionComparisonPanel({
         : comparison.itemChanges.length +
           comparison.nutritionChanges.length +
           (comparison.researchChanges?.length ?? 0) +
-          (comparison.sweetnessChanges?.length ?? 0) +
           comparison.costChanges.length +
           comparison.targetChanges.length +
           comparison.allergenChanges.length +
@@ -232,11 +231,8 @@ export function RecipeVersionComparisonPanel({
                 afterVersion={comparison.after.versionNumber}
                 beforeVersion={comparison.before.versionNumber}
                 emptyLabel="研发指标没有变化"
-                rows={[
-                  ...(comparison.researchChanges ?? []),
-                  ...(comparison.sweetnessChanges ?? []),
-                ]}
-                title="研发指标与理论甜度"
+                rows={comparison.researchChanges ?? []}
+                title="研发指标"
                 tone="nutrition"
               />
               <ComparisonSection

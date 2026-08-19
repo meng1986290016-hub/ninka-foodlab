@@ -15,8 +15,6 @@ use crate::{
     },
 };
 
-const THEORETICAL_SWEETNESS_DEFINITION_ID: &str = "theoretical_sweetness";
-
 pub fn normalize_and_evaluate(
     ingredients: &IngredientRepository,
     mut payload: AgentRecipeProposalPayload,
@@ -62,10 +60,6 @@ pub fn evaluate(
         .filter(|definition| definition.built_in && definition.category == "nutrition")
         .map(|definition| definition.id.clone())
         .collect::<BTreeSet<_>>();
-    let mut sweetness_total = Decimal::ZERO;
-    let mut sweetness_configured = 0_u64;
-    let mut sweetness_known = 0_u64;
-    let mut sweetness_missing = Vec::<String>::new();
     let mut stale_item_ids = Vec::new();
     let mut contains = Vec::<String>::new();
     let mut may_contain = Vec::<String>::new();
@@ -113,9 +107,8 @@ pub fn evaluate(
                     })
                     .collect::<BTreeMap<_, _>>();
                 for definition in definitions.iter().filter(|definition| {
-                    definition.id != THEORETICAL_SWEETNESS_DEFINITION_ID
-                        && ((definition.built_in && definition.category == "nutrition")
-                            || provided.contains_key(definition.id.as_str()))
+                    (definition.built_in && definition.category == "nutrition")
+                        || provided.contains_key(definition.id.as_str())
                 }) {
                     tracked_nutrient_ids.insert(definition.id.clone());
                     *nutrient_tracked_mass
@@ -165,21 +158,6 @@ pub fn evaluate(
                         "code": "missing_density", "severity": "warning",
                         "message": "原料按每100mL记录营养，但缺少密度", "field": "densityGPerMl", "itemId": id
                     }));
-                }
-                if provided.contains_key(THEORETICAL_SWEETNESS_DEFINITION_ID) {
-                    sweetness_configured += 1;
-                    let factor = provided
-                        .get(THEORETICAL_SWEETNESS_DEFINITION_ID)
-                        .copied()
-                        .flatten()
-                        .and_then(|value| Decimal::from_str(value).ok());
-                    match factor {
-                        Some(factor) => {
-                            sweetness_total += factor * mass;
-                            sweetness_known += 1;
-                        }
-                        _ => sweetness_missing.push(id.clone()),
-                    }
                 }
             }
         }
@@ -259,32 +237,12 @@ pub fn evaluate(
     let yield_percent = payload.finished_mass_grams.as_ref().and_then(|_| {
         (!total_mass.is_zero()).then(|| decimal(basis * Decimal::from(100) / total_mass))
     });
-    let sweetness = (sweetness_configured > 0).then(|| {
-        let status = if sweetness_missing.is_empty() {
-            "complete"
-        } else if sweetness_known == 0 {
-            "unknown"
-        } else {
-            "partial"
-        };
-        json!({
-            "totalSucroseEquivalentGrams": decimal(sweetness_total),
-            "per100gSucroseEquivalent": decimal(if basis.is_zero() {
-                Decimal::ZERO
-            } else {
-                sweetness_total * Decimal::from(100) / basis
-            }),
-            "status": status,
-            "missingItemIds": sweetness_missing,
-        })
-    });
     let calculation = json!({
         "inputMassGrams": decimal(total_mass),
         "basisMassGrams": decimal(basis),
         "basis": if payload.finished_mass_grams.is_some() { "finished_mass" } else { "input_mass" },
         "yieldPercent": yield_percent,
         "nutrients": nutrients,
-        "sweetness": sweetness,
         "cost": {
             "rawMaterialTotal": decimal(known_cost), "packagingTotal": "0", "additionalTotal": "0",
             "batchTotal": decimal(known_cost),

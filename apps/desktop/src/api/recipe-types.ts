@@ -225,13 +225,6 @@ export interface RecipeNutrientEstimate {
   category?: NutrientDefinitionCategory;
 }
 
-export interface RecipeSweetnessEstimate {
-  totalSucroseEquivalentGrams: RecipeDecimal;
-  per100gSucroseEquivalent: RecipeDecimal;
-  status: "complete" | "partial" | "unknown";
-  missingItemIds: EntityId[];
-}
-
 export interface RecipeCostBreakdownItem {
   id: EntityId;
   name: string;
@@ -286,7 +279,6 @@ export interface RecipeCalculation {
   basis: "input_mass" | "finished_mass";
   yieldPercent: RecipeDecimal | null;
   nutrients: RecipeNutrientEstimate[];
-  sweetness?: RecipeSweetnessEstimate | null;
   cost: RecipeCostSummary;
   targets: RecipeTargetEvaluation[];
   allergens: RecipeAllergenSummary;
@@ -420,7 +412,6 @@ export interface RecipeVersionComparison {
   itemChanges: RecipeVersionItemChange[];
   nutritionChanges: RecipeVersionComparisonRow[];
   researchChanges?: RecipeVersionComparisonRow[];
-  sweetnessChanges?: RecipeVersionComparisonRow[];
   costChanges: RecipeVersionComparisonRow[];
   targetChanges: RecipeVersionComparisonRow[];
   allergenChanges: RecipeVersionComparisonRow[];

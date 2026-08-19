@@ -1,9 +1,7 @@
 import {
   calculateRecipe,
-  calculateSweetness,
   evaluateTarget,
   flattenRecipeVersion,
-  THEORETICAL_SWEETNESS_DEFINITION_ID,
   toGrams,
   type CalculationIssue as CoreCalculationIssue,
   type IngredientSnapshot as CoreIngredientSnapshot,
@@ -60,7 +58,6 @@ interface GraphContext {
   allergensByIngredientId: Map<string, AllergenSource>;
   nutrientUnits: Map<string, string>;
   sourceItemByIngredientId: Map<string, string>;
-  sweetnessFactorByIngredientId: Map<string, string | null>;
   builtInNutrientIds: Set<string>;
   calculationWarnings: RecipeCalculationIssue[];
 }
@@ -71,55 +68,25 @@ interface ConvertedIngredient {
 }
 
 const ROOT_VERSION_ID = "__draft_root__";
-
-function legacySnapshotSweetnessFactor(
-  ingredient: RecipeIngredientSnapshot,
-): string | null | undefined {
-  const legacy = (
-    ingredient as RecipeIngredientSnapshot & {
-      sweetness?: {
-        basis: "w_w_percent" | "w_v_per_100ml";
-        content: string | null;
-        relativeFactor: string | null;
-      } | null;
-    }
-  ).sweetness;
-  if (legacy === undefined || legacy === null) return undefined;
-  if (legacy.content === null || legacy.relativeFactor === null) return null;
-  try {
-    const effective = new Decimal(legacy.content)
-      .mul(legacy.relativeFactor)
-      .div(100);
-    if (legacy.basis === "w_w_percent") return effective.toString();
-    if (ingredient.densityGPerMl === null) return null;
-    const density = new Decimal(ingredient.densityGPerMl);
-    if (!density.isFinite() || !density.isPositive()) return null;
-    return effective.div(density).toString();
-  } catch {
-    return null;
-  }
-}
+const RETIRED_NUTRIENT_DEFINITION_IDS = new Set(["theoretical_sweetness"]);
 
 export function calculateRecipeDraft(
   request: RecipeCalculationRequest,
 ): RecipeCalculationResult {
   const definitions = new Map(
-    request.nutrientDefinitions.map((definition) => [
-      definition.id,
-      definition,
-    ]),
+    request.nutrientDefinitions
+      .filter((definition) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(definition.id))
+      .map((definition) => [definition.id, definition]),
   );
   const context: GraphContext = {
     graph: {},
     allergensByIngredientId: new Map(),
     nutrientUnits: new Map(
-      request.nutrientDefinitions.map((definition) => [
-        definition.id,
-        definition.unit,
-      ]),
+      request.nutrientDefinitions
+        .filter((definition) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(definition.id))
+        .map((definition) => [definition.id, definition.unit]),
     ),
     sourceItemByIngredientId: new Map(),
-    sweetnessFactorByIngredientId: new Map(),
     builtInNutrientIds: new Set(
       request.nutrientDefinitions
         .filter(
@@ -300,7 +267,6 @@ export function calculateRecipeDraft(
   const nutrientEstimates = Object.entries(
     calculated.value.nutrition.nutrients,
   )
-    .filter(([id]) => id !== THEORETICAL_SWEETNESS_DEFINITION_ID)
     .sort(([left], [right]) =>
       (nutrientDefinitions.get(left)?.sortOrder ?? Number.MAX_SAFE_INTEGER) -
         (nutrientDefinitions.get(right)?.sortOrder ??
@@ -326,48 +292,6 @@ export function calculateRecipeDraft(
       ),
       category: nutrientDefinitions.get(id)?.category ?? "nutrition",
     }));
-
-  const sweetnessComponents = flattened.value.flatMap((leaf, index) => {
-    if (!context.sweetnessFactorByIngredientId.has(leaf.ingredient.id)) return [];
-    return [
-      {
-        id: `${leaf.ingredient.id}:${index}`,
-        massGrams: leaf.massGrams,
-        relativeFactor:
-          context.sweetnessFactorByIngredientId.get(leaf.ingredient.id) ?? null,
-      },
-    ];
-  });
-  let sweetness: RecipeCalculation["sweetness"] = null;
-  if (sweetnessComponents.length > 0) {
-    const calculatedSweetness = calculateSweetness({
-      components: sweetnessComponents,
-      totalInputMassGrams: decimal(rootInputMass),
-      ...(request.draft.finishedMassGrams === null
-        ? {}
-        : { finishedMassGrams: request.draft.finishedMassGrams }),
-    });
-    if (!calculatedSweetness.ok) {
-      return {
-        ok: false,
-        issues: calculatedSweetness.issues.map((issue) => adaptIssue(issue)),
-      };
-    }
-    sweetness = {
-      totalSucroseEquivalentGrams: normalizeDecimal(
-        calculatedSweetness.value.totalSucroseEquivalentGrams,
-      ),
-      per100gSucroseEquivalent: normalizeDecimal(
-        calculatedSweetness.value.per100gSucroseEquivalent,
-      ),
-      status: calculatedSweetness.value.status,
-      missingItemIds: unique(
-        calculatedSweetness.value.missingComponentIds.map(
-          (componentId) => componentSourceIds.get(componentId) ?? componentId,
-        ),
-      ),
-    };
-  }
 
   const missingCostItemIds = unique(
     calculated.value.cost.missingComponentIds.map(
@@ -454,7 +378,6 @@ export function calculateRecipeDraft(
         : "finished_mass",
     yieldPercent,
     nutrients: nutrientEstimates,
-    sweetness,
     cost,
     targets: targets.value,
     allergens,
@@ -496,7 +419,9 @@ function buildReferencedGraph(
         const nutrientsPer100g = Object.fromEntries(
           unique([
             ...context.builtInNutrientIds,
-            ...Object.keys(item.ingredient.nutrientsPer100g),
+            ...Object.keys(item.ingredient.nutrientsPer100g).filter(
+              (nutrientId) => !RETIRED_NUTRIENT_DEFINITION_IDS.has(nutrientId),
+            ),
           ]).map((nutrientId) => [
             nutrientId,
             item.ingredient.nutrientsPer100g[nutrientId] ?? null,
@@ -524,25 +449,8 @@ function buildReferencedGraph(
         for (const [id, unit] of Object.entries(
           item.ingredient.nutrientUnits,
         )) {
+          if (RETIRED_NUTRIENT_DEFINITION_IDS.has(id)) continue;
           context.nutrientUnits.set(id, unit);
-        }
-        if (
-          Object.prototype.hasOwnProperty.call(
-            item.ingredient.nutrientsPer100g,
-            THEORETICAL_SWEETNESS_DEFINITION_ID,
-          )
-        ) {
-          context.sweetnessFactorByIngredientId.set(
-            ingredientId,
-            item.ingredient.nutrientsPer100g[
-              THEORETICAL_SWEETNESS_DEFINITION_ID
-            ] ?? null,
-          );
-        } else {
-          const legacyFactor = legacySnapshotSweetnessFactor(item.ingredient);
-          if (legacyFactor !== undefined) {
-            context.sweetnessFactorByIngredientId.set(ingredientId, legacyFactor);
-          }
         }
       } else {
         items.push({
@@ -595,10 +503,12 @@ function convertCurrentIngredient(
   const nutrientsPer100g: Record<string, string | null> = {};
   const nutrientUnits: Record<string, string> = {};
   const provided = new Map(
-    variant.nutrition.values.map((value) => [
-      value.nutrientDefinitionId,
-      value.value,
-    ]),
+    variant.nutrition.values
+      .filter(
+        (value) =>
+          !RETIRED_NUTRIENT_DEFINITION_IDS.has(value.nutrientDefinitionId),
+      )
+      .map((value) => [value.nutrientDefinitionId, value.value]),
   );
   const nutrientIds = new Set([
     ...[...definitions.values()]
@@ -619,10 +529,7 @@ function convertCurrentIngredient(
   }
   const needsNutritionDensity =
     variant.nutrition.basis === "per_100ml" &&
-    [...provided.entries()].some(
-      ([id, value]) =>
-        id !== THEORETICAL_SWEETNESS_DEFINITION_ID && value !== null,
-    );
+    [...provided.values()].some((value) => value !== null);
   const needsPriceDensity =
     variant.currentPrice !== null &&
     (variant.priceUnit === "L" || variant.priceUnit === "mL");
@@ -638,10 +545,6 @@ function convertCurrentIngredient(
     nutrientUnits[nutrientId] = unit;
     context.nutrientUnits.set(nutrientId, unit);
     const value = provided.get(nutrientId) ?? null;
-    if (nutrientId === THEORETICAL_SWEETNESS_DEFINITION_ID) {
-      nutrientsPer100g[nutrientId] = value;
-      continue;
-    }
     if (value === null) {
       nutrientsPer100g[nutrientId] = null;
       continue;
@@ -710,12 +613,6 @@ function convertCurrentIngredient(
     mayContain: allergens.mayContain,
     sourceItemId: item.id,
   });
-  if (provided.has(THEORETICAL_SWEETNESS_DEFINITION_ID)) {
-    context.sweetnessFactorByIngredientId.set(
-      ingredientId,
-      nutrientsPer100g[THEORETICAL_SWEETNESS_DEFINITION_ID] ?? null,
-    );
-  }
   return {
     ok: true,
     value: {

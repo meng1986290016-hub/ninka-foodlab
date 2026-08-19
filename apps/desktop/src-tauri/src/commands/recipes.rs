@@ -529,7 +529,6 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         nutrient_cells(before, "research"),
         nutrient_cells(after, "research"),
     );
-    let sweetness_changes = comparison_rows(sweetness_cells(before), sweetness_cells(after));
     let cost_changes = comparison_rows(cost_cells(before), cost_cells(after));
     let target_changes = comparison_rows(target_cells(before), target_cells(after));
     let allergen_changes = comparison_rows(allergen_cells(before), allergen_cells(after));
@@ -539,7 +538,6 @@ fn compare_versions(before: &RecipeVersion, after: &RecipeVersion) -> Result<Val
         "itemChanges": item_changes,
         "nutritionChanges": nutrition_changes,
         "researchChanges": research_changes,
-        "sweetnessChanges": sweetness_changes,
         "costChanges": cost_changes,
         "targetChanges": target_changes,
         "allergenChanges": allergen_changes,
@@ -636,32 +634,6 @@ fn nutrient_cells(
         );
     }
     (keys, cells)
-}
-
-fn sweetness_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {
-    let estimate = version.snapshot.pointer("/calculation/sweetness");
-    let value = estimate.and_then(|value| {
-        if value.get("status").and_then(Value::as_str) == Some("unknown") {
-            Some("已配置，未知".to_string())
-        } else {
-            value
-                .get("per100gSucroseEquivalent")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        }
-    });
-    let key = "theoreticalSweetness".to_string();
-    (
-        vec![key.clone()],
-        HashMap::from([(
-            key,
-            ComparisonCell {
-                label: "理论甜度（蔗糖当量）".into(),
-                unit: Some("g/100g".into()),
-                value,
-            },
-        )]),
-    )
 }
 
 fn cost_cells(version: &RecipeVersion) -> (Vec<String>, HashMap<String, ComparisonCell>) {

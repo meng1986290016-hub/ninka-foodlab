@@ -1,6 +1,5 @@
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{collections::HashMap, path::Path};
 
-use rust_decimal::Decimal;
 use rust_xlsxwriter::{DataValidation, Workbook};
 use thiserror::Error;
 
@@ -281,14 +280,6 @@ pub fn parse_ingredient_table(
             });
         }
 
-        append_legacy_sweetness(
-            row,
-            &headers,
-            density_g_per_ml.as_deref(),
-            human_row,
-            &mut nutrients,
-            &mut row_issues,
-        );
         let contains_allergens = split_allergens(cell(row, &headers, "含有过敏原"));
         let may_contain_allergens = split_allergens(cell(row, &headers, "可能含有过敏原"));
         let normalized_contains = contains_allergens
@@ -550,111 +541,6 @@ fn decimal_cell(
     } else {
         Some(value.to_string())
     }
-}
-
-fn decimal_or_unknown_cell(
-    value: &str,
-    column: &str,
-    field: &str,
-    human_row: u64,
-    issues: &mut Vec<ImportIssue>,
-) -> Option<String> {
-    if value.is_empty() || value == "未知" {
-        return None;
-    }
-    if !is_unsigned_decimal(value) {
-        issues.push(cell_issue(
-            ImportIssueCode::InvalidDecimal,
-            human_row,
-            column,
-            field,
-            "请输入不带单位的非负数字，或填写“未知”",
-        ));
-        None
-    } else {
-        Some(value.to_string())
-    }
-}
-
-fn append_legacy_sweetness(
-    row: &[String],
-    headers: &HashMap<String, usize>,
-    density_g_per_ml: Option<&str>,
-    human_row: u64,
-    nutrients: &mut Vec<ImportedNutrientValue>,
-    issues: &mut Vec<ImportIssue>,
-) {
-    const DEFINITION_ID: &str = "theoretical_sweetness";
-    let basis = cell(row, headers, "甜度含量基准").trim();
-    let content = cell(row, headers, "甜味物质含量").trim();
-    let factor = cell(row, headers, "相对甜度倍数(蔗糖=1)").trim();
-    if basis.is_empty() && content.is_empty() && factor.is_empty() {
-        return;
-    }
-    if nutrients.iter().any(|nutrient| {
-        nutrient.definition_id.as_deref() == Some(DEFINITION_ID)
-            || nutrient.name == "理论甜度（蔗糖=1）"
-    }) {
-        return;
-    }
-
-    let direct_factor = decimal_or_unknown_cell(
-        factor,
-        "相对甜度倍数(蔗糖=1)",
-        "nutrients.theoretical_sweetness.value",
-        human_row,
-        issues,
-    );
-    let value = if basis.is_empty() && content.is_empty() {
-        direct_factor
-    } else {
-        let content = decimal_or_unknown_cell(
-            content,
-            "甜味物质含量",
-            "legacySweetness.content",
-            human_row,
-            issues,
-        );
-        match (content, direct_factor) {
-            (Some(content), Some(factor)) => {
-                let content = Decimal::from_str(&content).ok();
-                let factor = Decimal::from_str(&factor).ok();
-                match (basis, content, factor) {
-                    ("w/w" | "w_w_percent", Some(content), Some(factor)) => Some(
-                        (content * factor / Decimal::from(100))
-                            .normalize()
-                            .to_string(),
-                    ),
-                    ("w/v" | "w_v_per_100ml", Some(content), Some(factor)) => density_g_per_ml
-                        .and_then(|density| Decimal::from_str(density).ok())
-                        .filter(|density| !density.is_zero())
-                        .map(|density| {
-                            (content * factor / density / Decimal::from(100))
-                                .normalize()
-                                .to_string()
-                        }),
-                    _ => {
-                        issues.push(cell_issue(
-                            ImportIssueCode::InvalidBasis,
-                            human_row,
-                            "甜度含量基准",
-                            "legacySweetness.basis",
-                            "旧版甜度含量基准必须为 w/w 或 w/v",
-                        ));
-                        None
-                    }
-                }
-            }
-            _ => None,
-        }
-    };
-    nutrients.push(ImportedNutrientValue {
-        definition_id: Some(DEFINITION_ID.into()),
-        name: "理论甜度（蔗糖=1）".into(),
-        unit: "倍".into(),
-        value,
-        category: Some("research".into()),
-    });
 }
 
 fn parse_custom_header(header: &str) -> Option<CustomColumn> {

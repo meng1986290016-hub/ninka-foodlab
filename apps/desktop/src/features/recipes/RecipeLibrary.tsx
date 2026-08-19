@@ -1587,7 +1587,7 @@ function VersionSnapshot({
         </div>
       </section>
 
-      {researchItems.length > 0 || snapshot.calculation.sweetness ? (
+      {researchItems.length > 0 ? (
         <section className="recipe-library-inspector__section">
           <div className="recipe-library-inspector__section-title">
             <h3>研发指标</h3>
@@ -1611,24 +1611,6 @@ function VersionSnapshot({
                 </small>
               </div>
             ))}
-            {snapshot.calculation.sweetness ? (
-              <div>
-                <span>理论甜度</span>
-                <strong>
-                  {snapshot.calculation.sweetness.status === "unknown"
-                    ? "—"
-                    : `${snapshot.calculation.sweetness.status === "partial" ? "≈" : ""}${formatNumber(snapshot.calculation.sweetness.per100gSucroseEquivalent)} g/100g`}
-                </strong>
-                <small>
-                  蔗糖当量
-                  {snapshot.calculation.sweetness.missingItemIds.length > 0
-                    ? ` · 待补充：${snapshot.calculation.sweetness.missingItemIds
-                        .map((id) => itemNames[id] ?? id)
-                        .join("、")}`
-                    : ""}
-                </small>
-              </div>
-            ) : null}
           </div>
         </section>
       ) : null}

@@ -36,7 +36,6 @@ import type {
   AgentRecipeProposal,
   MaterialNeed,
 } from "./agent-recipe-types";
-import Decimal from "decimal.js";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
@@ -353,97 +352,36 @@ export function migrateV8ToV9(state: BrowserStateV8): BrowserStateV9 {
   };
 }
 
-const theoreticalSweetnessDefinition: NutrientDefinition = {
-  id: "theoretical_sweetness",
-  code: "theoretical_sweetness",
-  name: "理论甜度（蔗糖=1）",
-  unit: "倍",
-  builtIn: true,
-  sortOrder: 1000,
-  category: "research",
-  archivedAt: null,
-};
-
-function legacySweetnessFactor(
-  variant: IngredientVariant & {
-    sweetness?: {
-      basis: "w_w_percent" | "w_v_per_100ml";
-      content: string | null;
-      relativeFactor: string | null;
-    } | null;
-  },
-): string | null | undefined {
-  const legacy = variant.sweetness;
-  if (legacy === undefined || legacy === null) return undefined;
-  if (legacy.content === null || legacy.relativeFactor === null) return null;
-  try {
-    const content = new Decimal(legacy.content);
-    const factor = new Decimal(legacy.relativeFactor);
-    if (legacy.basis === "w_w_percent") {
-      return content.mul(factor).div(100).toString();
-    }
-    if (variant.densityGPerMl === null) return null;
-    const density = new Decimal(variant.densityGPerMl);
-    if (!density.isFinite() || !density.isPositive()) return null;
-    return content.mul(factor).div(density).div(100).toString();
-  } catch {
-    return null;
-  }
-}
+const RETIRED_RESEARCH_DEFINITION_ID = "theoretical_sweetness";
 
 export function migrateV9ToV10(state: BrowserStateV9): BrowserStateV10 {
-  const preservedDefinitions = state.nutrientDefinitions.map((definition) =>
-    definition.id !== theoreticalSweetnessDefinition.id &&
-    definition.name === theoreticalSweetnessDefinition.name
-      ? {
-          ...definition,
-          name: `${definition.name}（旧模板 ${definition.id}）`,
-        }
-      : definition,
-  );
+  return removeRetiredResearchMetric(state);
+}
+
+function removeRetiredResearchMetric(
+  state: BrowserStateV9 | BrowserStateV10,
+): BrowserStateV10 {
   return {
     ...state,
     schemaVersion: BROWSER_SCHEMA_VERSION,
-    nutrientDefinitions: preservedDefinitions.some(
-      (definition) => definition.id === theoreticalSweetnessDefinition.id,
-    )
-      ? preservedDefinitions.map((definition) =>
-          definition.id === theoreticalSweetnessDefinition.id
-            ? theoreticalSweetnessDefinition
-            : definition,
-        )
-      : [...preservedDefinitions, theoreticalSweetnessDefinition],
+    nutrientDefinitions: state.nutrientDefinitions.filter(
+      (definition) => definition.id !== RETIRED_RESEARCH_DEFINITION_ID,
+    ),
     materialGroups: state.materialGroups.map((group) => ({
       ...group,
       variants: group.variants.map((variant) => {
         const legacyVariant = variant as IngredientVariant & {
-          sweetness?: {
-            basis: "w_w_percent" | "w_v_per_100ml";
-            content: string | null;
-            relativeFactor: string | null;
-          } | null;
+          sweetness?: unknown;
         };
-        const migratedFactor = legacySweetnessFactor(legacyVariant);
-        const { sweetness: _legacySweetness, ...cleanVariant } = legacyVariant;
-        if (
-          migratedFactor === undefined ||
-          cleanVariant.nutrition.values.some(
-            (value) => value.nutrientDefinitionId === theoreticalSweetnessDefinition.id,
-          )
-        ) {
-          return cleanVariant;
-        }
+        const { sweetness: _retiredMetric, ...cleanVariant } = legacyVariant;
         return {
           ...cleanVariant,
           nutrition: {
             ...cleanVariant.nutrition,
-            values: [
-              ...cleanVariant.nutrition.values,
-              {
-                nutrientDefinitionId: theoreticalSweetnessDefinition.id,
-                value: migratedFactor,
-              },
-            ],
+            values: cleanVariant.nutrition.values.filter(
+              (value) =>
+                value.nutrientDefinitionId !== RETIRED_RESEARCH_DEFINITION_ID,
+            ),
           },
         };
       }),
@@ -462,7 +400,9 @@ export function readBrowserState(
     if (parsed.schemaVersion !== BROWSER_SCHEMA_VERSION) {
       throw new Error("unsupported browser schema");
     }
-    return parsed;
+    const migrated = removeRetiredResearchMetric(parsed);
+    writeBrowserState(storage, migrated);
+    return migrated;
   }
   const v9 = storage.getItem(BROWSER_V9_KEY);
   if (v9 !== null) {

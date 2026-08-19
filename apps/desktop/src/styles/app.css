@@ -7879,23 +7879,6 @@ tbody tr:hover {
   text-align: right;
 }
 
-.recipe-nutrition-row--sweetness {
-  border-top: 1px solid var(--color-border);
-  color: var(--color-accent);
-}
-
-.recipe-nutrition-row--sweetness small {
-  display: block;
-  margin-top: 2px;
-  color: var(--color-ink-muted);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.recipe-nutrition-row--sweetness small.is-warning {
-  color: var(--color-warning);
-}
-
 .recipe-cost-preview dl {
   margin: 0;
 }

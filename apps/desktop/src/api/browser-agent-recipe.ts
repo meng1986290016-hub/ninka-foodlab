@@ -1,5 +1,4 @@
 import Decimal from "decimal.js";
-import { THEORETICAL_SWEETNESS_DEFINITION_ID } from "@food-rd/core";
 
 import type {
   AgentRecipeProposalEvaluation,
@@ -57,11 +56,6 @@ export function evaluateBrowserAgentRecipe(
       )
       .map((definition) => definition.id),
   );
-  let sweetnessTotal = new Decimal(0);
-  let sweetnessConfigured = 0;
-  let sweetnessKnown = 0;
-  const sweetnessMissing: string[] = [];
-
   for (const item of payload.items) {
     const itemMass = mass(item.amount, item.unit);
     if (item.kind === "material_need") {
@@ -98,8 +92,7 @@ export function evaluateBrowserAgentRecipe(
     );
     for (const definition of definitions.filter(
       (value) =>
-        value.id !== THEORETICAL_SWEETNESS_DEFINITION_ID &&
-        ((value.builtIn && value.category === "nutrition") || provided.has(value.id)),
+        (value.builtIn && value.category === "nutrition") || provided.has(value.id),
     )) {
       trackedNutrientIds.add(definition.id);
       nutrientTrackedMass.set(
@@ -155,19 +148,6 @@ export function evaluateBrowserAgentRecipe(
         field: "densityGPerMl",
         itemId: item.id,
       });
-    }
-    if (provided.has(THEORETICAL_SWEETNESS_DEFINITION_ID)) {
-      sweetnessConfigured += 1;
-      const source = provided.get(THEORETICAL_SWEETNESS_DEFINITION_ID) ?? null;
-      const factor = source === null
-        ? null
-        : new Decimal(source);
-      if (factor === null) {
-        sweetnessMissing.push(item.id);
-      } else {
-        sweetnessTotal = sweetnessTotal.add(factor.mul(itemMass));
-        sweetnessKnown += 1;
-      }
     }
   }
 
@@ -229,24 +209,6 @@ export function evaluateBrowserAgentRecipe(
       ? null
       : decimal(basis.mul(100).div(totalMass)),
     nutrients,
-    sweetness:
-      sweetnessConfigured === 0
-        ? null
-        : {
-            totalSucroseEquivalentGrams: decimal(sweetnessTotal),
-            per100gSucroseEquivalent: decimal(
-              basis.isZero()
-                ? new Decimal(0)
-                : sweetnessTotal.mul(100).div(basis),
-            ),
-            status:
-              sweetnessMissing.length === 0
-                ? ("complete" as const)
-                : sweetnessKnown === 0
-                  ? ("unknown" as const)
-                  : ("partial" as const),
-            missingItemIds: sweetnessMissing,
-          },
     cost: {
       rawMaterialTotal: decimal(knownCost),
       packagingTotal: "0",

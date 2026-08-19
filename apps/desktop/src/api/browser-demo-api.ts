@@ -386,24 +386,6 @@ function buildRecipeVersionComparison(
         },
       ]),
     );
-  const sweetness = (version: RecipeVersion) => {
-    const estimate = version.snapshot.calculation.sweetness;
-    return new Map([
-      [
-        "theoreticalSweetness",
-        {
-          label: "理论甜度（蔗糖当量）",
-          unit: "g/100g",
-          value:
-            !estimate
-              ? null
-              : estimate.status === "unknown"
-                ? "已配置，未知"
-              : estimate.per100gSucroseEquivalent,
-        },
-      ],
-    ]);
-  };
   const costs = (version: RecipeVersion) =>
     new Map(
       [
@@ -472,7 +454,6 @@ function buildRecipeVersionComparison(
       nutrients(before, "research"),
       nutrients(after, "research"),
     ),
-    sweetnessChanges: comparisonRows(sweetness(before), sweetness(after)),
     costChanges: comparisonRows(costs(before), costs(after)),
     targetChanges: comparisonRows(targets(before), targets(after)),
     allergenChanges: comparisonRows(allergens(before), allergens(after)),

@@ -25,6 +25,10 @@ use crate::{
         validation::validate_review,
     },
     ingredients::model::IngredientVariant,
+    rnd_reference::{
+        model::{AgentRecipeEstimateCardDraft, PersonalReferenceCardInput},
+        repository::RndReferenceRepository,
+    },
 };
 
 const TOOL_NAMES: &[&str] = &[
@@ -46,6 +50,10 @@ const TOOL_NAMES: &[&str] = &[
     "diagnose_recipe",
     "review_recipe_development",
     "compare_supplier_variant",
+    "read_recipe_reference_context",
+    "search_rnd_reference_cards",
+    "create_recipe_estimate_card",
+    "prepare_personal_rnd_reference_card",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,12 +68,15 @@ pub struct AgentToolContext {
     pub active_recipe_id: Option<String>,
     #[serde(default)]
     pub active_recipe_name: Option<String>,
+    #[serde(default)]
+    pub active_draft_fingerprint: Option<String>,
 }
 
 pub struct AgentToolRegistry {
     coordinator: IngredientIngestCoordinator,
     audit: Option<AgentRepository>,
     recipes: Option<AgentRecipeRepository>,
+    references: Option<RndReferenceRepository>,
 }
 
 impl AgentToolRegistry {
@@ -74,6 +85,7 @@ impl AgentToolRegistry {
             coordinator,
             audit: None,
             recipes: None,
+            references: None,
         }
     }
 
@@ -82,6 +94,7 @@ impl AgentToolRegistry {
             coordinator,
             audit: Some(audit),
             recipes: None,
+            references: None,
         }
     }
 
@@ -94,6 +107,21 @@ impl AgentToolRegistry {
             coordinator,
             audit: Some(audit),
             recipes: Some(recipes),
+            references: None,
+        }
+    }
+
+    pub fn with_audit_recipes_and_references(
+        coordinator: IngredientIngestCoordinator,
+        audit: AgentRepository,
+        recipes: AgentRecipeRepository,
+        references: RndReferenceRepository,
+    ) -> Self {
+        Self {
+            coordinator,
+            audit: Some(audit),
+            recipes: Some(recipes),
+            references: Some(references),
         }
     }
 
@@ -176,6 +204,14 @@ impl AgentToolRegistry {
             "diagnose_recipe" => self.diagnose_recipe(arguments),
             "review_recipe_development" => self.review_recipe_development(arguments),
             "compare_supplier_variant" => self.compare_supplier_variant(arguments),
+            "read_recipe_reference_context" => {
+                self.read_recipe_reference_context(context, arguments)
+            }
+            "search_rnd_reference_cards" => self.search_rnd_reference_cards(arguments),
+            "create_recipe_estimate_card" => self.create_recipe_estimate_card(context, arguments),
+            "prepare_personal_rnd_reference_card" => {
+                self.prepare_personal_rnd_reference_card(arguments)
+            }
             _ => Err(AgentError::tool_denied(name)),
         }
     }
@@ -824,6 +860,169 @@ impl AgentToolRegistry {
             "note": "该工具不会修改草稿；同用量替换后的工艺、感官和法规适用性仍需人工复核"
         }))
     }
+
+    fn read_recipe_reference_context(
+        &self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
+        require_active_recipe(context, &arguments.recipe_id)?;
+        let source = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方参考估算工具不可用"))?
+            .get_recipe_analysis_source(&arguments.recipe_id)?;
+        let draft = source
+            .get("draft")
+            .filter(|value| !value.is_null())
+            .ok_or_else(|| AgentError::invalid_input("当前配方还没有可估算的工作草稿"))?;
+        let payload = draft.get("payload").unwrap_or(&Value::Null);
+        let items = payload
+            .get("items")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| self.reference_context_item(item))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(json!({
+            "recipe": source["recipe"].clone(),
+            "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
+            "requestedDraftFingerprint": context.active_draft_fingerprint.clone(),
+            "finishedMassGrams": payload.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
+            "inputMassGrams": draft.pointer("/calculation/inputMassGrams").cloned().unwrap_or(Value::Null),
+            "basisMassGrams": draft.pointer("/calculation/basisMassGrams").cloned().unwrap_or(Value::Null),
+            "basis": draft.pointer("/calculation/basis").cloned().unwrap_or(Value::Null),
+            "knownNutrition": draft.pointer("/calculation/nutrients").cloned().unwrap_or_else(|| json!([])),
+            "items": items,
+            "researchNotes": payload.get("markdownNotes").cloned().unwrap_or_else(|| json!("")),
+            "instructions": [
+                "只估算当前配方的蔗糖当量参考值，不提供目标甜度",
+                "必须先通过 search_rnd_reference_cards 找到每个甜味来源的参考卡",
+                "商业稀释品、糖浆或复配甜味剂缺少浓度或固形物时必须输出 needs_input，不得采用默认浓度",
+                "数值由模型根据配方与参考卡估算，并必须提交简要推算过程"
+            ],
+            "readOnly": true
+        }))
+    }
+
+    fn reference_context_item(&self, item: Value) -> Result<Value, AgentError> {
+        let kind = item.get("kind").and_then(Value::as_str).unwrap_or_default();
+        match kind {
+            "ingredient" => {
+                let variant_id = item
+                    .get("ingredientVariantId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AgentError::invalid_input("配方原料缺少供应商版本"))?;
+                let variant = self.coordinator.ingredients().get_variant(variant_id)?;
+                let material_name = self
+                    .coordinator
+                    .ingredients()
+                    .get_material_name_for_variant(variant_id)?;
+                Ok(json!({
+                    "id": item.get("id").cloned().unwrap_or(Value::Null),
+                    "kind": "ingredient",
+                    "materialName": material_name,
+                    "supplierName": variant.supplier_name,
+                    "modelOrSpecification": variant.model_or_specification,
+                    "densityGPerMl": variant.density_g_per_ml,
+                    "source": variant.source,
+                    "researchNotes": variant.research_notes,
+                    "knownNutrition": variant.nutrition,
+                    "amount": item.get("amount").cloned().unwrap_or_else(|| json!("0")),
+                    "unit": item.get("unit").cloned().unwrap_or_else(|| json!("g"))
+                }))
+            }
+            "recipe_version" => Ok(json!({
+                "id": item.get("id").cloned().unwrap_or(Value::Null),
+                "kind": "recipe_version",
+                "recipeVersionId": item.get("recipeVersionId").cloned().unwrap_or(Value::Null),
+                "amount": item.get("amount").cloned().unwrap_or_else(|| json!("0")),
+                "unit": item.get("unit").cloned().unwrap_or_else(|| json!("g")),
+                "missingSpecification": "当前参考估算尚未展开半成品版本，需先提供该版本中甜味原料的构成"
+            })),
+            "material_need" => Ok(json!({
+                "id": item.get("id").cloned().unwrap_or(Value::Null),
+                "kind": "material_need",
+                "amount": item.get("amount").cloned().unwrap_or_else(|| json!("0")),
+                "unit": item.get("unit").cloned().unwrap_or_else(|| json!("g")),
+                "missingSpecification": "待补充原料无法用于甜度参考估算"
+            })),
+            _ => Err(AgentError::invalid_input("配方中存在无法读取的原料项")),
+        }
+    }
+
+    fn search_rnd_reference_cards(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: SearchArguments = parse_arguments(arguments)?;
+        let cards = self
+            .references
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("研发参考资料库不可用"))?
+            .list_reference_cards(arguments.query.as_deref().unwrap_or_default(), false)?
+            .into_iter()
+            .take(arguments.limit())
+            .collect::<Vec<_>>();
+        Ok(json!({
+            "items": cards,
+            "fallback": if cards.is_empty() {
+                "本地没有匹配参考卡；请询问用户能否提供参考数值或来源，不要用模型常识补数"
+            } else {
+                "按原料规格和适用条件选择最匹配的参考卡；来源冲突时不得机械平均"
+            }
+        }))
+    }
+
+    fn create_recipe_estimate_card(
+        &mut self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let arguments: RecipeEstimateCardArguments = parse_arguments(arguments)?;
+        require_active_recipe(context, &arguments.card.recipe_id)?;
+        if context.active_draft_fingerprint.as_deref()
+            != Some(arguments.card.source_draft_fingerprint.as_str())
+        {
+            return Err(AgentError::scope_violation(
+                "估算卡草稿指纹与当前界面不一致，请重新读取当前配方",
+            ));
+        }
+        let conversation_id = self
+            .audit
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("估算卡审计上下文不可用"))?
+            .get_run(&context.run_id)?
+            .conversation_id;
+        let source = self
+            .recipes
+            .as_ref()
+            .ok_or_else(|| AgentError::provider_failure("配方参考估算工具不可用"))?
+            .get_recipe_analysis_source(&arguments.card.recipe_id)?;
+        let recipe_name = source
+            .pointer("/recipe/name")
+            .and_then(Value::as_str)
+            .unwrap_or("当前配方");
+        let card = self
+            .references
+            .as_mut()
+            .ok_or_else(|| AgentError::provider_failure("研发参考资料库不可用"))?
+            .create_estimate_card(
+                &conversation_id,
+                &context.run_id,
+                recipe_name,
+                arguments.card,
+            )?;
+        Ok(json!({ "card": card, "requiresHumanConfirmationToAppendNotes": true }))
+    }
+
+    fn prepare_personal_rnd_reference_card(&self, arguments: Value) -> Result<Value, AgentError> {
+        let arguments: PersonalReferenceCardArguments = parse_arguments(arguments)?;
+        Ok(json!({
+            "draft": arguments.input,
+            "requiresHumanConfirmation": true,
+            "instruction": "这只是个人参考卡草稿；必须由用户在参考资料库中确认来源、适用条件和数值后才能保存"
+        }))
+    }
 }
 
 #[derive(Deserialize)]
@@ -875,6 +1074,18 @@ struct DraftIdArguments {
 #[serde(rename_all = "camelCase")]
 struct RecipeProposalPayloadArguments {
     payload: AgentRecipeProposalPayload,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecipeEstimateCardArguments {
+    card: AgentRecipeEstimateCardDraft,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersonalReferenceCardArguments {
+    input: PersonalReferenceCardInput,
 }
 
 #[derive(Deserialize)]
@@ -1074,6 +1285,13 @@ fn parse_arguments<T: for<'de> Deserialize<'de>>(arguments: Value) -> Result<T, 
         .map_err(|_| AgentError::invalid_input("Agent 工具参数缺失或格式不正确"))
 }
 
+fn require_active_recipe(context: &AgentToolContext, recipe_id: &str) -> Result<(), AgentError> {
+    if context.active_recipe_id.as_deref() != Some(recipe_id) {
+        return Err(AgentError::scope_violation("只能估算当前打开的配方草稿"));
+    }
+    Ok(())
+}
+
 fn require_allowed_attachments(
     context: &AgentToolContext,
     attachment_ids: &[String],
@@ -1196,6 +1414,22 @@ fn definition(name: &str) -> AgentToolDefinition {
                 "additionalProperties": false
             }),
         ),
+        "read_recipe_reference_context" => (
+            "只读读取当前配方的投料、供应商规格、出成口径与草稿版本，用于当前甜度参考估算",
+            recipe_id_schema(),
+        ),
+        "search_rnd_reference_cards" => (
+            "检索已审核的内置与个人研发参考卡；估算甜度时必须先调用，不得用模型常识补齐缺失因子",
+            search_schema(),
+        ),
+        "create_recipe_estimate_card" => (
+            "创建当前配方的结构化甜度参考估算卡；只保存待人工参考的对话卡片，不写入配方计算结果或研发备注",
+            recipe_estimate_card_schema(),
+        ),
+        "prepare_personal_rnd_reference_card" => (
+            "将用户提供的参考数值整理为个人参考卡草稿；不直接保存，必须由用户在界面中确认",
+            personal_reference_card_schema(),
+        ),
         _ => unreachable!(),
     };
     AgentToolDefinition {
@@ -1244,6 +1478,114 @@ fn recipe_id_schema() -> Value {
         "type": "object",
         "properties": { "recipeId": { "type": "string" } },
         "required": ["recipeId"],
+        "additionalProperties": false
+    })
+}
+
+fn recipe_estimate_card_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "card": {
+                "type": "object",
+                "properties": {
+                    "recipeId": { "type": "string" },
+                    "sourceDraftUpdatedAt": { "type": "string" },
+                    "sourceDraftFingerprint": { "type": "string" },
+                    "status": { "type": "string", "enum": ["ready", "needs_input"] },
+                    "parameterKey": { "const": "relative_sweetness" },
+                    "title": { "type": "string" },
+                    "estimatedValue": { "type": ["string", "null"] },
+                    "minimumValue": { "type": ["string", "null"] },
+                    "maximumValue": { "type": ["string", "null"] },
+                    "unit": { "const": "g_sucrose_equivalent_per_100g" },
+                    "basis": { "type": "string", "enum": ["finished_product_100g", "input_mix_100g"] },
+                    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                    "formulaInputs": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": { "type": "string" },
+                                "amount": { "type": "string" },
+                                "unit": { "type": "string", "enum": ["mg", "g", "kg", "mL", "L"] },
+                                "referenceCardId": { "type": ["string", "null"] }
+                            },
+                            "required": ["label", "amount", "unit", "referenceCardId"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "citedReferenceCardIds": { "type": "array", "items": { "type": "string" } },
+                    "calculationSummary": { "type": "string" },
+                    "assumptions": { "type": "array", "items": { "type": "string" } },
+                    "influencingFactors": { "type": "array", "items": { "type": "string" } },
+                    "missingInputs": { "type": "array", "items": { "type": "string" }, "maxItems": 2 },
+                    "conflict": {
+                        "oneOf": [
+                            { "type": "null" },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "selectedReferenceCardId": { "type": "string" },
+                                    "alternativeReferenceCardIds": { "type": "array", "items": { "type": "string" } },
+                                    "rationale": { "type": "string" }
+                                },
+                                "required": ["selectedReferenceCardId", "alternativeReferenceCardIds", "rationale"],
+                                "additionalProperties": false
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "recipeId", "sourceDraftUpdatedAt", "sourceDraftFingerprint", "status", "parameterKey", "title",
+                    "estimatedValue", "minimumValue", "maximumValue", "unit", "basis",
+                    "confidence", "formulaInputs", "citedReferenceCardIds", "calculationSummary",
+                    "assumptions", "influencingFactors", "missingInputs", "conflict"
+                ],
+                "additionalProperties": false
+            }
+        },
+        "required": ["card"],
+        "additionalProperties": false
+    })
+}
+
+fn personal_reference_card_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "input": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" },
+                    "parameterKey": { "const": "relative_sweetness" },
+                    "ingredientNames": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "specification": { "type": "string" },
+                    "applicability": { "type": "string" },
+                    "unit": { "const": "x_sucrose" },
+                    "basis": { "const": "sucrose_1" },
+                    "typicalValue": { "type": "string" },
+                    "minimumValue": { "type": "string" },
+                    "maximumValue": { "type": "string" },
+                    "source": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" },
+                            "publisher": { "type": "string" },
+                            "url": { "type": ["string", "null"] },
+                            "publishedAt": { "type": ["string", "null"] },
+                            "locator": { "type": ["string", "null"] },
+                            "evidenceType": { "type": "string", "enum": ["regulatory_agency", "peer_reviewed_review", "supplier_document", "personal_experience"] }
+                        },
+                        "required": ["title", "publisher", "url", "publishedAt", "locator", "evidenceType"],
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["title", "parameterKey", "ingredientNames", "specification", "applicability", "unit", "basis", "typicalValue", "minimumValue", "maximumValue", "source"],
+                "additionalProperties": false
+            }
+        },
+        "required": ["input"],
         "additionalProperties": false
     })
 }

@@ -25,6 +25,8 @@ interface RecipeAgentWorkspaceProps {
   busy: boolean;
   canUseModel: boolean;
   context: RecipeAgentWorkbenchContext;
+  onOpenReferenceLibrary(): void;
+  onRequestEstimate(): void;
   onRequestRetrospective(): void;
 }
 
@@ -33,6 +35,8 @@ export function RecipeAgentWorkspace({
   busy,
   canUseModel,
   context,
+  onOpenReferenceLibrary,
+  onRequestEstimate,
   onRequestRetrospective,
 }: RecipeAgentWorkspaceProps) {
   const [diagnosis, setDiagnosis] = useState<RecipeAgentDiagnosis | null>(null);
@@ -178,6 +182,19 @@ export function RecipeAgentWorkspace({
         <button disabled={busy || ingredientItems.length === 0} onClick={() => void openSubstitution()} type="button">
           <Icon name="ingredient" size={15} />
           替代原料分析
+        </button>
+        <button
+          disabled={busy || !canUseModel}
+          onClick={onRequestEstimate}
+          title={canUseModel ? undefined : "请先启用一个聊天模型"}
+          type="button"
+        >
+          <Icon name="scale" size={15} />
+          估算当前甜度
+        </button>
+        <button disabled={busy} onClick={onOpenReferenceLibrary} type="button">
+          <Icon name="report" size={15} />
+          参考资料库
         </button>
         <button
           className="is-wide"

@@ -11,6 +11,7 @@ use food_rd_desktop::{
     },
     agent_recipe::repository::AgentRecipeRepository,
     ingest::coordinator::IngredientIngestCoordinator,
+    rnd_reference::repository::RndReferenceRepository,
 };
 
 #[tokio::main]
@@ -34,7 +35,14 @@ async fn run() -> Result<(), String> {
         .map_err(|error| error.message().to_string())?;
     let recipe_proposals =
         AgentRecipeRepository::open(&database_path).map_err(|error| error.message().to_string())?;
-    let registry = AgentToolRegistry::with_audit_and_recipes(coordinator, audit, recipe_proposals);
+    let references = RndReferenceRepository::open(&database_path)
+        .map_err(|error| error.message().to_string())?;
+    let registry = AgentToolRegistry::with_audit_recipes_and_references(
+        coordinator,
+        audit,
+        recipe_proposals,
+        references,
+    );
     let server = McpServer::new(registry, context);
     serve_mcp(server, tokio::io::stdin(), tokio::io::stdout())
         .await

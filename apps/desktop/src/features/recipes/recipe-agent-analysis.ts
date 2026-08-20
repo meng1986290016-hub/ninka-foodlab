@@ -98,6 +98,11 @@ export interface RecipeAgentWorkbenchContext {
     group: MaterialGroup,
     variant: IngredientVariant,
   ): void;
+  appendResearchNotes(
+    expectedDraftUpdatedAt: string,
+    appendText: string,
+  ): Promise<void>;
+  saveDraftNow(): Promise<void>;
 }
 
 interface AnalysisRequest {

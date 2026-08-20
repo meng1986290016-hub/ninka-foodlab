@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../../App";
 import { BrowserAgentEventSource } from "../../api/agent-event-source";
@@ -10,6 +10,7 @@ import type { ImportFilePicker } from "../../api/import-file-picker";
 import type { ImportFileReference } from "../../api/import-types";
 import { AgentPanel } from "./AgentPanel";
 import { recipeDraftFingerprint } from "../recipes/recipe-agent-analysis";
+import type { AgentRecipeEstimateCard } from "../../api/rnd-reference-types";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -137,6 +138,14 @@ class FailedDraftRunApi extends BrowserDemoApi {
   override async getAgentRun(id: string) {
     if (this.visibleRun?.id === id) return this.visibleRun;
     return super.getAgentRun(id);
+  }
+}
+
+class EstimateCardApi extends BrowserDemoApi {
+  estimateCard: AgentRecipeEstimateCard | null = null;
+
+  override async listAgentRecipeEstimateCards(_conversationId: string) {
+    return this.estimateCard ? [this.estimateCard] : [];
   }
 }
 
@@ -445,6 +454,8 @@ describe("AgentPanel", () => {
           readOnly: false,
           draftFingerprint: recipeDraftFingerprint(draft),
           applyIngredientSubstitution: () => {},
+          appendResearchNotes: async () => {},
+          saveDraftNow: async () => {},
         }}
       />,
     );
@@ -465,5 +476,121 @@ describe("AgentPanel", () => {
     expect((await api.getRecipeDraft(recipe.id))?.markdownNotes).toBe(
       "本轮降低甜度，口感偏硬。",
     );
+  });
+
+  it("shows estimate evidence and requires an editable preview before appending notes", async () => {
+    const events = new BrowserAgentEventSource();
+    const api = new EstimateCardApi({
+      storage: new MemoryStorage(),
+      agentEvents: events,
+      now: () => "2026-08-20T10:00:00.000Z",
+    });
+    const recipe = await api.createRecipe({
+      name: "甜度卡片测试",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const draft = await api.saveRecipeDraft({
+      recipeId: recipe.id,
+      basedOnVersionId: null,
+      source: "manual",
+      targetBatchGrams: "1000",
+      finishedMassGrams: null,
+      servingMassGrams: null,
+      packageCount: null,
+      items: [],
+      packagingCosts: [],
+      additionalCosts: [],
+      targets: [],
+      markdownNotes: "",
+      calculation: null,
+      calculationIssues: [],
+    });
+    api.estimateCard = {
+      id: "estimate-card-1",
+      conversationId: "conversation-any",
+      runId: "run-1",
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      sourceDraftUpdatedAt: draft.updatedAt,
+      sourceDraftFingerprint: recipeDraftFingerprint(draft),
+      status: "ready",
+      parameterKey: "relative_sweetness",
+      title: "当前配方甜度参考估算",
+      estimatedValue: "10",
+      minimumValue: "9",
+      maximumValue: "11",
+      unit: "g_sucrose_equivalent_per_100g",
+      basis: "finished_product_100g",
+      confidence: "medium",
+      formulaInputs: [
+        {
+          label: "白砂糖",
+          amount: "100",
+          unit: "g",
+          referenceCardId: "sweetness-sucrose",
+        },
+      ],
+      citedReferenceCardIds: ["sweetness-sucrose"],
+      calculationSummary: "按当前出成重量折算。",
+      assumptions: ["白砂糖按蔗糖纯品处理"],
+      influencingFactors: ["产品基质"],
+      missingInputs: [],
+      conflict: null,
+      notePreview: "### Agent 当前配方参考估算\n- 当前估计：10 g 蔗糖当量 / 100 g",
+      createdAt: "2026-08-20T10:00:00.000Z",
+      updatedAt: "2026-08-20T10:00:00.000Z",
+    };
+    const appendResearchNotes = vi.fn(
+      async (_expectedDraftUpdatedAt: string, _appendText: string) => {},
+    );
+    const user = userEvent.setup();
+    render(
+      <AgentPanel
+        api={api}
+        events={events}
+        filePicker={picker()}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+        recipeContext={{
+          recipe,
+          draft,
+          referencedVersions: [],
+          nutrientDefinitions: await api.listNutrientDefinitions(),
+          readOnly: false,
+          draftFingerprint: recipeDraftFingerprint(draft),
+          applyIngredientSubstitution: () => {},
+          appendResearchNotes,
+          saveDraftNow: async () => {},
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByText("当前配方甜度参考估算"),
+    ).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "查看参考卡" }));
+    expect(
+      await screen.findByRole("dialog", { name: "研发参考资料库" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("蔗糖相对甜度基准").length).toBeGreaterThan(0);
+    await user.click(
+      screen.getByRole("button", { name: "关闭研发参考资料库" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "加入研发备注" }));
+    const preview = await screen.findByRole("textbox", {
+      name: "待追加的研发备注",
+    });
+    await user.type(preview, "\n- 人工补充：已复核");
+    expect(appendResearchNotes).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "确认追加" }));
+    await waitFor(() => expect(appendResearchNotes).toHaveBeenCalledTimes(1));
+    expect(appendResearchNotes.mock.calls[0]?.[0]).toBe(draft.updatedAt);
+    expect(appendResearchNotes.mock.calls[0]?.[1]).toContain("人工补充：已复核");
   });
 });

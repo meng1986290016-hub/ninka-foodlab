@@ -47,7 +47,12 @@ import {
   type RecipeVersionPreparation,
   type RecipeVersionValidationIssue,
 } from "./recipe-versioning";
-import { useRecipeDraft } from "./useRecipeDraft";
+import {
+  RECIPE_EDITOR_DRAFT_KIND,
+  RECIPE_EDITOR_DRAFT_VERSION,
+  type RecipeEditorDraftPayload,
+  useRecipeDraft,
+} from "./useRecipeDraft";
 import type { SampleSheetLaunch } from "./sample-sheet-source";
 import {
   recipeDraftFingerprint,
@@ -346,7 +351,7 @@ function RecipeEditor({
     [nutrientDefinitions, referencedVersions],
   );
   const draftState = useRecipeDraft(api, recipe.id, { calculate });
-  const { draft, dispatch } = draftState;
+  const { draft, dispatch, saveNow } = draftState;
   const inactive = recipeSchemeStatus(recipe) === "inactive";
   const dataGapReport = useMemo(
     () =>
@@ -482,6 +487,26 @@ function RecipeEditor({
     },
     [dispatch, draft.items],
   );
+  const appendResearchNotes = useCallback(
+    async (expectedDraftUpdatedAt: string, appendText: string) => {
+      if (inactive) throw new Error("只读或停用配方不能追加研发备注");
+      await saveNow();
+      const updated = await api.appendRecipeDraftNotes({
+        recipeId: recipe.id,
+        expectedDraftUpdatedAt,
+        appendText,
+      });
+      await api.saveDraft(
+        RECIPE_EDITOR_DRAFT_KIND,
+        recipe.id,
+        RECIPE_EDITOR_DRAFT_VERSION,
+        { draft: updated } satisfies RecipeEditorDraftPayload,
+      );
+      dispatch({ type: "hydrate", draft: updated });
+      setVersionNotice("参考估算已追加到研发备注");
+    },
+    [api, dispatch, inactive, recipe.id, saveNow],
+  );
   const agentContext = useMemo<RecipeAgentWorkbenchContext>(
     () => ({
       recipe,
@@ -491,14 +516,18 @@ function RecipeEditor({
       readOnly: inactive,
       draftFingerprint: recipeDraftFingerprint(draft),
       applyIngredientSubstitution,
+      appendResearchNotes,
+      saveDraftNow: saveNow,
     }),
     [
       applyIngredientSubstitution,
+      appendResearchNotes,
       draft,
       inactive,
       nutrientDefinitions,
       recipe,
       referencedVersions,
+      saveNow,
     ],
   );
 

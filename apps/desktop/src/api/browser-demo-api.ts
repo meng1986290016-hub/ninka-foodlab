@@ -28,6 +28,13 @@ import type {
   MaterialNeed,
   MaterialNeedStatus,
 } from "./agent-recipe-types";
+import type {
+  AgentRecipeEstimateCard,
+  AppendRecipeDraftNotesInput,
+  PersonalReferenceCardDraft,
+  RndReferenceCard,
+} from "./rnd-reference-types";
+import builtInRndReferenceCardData from "../data/rnd-reference-cards.json";
 import { evaluateBrowserAgentRecipe } from "./browser-agent-recipe";
 import type { DesktopApi } from "./desktop-api";
 import type {
@@ -253,6 +260,99 @@ function cloneBrowserState(state: BrowserStateV5): BrowserStateV5 {
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+const builtInRndReferenceCards =
+  builtInRndReferenceCardData as RndReferenceCard[];
+
+function cleanedStrings(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort(
+    (left, right) => left.localeCompare(right, "zh-CN"),
+  );
+}
+
+function browserRndReferenceCards(
+  state: BrowserStateV5,
+  includeArchived = false,
+) {
+  return builtInRndReferenceCards
+    .filter((card) => card.status === "approved")
+    .concat(
+      Object.values(state.personalRndReferenceCards).filter(
+        (card) => includeArchived || card.status === "approved",
+      ),
+    );
+}
+
+function browserReferenceMatchScore(
+  card: RndReferenceCard,
+  query: string,
+) {
+  if (query === "") return 2;
+  if (card.ingredientNames.some((name) => normalize(name) === query)) return 0;
+  if (
+    normalize(card.title).includes(query) ||
+    card.ingredientNames.some((name) => normalize(name).includes(query))
+  ) {
+    return 1;
+  }
+  return 2;
+}
+
+function validatePersonalReferenceCard(input: PersonalReferenceCardDraft) {
+  if (
+    input.parameterKey !== "relative_sweetness" ||
+    input.unit !== "x_sucrose" ||
+    input.basis !== "sucrose_1" ||
+    input.title.trim() === "" ||
+    cleanedStrings(input.ingredientNames).length === 0 ||
+    input.source.title.trim() === "" ||
+    input.source.publisher.trim() === ""
+  ) {
+    throw new DesktopApiError(
+      "invalid_input",
+      "请补齐参考卡名称、原料别名、单位基准和来源",
+    );
+  }
+  try {
+    const typical = new Decimal(input.typicalValue);
+    const minimum = new Decimal(input.minimumValue);
+    const maximum = new Decimal(input.maximumValue);
+    if (minimum.isNegative() || minimum.gt(typical) || typical.gt(maximum)) {
+      throw new Error("invalid range");
+    }
+  } catch {
+    throw new DesktopApiError(
+      "invalid_input",
+      "参考卡中心值必须是有效数值，并位于最小值与最大值之间",
+    );
+  }
+}
+
+function browserRecipeMassGrams(amount: string, unit: string) {
+  try {
+    const value = new Decimal(amount);
+    if (value.isNegative()) return null;
+    if (unit === "mg") return value.div(1000);
+    if (unit === "g") return value;
+    if (unit === "kg") return value.mul(1000);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function decimalOrNull(value: string | null) {
+  if (value === null || value.trim() === "") return null;
+  try {
+    return new Decimal(value);
+  } catch {
+    return null;
+  }
+}
+
+function formatEstimateDecimal(value: Decimal) {
+  return value.toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toString();
 }
 
 function versionReference(version: RecipeVersion): RecipeVersionReference {
@@ -1561,6 +1661,39 @@ export class BrowserDemoApi implements DesktopApi {
     return cloneValue(draft);
   }
 
+  async appendRecipeDraftNotes(
+    input: AppendRecipeDraftNotesInput,
+  ): Promise<RecipeDraft> {
+    const state = this.read();
+    const recipe = this.findRecipe(state, input.recipeId);
+    const draft = state.recipeDrafts[recipe.id];
+    if (!draft) {
+      throw new DesktopApiError("not_found", "找不到当前配方草稿");
+    }
+    if (draft.updatedAt !== input.expectedDraftUpdatedAt) {
+      throw new DesktopApiError(
+        "stale_reference",
+        "配方草稿已发生变化，请重新估算后再加入备注",
+      );
+    }
+    const appendText = input.appendText.trim();
+    if (appendText === "" || appendText.length > 10_000) {
+      throw new DesktopApiError("invalid_input", "研发备注内容无效");
+    }
+    const timestamp = this.now();
+    const updated = this.materializeRecipeDraft(state, {
+      ...draft,
+      markdownNotes: [draft.markdownNotes.trim(), appendText]
+        .filter(Boolean)
+        .join("\n\n"),
+      updatedAt: timestamp,
+    });
+    state.recipeDrafts[recipe.id] = updated;
+    state.recipes[recipe.id] = { ...recipe, updatedAt: timestamp };
+    this.write(state);
+    return cloneValue(updated);
+  }
+
   async listRecipeVersions(recipeId: string): Promise<RecipeVersion[]> {
     const state = this.read();
     this.findRecipe(state, recipeId);
@@ -1905,6 +2038,11 @@ export class BrowserDemoApi implements DesktopApi {
         proposal.runId = null;
       }
     }
+    for (const [cardId, card] of Object.entries(
+      state.agentRecipeEstimateCards,
+    )) {
+      if (card.conversationId === id) delete state.agentRecipeEstimateCards[cardId];
+    }
     this.write(state);
   }
 
@@ -1946,12 +2084,18 @@ export class BrowserDemoApi implements DesktopApi {
     }
 
     const normalizedRequest = request.content.trim().toLocaleLowerCase("zh-CN");
+    const estimateTask =
+      request.recipeContext != null &&
+      ["甜度", "甜味", "蔗糖当量", "参考估算"].some((keyword) =>
+        normalizedRequest.includes(keyword),
+      );
     const retrospectiveTask =
+      !estimateTask &&
       request.recipeContext != null &&
       ["复盘", "研发记录", "下一轮打样"].some((keyword) =>
         normalizedRequest.includes(keyword),
       );
-    const recipeTask = !retrospectiveTask && [
+    const recipeTask = !estimateTask && !retrospectiveTask && [
       "配方",
       "产品",
       "营养要求",
@@ -2066,7 +2210,22 @@ export class BrowserDemoApi implements DesktopApi {
         updatedAt: timestamp,
       };
     }
-    const finalText = retrospectiveTask && request.recipeContext
+    const estimateCard = estimateTask && request.recipeContext
+      ? this.browserDemoRecipeEstimateCard(
+          state,
+          request.conversationId,
+          runId,
+          request.recipeContext.recipeId,
+          request.recipeContext.recipeName,
+          request.recipeContext.draftFingerprint,
+          timestamp,
+        )
+      : null;
+    const finalText = estimateCard
+      ? estimateCard.status === "ready"
+        ? "我已按当前实际投料和出成口径生成甜度参考估算卡。请核对引用、假设和可能区间；需要记录时，可先编辑预览再加入研发备注。"
+        : "当前资料不足以形成有来源的中心估计值。我已列出最关键的待补信息，补齐后可以重新估算。"
+      : retrospectiveTask && request.recipeContext
       ? browserDemoRecipeRetrospective(
           state,
           request.recipeContext.recipeId,
@@ -2124,6 +2283,9 @@ export class BrowserDemoApi implements DesktopApi {
         };
         latest.agentMessages[assistantMessage.id] = assistantMessage;
         if (proposal) latest.agentRecipeProposals[proposal.id] = proposal;
+        if (estimateCard) {
+          latest.agentRecipeEstimateCards[estimateCard.id] = estimateCard;
+        }
         latest.agentConversations[request.conversationId]!.updatedAt =
           this.now();
         this.write(latest);
@@ -2139,6 +2301,9 @@ export class BrowserDemoApi implements DesktopApi {
         if (proposal) {
           this.emitAgentEvent({ type: "recipe_proposals_changed", runId });
         }
+        if (estimateCard) {
+          this.emitAgentEvent({ type: "recipe_estimate_cards_changed", runId });
+        }
         this.emitAgentEvent({ type: "run_completed", runId });
       }, this.agentResponseDelayMs);
 
@@ -2149,6 +2314,7 @@ export class BrowserDemoApi implements DesktopApi {
     state.agentMessages[userMessage.id] = userMessage;
     state.agentMessages[assistantMessage.id] = assistantMessage;
     if (proposal) state.agentRecipeProposals[proposal.id] = proposal;
+    if (estimateCard) state.agentRecipeEstimateCards[estimateCard.id] = estimateCard;
     state.agentConversations[request.conversationId]!.updatedAt = timestamp;
     this.write(state);
 
@@ -2162,6 +2328,9 @@ export class BrowserDemoApi implements DesktopApi {
     }
     if (proposal) {
       this.emitAgentEvent({ type: "recipe_proposals_changed", runId });
+    }
+    if (estimateCard) {
+      this.emitAgentEvent({ type: "recipe_estimate_cards_changed", runId });
     }
     this.emitAgentEvent({ type: "run_completed", runId });
     return run;
@@ -2208,6 +2377,119 @@ export class BrowserDemoApi implements DesktopApi {
       .filter((proposal) => proposal.conversationId === conversationId)
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .map(cloneValue);
+  }
+
+  async listAgentRecipeEstimateCards(conversationId: string) {
+    const state = this.read();
+    if (!state.agentConversations[conversationId]) {
+      throw new DesktopApiError("not_found", "找不到该对话");
+    }
+    let changed = false;
+    const cards = Object.values(state.agentRecipeEstimateCards)
+      .filter((card) => card.conversationId === conversationId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .map((card) => {
+        const currentDraft = state.recipeDrafts[card.recipeId];
+        if (
+          card.status !== "stale" &&
+          currentDraft?.updatedAt !== card.sourceDraftUpdatedAt
+        ) {
+          card.status = "stale";
+          card.updatedAt = this.now();
+          changed = true;
+        }
+        return cloneValue(card);
+      });
+    if (changed) this.write(state);
+    return cards;
+  }
+
+  async listRndReferenceCards(query = "", includeArchived = false) {
+    const normalized = normalize(query);
+    return browserRndReferenceCards(this.read(), includeArchived)
+      .filter(
+        (card) =>
+          normalized === "" ||
+          [card.title, card.specification, card.applicability]
+            .concat(card.ingredientNames)
+            .some((value) => normalize(value).includes(normalized)),
+      )
+      .sort((left, right) =>
+        browserReferenceMatchScore(left, normalized) -
+          browserReferenceMatchScore(right, normalized) ||
+        left.title.localeCompare(right.title, "zh-CN"),
+      )
+      .map(cloneValue);
+  }
+
+  async createPersonalRndReferenceCard(input: PersonalReferenceCardDraft) {
+    validatePersonalReferenceCard(input);
+    const state = this.read();
+    const timestamp = this.now();
+    const card: RndReferenceCard = {
+      ...cloneValue(input),
+      id: this.createId(),
+      origin: "personal",
+      status: "approved",
+      ingredientNames: cleanedStrings(input.ingredientNames),
+      reviewVersion: 1,
+      reviewedAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null,
+    };
+    state.personalRndReferenceCards[card.id] = card;
+    this.write(state);
+    return cloneValue(card);
+  }
+
+  async updatePersonalRndReferenceCard(
+    id: string,
+    input: PersonalReferenceCardDraft,
+  ) {
+    validatePersonalReferenceCard(input);
+    const state = this.read();
+    const existing = state.personalRndReferenceCards[id];
+    if (!existing) {
+      throw new DesktopApiError("not_found", "找不到个人参考卡");
+    }
+    if (existing.status === "archived") {
+      throw new DesktopApiError("invalid_state", "已归档参考卡不能修改");
+    }
+    const timestamp = this.now();
+    const updated: RndReferenceCard = {
+      ...cloneValue(input),
+      id: existing.id,
+      origin: "personal",
+      status: "approved",
+      ingredientNames: cleanedStrings(input.ingredientNames),
+      reviewVersion: existing.reviewVersion + 1,
+      reviewedAt: timestamp,
+      createdAt: existing.createdAt,
+      updatedAt: timestamp,
+      archivedAt: null,
+    };
+    state.personalRndReferenceCards[id] = updated;
+    this.write(state);
+    return cloneValue(updated);
+  }
+
+  async archivePersonalRndReferenceCard(id: string) {
+    const state = this.read();
+    const card = state.personalRndReferenceCards[id];
+    if (!card) {
+      throw new DesktopApiError("not_found", "找不到个人参考卡");
+    }
+    const timestamp = this.now();
+    const archived: RndReferenceCard = {
+      ...card,
+      status: "archived",
+      archivedAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.personalRndReferenceCards[id] = archived;
+    this.write(state);
+    return cloneValue(archived);
   }
 
   async getAgentRecipeProposal(id: string) {
@@ -3402,6 +3684,210 @@ export class BrowserDemoApi implements DesktopApi {
 
   private emitAgentEvent(event: AgentEvent) {
     this.agentEvents?.emit(event);
+  }
+
+  private browserDemoRecipeEstimateCard(
+    state: BrowserStateV5,
+    conversationId: string,
+    runId: string,
+    recipeId: string,
+    recipeName: string,
+    sourceDraftFingerprint: string,
+    timestamp: string,
+  ): AgentRecipeEstimateCard {
+    const draft = state.recipeDrafts[recipeId];
+    if (!draft) {
+      throw new DesktopApiError("not_found", "找不到当前配方草稿");
+    }
+    const availableCards = browserRndReferenceCards(state);
+    const formulaInputs: AgentRecipeEstimateCard["formulaInputs"] = [];
+    const citedReferenceCardIds: string[] = [];
+    const missingInputs: string[] = [];
+    const conflicts: Array<NonNullable<AgentRecipeEstimateCard["conflict"]>> = [];
+    let typicalTotal = new Decimal(0);
+    let minimumTotal = new Decimal(0);
+    let maximumTotal = new Decimal(0);
+
+    for (const item of draft.items) {
+      if (item.kind === "recipe_version") {
+        missingInputs.push(
+          `半成品“${item.recipeVersion.recipeName}”的甜味组成与该版本实际出成重量`,
+        );
+        continue;
+      }
+      if (item.kind === "material_need") {
+        missingInputs.push(
+          `待补原料“${item.materialNeed.materialName}”的具体规格`,
+        );
+        continue;
+      }
+      const materialName = normalize(item.materialName);
+      const specification = normalize(
+        item.ingredientVariant.modelOrSpecification,
+      );
+      const candidates = availableCards
+        .filter((card) =>
+          card.ingredientNames.some((name) => {
+            const alias = normalize(name);
+            return materialName === alias || materialName.includes(alias);
+          }),
+        )
+        .sort((left, right) => {
+          const leftSpec =
+            specification !== "" &&
+            normalize(left.specification).includes(specification)
+              ? 1
+              : 0;
+          const rightSpec =
+            specification !== "" &&
+            normalize(right.specification).includes(specification)
+              ? 1
+              : 0;
+          if (leftSpec !== rightSpec) return rightSpec - leftSpec;
+          if (left.origin !== right.origin) {
+            return left.origin === "builtin" ? -1 : 1;
+          }
+          return left.title.localeCompare(right.title, "zh-CN");
+        });
+      const selected = candidates[0];
+      if (!selected) {
+        if (/糖|甜|蜜|syrup|sweet/i.test(item.materialName)) {
+          missingInputs.push(`“${item.materialName}”的可核查甜度参考值或资料`);
+        }
+        continue;
+      }
+      const relative = new Decimal(selected.typicalValue);
+      const requiresActiveContent =
+        relative.gte(10) || /液|浆|复配|预混|solution|syrup/i.test(item.materialName);
+      if (
+        requiresActiveContent &&
+        !/%|纯度|含量|活性|固形物|pure/i.test(
+          item.ingredientVariant.modelOrSpecification,
+        )
+      ) {
+        missingInputs.push(
+          `“${item.materialName}”的纯度、浓度、固形物或活性物含量`,
+        );
+        continue;
+      }
+      const massGrams = browserRecipeMassGrams(item.amount, item.unit);
+      if (massGrams === null) {
+        missingInputs.push(`“${item.materialName}”由体积换算质量所需的密度`);
+        continue;
+      }
+      typicalTotal = typicalTotal.add(massGrams.mul(selected.typicalValue));
+      minimumTotal = minimumTotal.add(massGrams.mul(selected.minimumValue));
+      maximumTotal = maximumTotal.add(massGrams.mul(selected.maximumValue));
+      formulaInputs.push({
+        label: item.materialName,
+        amount: item.amount,
+        unit: item.unit,
+        referenceCardId: selected.id,
+      });
+      if (!citedReferenceCardIds.includes(selected.id)) {
+        citedReferenceCardIds.push(selected.id);
+      }
+      if (candidates.length > 1) {
+        conflicts.push({
+          selectedReferenceCardId: selected.id,
+          alternativeReferenceCardIds: candidates.slice(1).map((card) => card.id),
+          rationale:
+            "优先使用与当前原料名称及规格最接近的参考卡；其他来源仅展示，不参与平均。",
+        });
+      }
+    }
+
+    let basis: AgentRecipeEstimateCard["basis"] = "input_mix_100g";
+    let denominator = decimalOrNull(draft.calculation?.inputMassGrams ?? null);
+    const finishedMass = decimalOrNull(draft.finishedMassGrams);
+    if (finishedMass?.gt(0)) {
+      denominator = finishedMass;
+      basis = "finished_product_100g";
+    }
+    if (!denominator?.gt(0)) {
+      missingInputs.push("当前配方的实际投料总量或出成重量");
+    }
+    if (formulaInputs.length === 0 && missingInputs.length === 0) {
+      missingInputs.push("当前配方中可匹配的甜味原料及参考卡");
+    }
+
+    const uniqueMissing = cleanedStrings(missingInputs).slice(0, 2);
+    const ready = uniqueMissing.length === 0 && denominator != null;
+    const scale = ready && denominator
+      ? new Decimal(100).div(denominator)
+      : null;
+    const estimatedValue = scale
+      ? formatEstimateDecimal(typicalTotal.mul(scale))
+      : null;
+    const minimumValue = scale
+      ? formatEstimateDecimal(minimumTotal.mul(scale))
+      : null;
+    const maximumValue = scale
+      ? formatEstimateDecimal(maximumTotal.mul(scale))
+      : null;
+    const conflict = conflicts[0] ?? null;
+    const citedTitles = citedReferenceCardIds.flatMap((id) => {
+      const card = availableCards.find((candidate) => candidate.id === id);
+      return card ? [card.title] : [];
+    });
+    const calculationSummary = ready
+      ? "按 Σ（甜味原料投料质量 × 所选参考卡相对甜度）÷ 当前实际出成或投料基准重量 × 100 折算。"
+      : "关键规格或质量基准缺失，本次不计算中心值。";
+    const assumptions = ready
+      ? ["所列甜味原料与所选参考卡规格一致，且不额外计入未识别的甜味来源"]
+      : [];
+    const influencingFactors = ready
+      ? ["浓度、温度、酸度、产品基质及甜味剂协同作用会影响实际感官结果"]
+      : [];
+    const notePreview = ready
+      ? [
+          "### Agent 当前配方参考估算 · 当前配方甜度",
+          `- 当前估计：${estimatedValue} g 蔗糖当量 / 100 g`,
+          `- 可能区间：${minimumValue}–${maximumValue} g / 100 g`,
+          `- 配方：${recipeName}`,
+          `- 推算：${calculationSummary}`,
+          `- 参考卡：${citedTitles.join("、")}`,
+          `- 主要假设：${assumptions.join("；")}`,
+          `- 影响因素：${influencingFactors.join("；")}`,
+          `- 记录时间：${timestamp}`,
+        ].join("\n")
+      : "";
+
+    return {
+      id: this.createId(),
+      conversationId,
+      runId,
+      recipeId,
+      recipeName,
+      sourceDraftUpdatedAt: draft.updatedAt,
+      sourceDraftFingerprint,
+      status: ready ? "ready" : "needs_input",
+      parameterKey: "relative_sweetness",
+      title: "当前配方甜度参考估算",
+      estimatedValue,
+      minimumValue,
+      maximumValue,
+      unit: "g_sucrose_equivalent_per_100g",
+      basis,
+      confidence: ready
+        ? conflict || citedReferenceCardIds.some((id) => {
+            const card = availableCards.find((candidate) => candidate.id === id);
+            return card?.minimumValue !== card?.maximumValue;
+          })
+          ? "medium"
+          : "high"
+        : "low",
+      formulaInputs,
+      citedReferenceCardIds,
+      calculationSummary,
+      assumptions,
+      influencingFactors,
+      missingInputs: uniqueMissing,
+      conflict,
+      notePreview,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
   }
 
   private browserDemoRecipeProposalPayload(

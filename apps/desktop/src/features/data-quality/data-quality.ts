@@ -725,11 +725,14 @@ function reportFromCollection(
       return definition !== undefined;
     })
     .map((nutrient) => {
-      const trackedMass = collection.leaves.reduce(
-        (sum, leaf) =>
-          leaf.massGrams === null ? sum : sum.add(leaf.massGrams),
-        new Decimal(0),
-      );
+      const calculatedInputMass = safeDecimal(calculation?.inputMassGrams);
+      const trackedMass =
+        calculatedInputMass ??
+        collection.leaves.reduce(
+          (sum, leaf) =>
+            leaf.massGrams === null ? sum : sum.add(leaf.massGrams),
+          new Decimal(0),
+        );
       const ratio = ratioNumber(nutrient.completenessRatio);
       if (nutrient.status !== "complete") {
         for (const leaf of collection.leaves) {

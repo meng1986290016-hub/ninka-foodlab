@@ -23,6 +23,12 @@ import type {
   MaterialNeed,
   MaterialNeedStatus,
 } from "./agent-recipe-types";
+import type {
+  AgentRecipeEstimateCard,
+  AppendRecipeDraftNotesInput,
+  PersonalReferenceCardDraft,
+  RndReferenceCard,
+} from "./rnd-reference-types";
 import type { DesktopApi } from "./desktop-api";
 import type {
   BackupManifest,
@@ -298,6 +304,10 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invoke<RecipeDraft>("save_recipe_draft", { input });
   }
 
+  appendRecipeDraftNotes(input: AppendRecipeDraftNotesInput) {
+    return this.invoke<RecipeDraft>("append_recipe_draft_notes", { input });
+  }
+
   listRecipeVersions(recipeId: string) {
     return this.invoke<RecipeVersion[]>("list_recipe_versions", { recipeId });
   }
@@ -419,6 +429,42 @@ export class TauriDesktopApi implements DesktopApi {
   listAgentRecipeProposals(conversationId: string) {
     return this.invoke<AgentRecipeProposal[]>("list_agent_recipe_proposals", {
       conversationId,
+    });
+  }
+
+  listAgentRecipeEstimateCards(conversationId: string) {
+    return this.invoke<AgentRecipeEstimateCard[]>(
+      "list_agent_recipe_estimate_cards",
+      { conversationId },
+    );
+  }
+
+  listRndReferenceCards(query = "", includeArchived = false) {
+    return this.invoke<RndReferenceCard[]>("list_rnd_reference_cards", {
+      query,
+      includeArchived,
+    });
+  }
+
+  createPersonalRndReferenceCard(input: PersonalReferenceCardDraft) {
+    return this.invoke<RndReferenceCard>("create_personal_rnd_reference_card", {
+      input,
+    });
+  }
+
+  updatePersonalRndReferenceCard(
+    id: string,
+    input: PersonalReferenceCardDraft,
+  ) {
+    return this.invoke<RndReferenceCard>("update_personal_rnd_reference_card", {
+      id,
+      input,
+    });
+  }
+
+  archivePersonalRndReferenceCard(id: string) {
+    return this.invoke<RndReferenceCard>("archive_personal_rnd_reference_card", {
+      id,
     });
   }
 

@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_fifteen() {
+fn fresh_database_applies_latest_schema_version_sixteen() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 15);
+    assert_eq!(schema_version(&connection), 16);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -114,7 +114,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 15);
+    assert_eq!(schema_version(&connection), 16);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name

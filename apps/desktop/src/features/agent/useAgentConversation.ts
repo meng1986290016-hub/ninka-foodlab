@@ -11,6 +11,7 @@ import type {
 } from "../../api/agent-types";
 import type { DesktopApi } from "../../api/desktop-api";
 import type { AgentRecipeProposal } from "../../api/agent-recipe-types";
+import type { AgentRecipeEstimateCard } from "../../api/rnd-reference-types";
 import type {
   ImportFileReference,
   IngredientImportDraft,
@@ -31,6 +32,10 @@ const toolStatus: Record<string, string> = {
   diagnose_recipe: "正在诊断当前配方",
   review_recipe_development: "正在复盘研发记录",
   compare_supplier_variant: "正在计算替代原料影响",
+  read_recipe_reference_context: "正在读取当前配方估算上下文",
+  search_rnd_reference_cards: "正在检索研发参考卡",
+  create_recipe_estimate_card: "正在生成当前配方参考估算",
+  prepare_personal_rnd_reference_card: "正在整理个人参考卡草稿",
 };
 
 interface InitialAgentState {
@@ -41,6 +46,7 @@ interface InitialAgentState {
   lastRun: AgentRun | null;
   drafts: IngredientImportDraft[];
   proposals: AgentRecipeProposal[];
+  estimates: AgentRecipeEstimateCard[];
 }
 
 export function useAgentConversation(
@@ -58,6 +64,7 @@ export function useAgentConversation(
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
   const [drafts, setDrafts] = useState<IngredientImportDraft[]>([]);
   const [proposals, setProposals] = useState<AgentRecipeProposal[]>([]);
+  const [estimates, setEstimates] = useState<AgentRecipeEstimateCard[]>([]);
   const [streamingText, setStreamingText] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
   const [error, setError] = useState("");
@@ -113,6 +120,20 @@ export function useAgentConversation(
     [api],
   );
 
+  const refreshEstimates = useCallback(
+    async (conversationId?: string) => {
+      const id = conversationId ?? conversationRef.current?.id;
+      if (!id) {
+        setEstimates([]);
+        return [];
+      }
+      const next = await api.listAgentRecipeEstimateCards(id);
+      setEstimates(next);
+      return next;
+    },
+    [api],
+  );
+
   useEffect(() => {
     let active = true;
     if (!initializationRef.current) {
@@ -125,9 +146,10 @@ export function useAgentConversation(
           ]);
         const nextConversation =
           conversations[0] ?? (await api.createAgentConversation("食品研发对话"));
-        const [messages, proposals] = await Promise.all([
+        const [messages, proposals, estimates] = await Promise.all([
           api.listAgentMessages(nextConversation.id),
           api.listAgentRecipeProposals(nextConversation.id),
+          api.listAgentRecipeEstimateCards(nextConversation.id),
         ]);
         const lastRunId = [...messages]
           .reverse()
@@ -143,6 +165,7 @@ export function useAgentConversation(
             ? await api.listAgentImportDrafts(lastRun.id)
             : [],
           proposals,
+          estimates,
         };
       })();
     }
@@ -157,6 +180,7 @@ export function useAgentConversation(
         setLastRun(initial.lastRun);
         setDrafts(initial.drafts);
         setProposals(initial.proposals);
+        setEstimates(initial.estimates);
       })
       .catch((reason: unknown) => {
         if (!active) return;
@@ -198,6 +222,11 @@ export function useAgentConversation(
           ).length;
           setTaskStatus(`已生成 ${pending} 张待复核配方提案`);
         });
+      } else if (event.type === "recipe_estimate_cards_changed") {
+        void refreshEstimates().then((next) => {
+          if (!active) return;
+          setTaskStatus(`已生成 ${next.length} 张当前配方参考估算卡`);
+        });
       } else if (event.type === "run_completed") {
         setStarting(false);
         setStreamingText("");
@@ -211,6 +240,7 @@ export function useAgentConversation(
         });
         void refreshMessages();
         void refreshProposals();
+        void refreshEstimates();
       } else if (event.type === "run_failed") {
         setStarting(false);
         setStreamingText("");
@@ -226,6 +256,7 @@ export function useAgentConversation(
         });
         void refreshMessages();
         void refreshProposals();
+        void refreshEstimates();
       }
     };
     void events.subscribe(receive).then((stop) => {
@@ -236,7 +267,14 @@ export function useAgentConversation(
       active = false;
       unsubscribe();
     };
-  }, [api, events, refreshDrafts, refreshMessages, refreshProposals]);
+  }, [
+    api,
+    events,
+    refreshDrafts,
+    refreshEstimates,
+    refreshMessages,
+    refreshProposals,
+  ]);
 
   const send = useCallback(
     async (
@@ -280,8 +318,11 @@ export function useAgentConversation(
         } else {
           setCurrentRun(null);
           setLastRun(run);
-          await refreshDrafts(run.id);
-          await refreshProposals(activeConversation.id);
+          await Promise.all([
+            refreshDrafts(run.id),
+            refreshProposals(activeConversation.id),
+            refreshEstimates(activeConversation.id),
+          ]);
           setTaskStatus(
             run.status === "completed" ? "本次任务已完成" : "本次任务未完成",
           );
@@ -294,7 +335,7 @@ export function useAgentConversation(
         return null;
       }
     },
-    [api, refreshDrafts, refreshMessages, refreshProposals],
+    [api, refreshDrafts, refreshEstimates, refreshMessages, refreshProposals],
   );
 
   const cancel = useCallback(async () => {
@@ -359,6 +400,7 @@ export function useAgentConversation(
     setLastRun(null);
     setDrafts([]);
     setProposals([]);
+    setEstimates([]);
     setStreamingText("");
     setTaskStatus("");
     setError("");
@@ -372,6 +414,7 @@ export function useAgentConversation(
     conversation,
     currentRun,
     drafts,
+    estimates,
     error,
     lastRun,
     loading,
@@ -380,6 +423,7 @@ export function useAgentConversation(
     preferences,
     refreshConfiguration,
     refreshDrafts,
+    refreshEstimates,
     refreshProposals,
     retry,
     send,

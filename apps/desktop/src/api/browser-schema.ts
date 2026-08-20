@@ -37,6 +37,10 @@ import type {
   AgentRecipeProposal,
   MaterialNeed,
 } from "./agent-recipe-types";
+import type {
+  AgentRecipeEstimateCard,
+  RndReferenceCard,
+} from "./rnd-reference-types";
 
 export const BROWSER_V1_KEY = "food-rd.browser-demo.v1";
 export const BROWSER_V2_KEY = "food-rd.browser-demo.v2";
@@ -129,6 +133,8 @@ export interface BrowserStateV9
 export interface BrowserStateV10
   extends Omit<BrowserStateV9, "schemaVersion"> {
   schemaVersion: 10;
+  personalRndReferenceCards: Record<string, RndReferenceCard>;
+  agentRecipeEstimateCards: Record<string, AgentRecipeEstimateCard>;
 }
 
 export interface MigrationContext {
@@ -360,6 +366,13 @@ export function migrateV9ToV10(state: BrowserStateV9): BrowserStateV10 {
 function removeResearchMetrics(
   state: BrowserStateV9 | BrowserStateV10,
 ): BrowserStateV10 {
+  const extended = state as BrowserStateV9 &
+    Partial<
+      Pick<
+        BrowserStateV10,
+        "personalRndReferenceCards" | "agentRecipeEstimateCards"
+      >
+    >;
   const retiredDefinitionIds = new Set(
     state.nutrientDefinitions
       .filter(
@@ -527,6 +540,8 @@ function removeResearchMetrics(
         ];
       }),
     ),
+    personalRndReferenceCards: extended.personalRndReferenceCards ?? {},
+    agentRecipeEstimateCards: extended.agentRecipeEstimateCards ?? {},
   };
 }
 
@@ -741,6 +756,7 @@ function browserAgentProviderConfigs(
             tools: true,
             structuredOutput: true,
             streaming: true,
+            nativeWebSearch: false,
           },
           updatedAt,
         } satisfies AgentProviderConfig,

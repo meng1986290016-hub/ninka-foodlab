@@ -353,6 +353,7 @@ async fn cli_timeout_after_a_completed_draft_write_is_a_reviewable_completion() 
                 model: "test-model".into(),
                 active_recipe_id: None,
                 active_recipe_name: None,
+                active_draft_fingerprint: None,
             },
             "create_ingredient_import_draft",
             arguments,

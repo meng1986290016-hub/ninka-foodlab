@@ -69,6 +69,8 @@ pub struct AgentProviderCapabilities {
     pub tools: bool,
     pub structured_output: bool,
     pub streaming: bool,
+    #[serde(default)]
+    pub native_web_search: bool,
 }
 
 impl AgentProviderCapabilities {
@@ -79,6 +81,7 @@ impl AgentProviderCapabilities {
             tools: true,
             structured_output: true,
             streaming: true,
+            native_web_search: false,
         }
     }
 }

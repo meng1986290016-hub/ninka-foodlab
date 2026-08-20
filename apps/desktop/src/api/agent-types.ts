@@ -30,6 +30,7 @@ export interface AgentProviderCapabilities {
   tools: boolean;
   structuredOutput: boolean;
   streaming: boolean;
+  nativeWebSearch: boolean;
 }
 
 export interface AgentProviderConfig {
@@ -157,5 +158,6 @@ export type AgentEvent =
     }
   | { type: "drafts_changed"; runId: string; importJobId: string }
   | { type: "recipe_proposals_changed"; runId: string }
+  | { type: "recipe_estimate_cards_changed"; runId: string }
   | { type: "run_completed"; runId: string }
   | { type: "run_failed"; runId: string; code: string; message: string };

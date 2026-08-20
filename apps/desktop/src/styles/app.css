@@ -1929,6 +1929,512 @@
   }
 }
 
+/* Agent current-recipe reference estimates */
+.agent-estimate-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.agent-estimate-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid #bdd6c6;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, #f3faf6, #fff);
+}
+
+.agent-estimate-card.is-needs_input {
+  border-color: #e5cea0;
+  background: linear-gradient(145deg, #fff9eb, #fff);
+}
+
+.agent-estimate-card.is-stale {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.agent-estimate-card > header,
+.agent-estimate-card > footer,
+.agent-estimate-preview section > header,
+.agent-estimate-preview section > footer,
+.agent-reference-library > section > header,
+.agent-reference-form > header,
+.agent-reference-form > footer,
+.agent-reference-library__list article > header,
+.agent-reference-library__list article > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.agent-estimate-card > header div,
+.agent-estimate-preview section > header div,
+.agent-reference-library > section > header div,
+.agent-reference-library__list article > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-estimate-card > header span,
+.agent-estimate-preview section > header span,
+.agent-reference-library > section > header span,
+.agent-reference-library__list article > header span {
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.agent-estimate-card > header strong {
+  font-size: 13px;
+}
+
+.agent-estimate-card > header em {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.agent-estimate-card.is-needs_input > header em {
+  background: #fff0cc;
+  color: #82580c;
+}
+
+.agent-estimate-card.is-stale > header em {
+  background: #e7e9e8;
+  color: var(--color-ink-muted);
+}
+
+.agent-estimate-card__value {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #d5e5db;
+  border-radius: var(--radius-md);
+  background: #d5e5db;
+}
+
+.agent-estimate-card__value > div {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: var(--space-3);
+  background: #fff;
+}
+
+.agent-estimate-card__value span,
+.agent-estimate-card__value small {
+  color: var(--color-ink-muted);
+  font-size: 9px;
+}
+
+.agent-estimate-card__value strong {
+  color: var(--color-accent);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.agent-estimate-card__details {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.agent-estimate-card__details > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: var(--space-2);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.agent-estimate-card__details dt,
+.agent-estimate-card__details dd {
+  margin: 0;
+}
+
+.agent-estimate-card__details dt {
+  color: var(--color-ink-muted);
+}
+
+.agent-estimate-card__details dd {
+  color: var(--color-ink-soft);
+}
+
+.agent-estimate-card__details dd span {
+  display: block;
+}
+
+.agent-estimate-card__conflict,
+.agent-estimate-card__stale,
+.agent-estimate-card__missing {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.agent-estimate-card__conflict,
+.agent-estimate-card__missing {
+  background: #fff6df;
+  color: #75510e;
+}
+
+.agent-estimate-card__stale {
+  background: #e9ecea;
+  color: var(--color-ink-soft);
+}
+
+.agent-estimate-card__missing p {
+  margin: 3px 0;
+}
+
+.agent-estimate-card__missing ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.agent-estimate-card > footer {
+  justify-content: flex-end;
+}
+
+.agent-estimate-card button,
+.agent-estimate-preview button,
+.agent-reference-library button,
+.agent-reference-form button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--color-ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.agent-estimate-card button.is-primary,
+.agent-estimate-preview button.is-primary,
+.agent-reference-library button.is-primary,
+.agent-reference-form button.is-primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.agent-estimate-card button:disabled,
+.agent-estimate-preview button:disabled,
+.agent-reference-library button:disabled,
+.agent-reference-form button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.agent-estimate-list__notice,
+.agent-estimate-list__error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}
+
+.agent-estimate-list__notice {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.agent-estimate-list__error,
+.agent-estimate-preview [role="alert"],
+.agent-reference-library__error,
+.agent-reference-form [role="alert"] {
+  color: var(--color-danger);
+}
+
+.agent-context-error {
+  margin: 0;
+  padding: 8px var(--space-4);
+  border-bottom: 1px solid #f0c7c2;
+  background: #fff1f0;
+  color: var(--color-danger);
+  font-size: 10px;
+}
+
+.agent-estimate-preview,
+.agent-reference-library {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: rgb(12 25 19 / 44%);
+}
+
+.agent-estimate-preview > section {
+  display: grid;
+  width: min(560px, 100%);
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+}
+
+.agent-estimate-preview section > header button,
+.agent-reference-library > section > header button {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+}
+
+.agent-estimate-preview section > p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 11px;
+}
+
+.agent-estimate-preview textarea,
+.agent-reference-library input,
+.agent-reference-library textarea,
+.agent-reference-library select {
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.agent-estimate-preview textarea {
+  min-height: 220px;
+  padding: var(--space-3);
+  resize: vertical;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.agent-estimate-preview section > footer,
+.agent-reference-form > footer {
+  justify-content: flex-end;
+}
+
+.agent-reference-library {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.agent-reference-library > section {
+  display: grid;
+  width: min(760px, 94vw);
+  min-height: 0;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-5);
+  overflow: hidden;
+  background: #f6f8f7;
+  box-shadow: var(--shadow-lg);
+}
+
+.agent-reference-library > section > header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.agent-reference-library > section > header small,
+.agent-reference-form > header small,
+.agent-reference-library__list article small {
+  color: var(--color-ink-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.agent-reference-library__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agent-reference-library__toolbar input[type="search"],
+.agent-reference-form input,
+.agent-reference-form select {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.agent-reference-library__toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.agent-reference-library__toolbar input[type="checkbox"] {
+  width: auto;
+}
+
+.agent-reference-library__loading,
+.agent-reference-library__error {
+  margin: 0;
+  font-size: 11px;
+}
+
+.agent-reference-library__list {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.agent-reference-library__list article {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.agent-reference-library__list article.is-focused {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
+}
+
+.agent-reference-library__list article.is-archived {
+  opacity: 0.65;
+}
+
+.agent-reference-library__list article > header strong {
+  font-size: 13px;
+}
+
+.agent-reference-library__list article > header b {
+  color: var(--color-accent);
+  font-size: 18px;
+}
+
+.agent-reference-library__range {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-reference-library__list dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.agent-reference-library__list dl div {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.agent-reference-library__list dt,
+.agent-reference-library__list dd {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.agent-reference-library__list dt {
+  color: var(--color-ink-muted);
+}
+
+.agent-reference-library__list dd small {
+  display: block;
+}
+
+.agent-reference-library__list article > footer {
+  justify-content: flex-end;
+}
+
+.agent-reference-form {
+  display: grid;
+  gap: var(--space-3);
+  max-height: 58vh;
+  padding: var(--space-4);
+  overflow-y: auto;
+  border: 1px solid #bdd6c6;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.agent-reference-form > header {
+  display: grid;
+  justify-content: stretch;
+  gap: 2px;
+}
+
+.agent-reference-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.agent-reference-form__grid label {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.agent-reference-form__grid label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.agent-reference-form__grid label span {
+  color: var(--color-ink-muted);
+  font-size: 10px;
+}
+
+.agent-reference-form textarea {
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+@media (max-width: 620px) {
+  .agent-estimate-card__value,
+  .agent-reference-library__list dl,
+  .agent-reference-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-reference-form__grid label.is-wide {
+    grid-column: auto;
+  }
+
+  .agent-reference-library__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-reference-library > section {
+    width: 100vw;
+    padding: var(--space-3);
+  }
+}
+
 /* Research report preview */
 
 .research-report-workspace {
@@ -7425,24 +7931,59 @@ tbody tr:hover {
   text-align: center;
 }
 
-.recipe-identity-cell strong,
-.recipe-identity-cell span {
+.recipe-identity-cell {
+  vertical-align: middle;
+}
+
+.recipe-identity-name,
+.recipe-identity-detail {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.recipe-identity-cell strong {
+.recipe-identity-name {
   color: var(--color-ink);
   font-size: 14px;
   font-weight: 620;
+  line-height: 1.35;
 }
 
-.recipe-identity-cell span {
-  margin-top: 2px;
+.recipe-identity-detail {
+  margin-top: 3px;
   color: var(--color-ink-muted);
   font-size: 12px;
+  line-height: 1.35;
+}
+
+.recipe-identity-cell .recipe-nutrition-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--color-ink);
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.recipe-nutrition-link .recipe-identity-name {
+  min-width: 0;
+}
+
+.recipe-nutrition-link__icon {
+  flex: 0 0 auto;
+  color: var(--color-ink-muted);
+  transition:
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.recipe-nutrition-link:hover .recipe-nutrition-link__icon,
+.recipe-nutrition-link:focus-visible .recipe-nutrition-link__icon {
+  color: var(--color-accent);
+  transform: translateY(-1px);
 }
 
 .recipe-amount-cell {

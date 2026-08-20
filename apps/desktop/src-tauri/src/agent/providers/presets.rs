@@ -172,6 +172,7 @@ fn preset(
             tools: true,
             structured_output: true,
             streaming: true,
+            native_web_search: false,
         },
     }
 }

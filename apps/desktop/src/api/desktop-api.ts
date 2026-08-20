@@ -22,6 +22,12 @@ import type {
   MaterialNeedStatus,
 } from "./agent-recipe-types";
 import type {
+  AgentRecipeEstimateCard,
+  AppendRecipeDraftNotesInput,
+  PersonalReferenceCardDraft,
+  RndReferenceCard,
+} from "./rnd-reference-types";
+import type {
   BackupManifest,
   BackupPreflight,
   BackupRestoreResult,
@@ -131,6 +137,9 @@ export interface DesktopApi extends LegacyIngredientApi {
   deleteRecipeVersion(id: string): Promise<void>;
   getRecipeDraft(recipeId: string): Promise<RecipeDraft | null>;
   saveRecipeDraft(input: RecipeDraftSaveInput): Promise<RecipeDraft>;
+  appendRecipeDraftNotes(
+    input: AppendRecipeDraftNotesInput,
+  ): Promise<RecipeDraft>;
   listRecipeVersions(recipeId: string): Promise<RecipeVersion[]>;
   getRecipeVersion(id: string): Promise<RecipeVersion>;
   createRecipeVersion(input: RecipeVersionCreateInput): Promise<RecipeVersion>;
@@ -165,6 +174,21 @@ export interface DesktopApi extends LegacyIngredientApi {
   getAgentRun(id: string): Promise<AgentRun>;
   listAgentImportDrafts(runId: string): Promise<IngredientImportDraft[]>;
   listAgentRecipeProposals(conversationId: string): Promise<AgentRecipeProposal[]>;
+  listAgentRecipeEstimateCards(
+    conversationId: string,
+  ): Promise<AgentRecipeEstimateCard[]>;
+  listRndReferenceCards(
+    query?: string,
+    includeArchived?: boolean,
+  ): Promise<RndReferenceCard[]>;
+  createPersonalRndReferenceCard(
+    input: PersonalReferenceCardDraft,
+  ): Promise<RndReferenceCard>;
+  updatePersonalRndReferenceCard(
+    id: string,
+    input: PersonalReferenceCardDraft,
+  ): Promise<RndReferenceCard>;
+  archivePersonalRndReferenceCard(id: string): Promise<RndReferenceCard>;
   getAgentRecipeProposal(id: string): Promise<AgentRecipeProposal>;
   evaluateAgentRecipeProposal(
     input: AgentRecipeProposalPayload,

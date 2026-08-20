@@ -148,7 +148,11 @@ function GapReportView({
       nutrientDefinitionId === undefined
         ? report.entries
         : report.entries.filter(
-            (entry) => entry.fieldId === nutrientDefinitionId,
+            (entry) =>
+              entry.fieldId === nutrientDefinitionId ||
+              entry.category === "material" ||
+              entry.category === "version" ||
+              entry.category === "density",
           ),
     [nutrientDefinitionId, report.entries],
   );

@@ -181,7 +181,7 @@ fn migration_seven_creates_report_table_indexes_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 16);
     for object in [
         "research_reports",
         "research_reports_recipe_version_idx",

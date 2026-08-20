@@ -382,6 +382,68 @@ impl RecipeRepository {
             .ok_or_else(|| domain("not_found", "找不到配方草稿"))
     }
 
+    pub fn append_draft_notes(
+        &mut self,
+        recipe_id: &str,
+        expected_updated_at: &str,
+        append_text: &str,
+    ) -> Result<RecipeDraft, RepositoryError> {
+        let append_text = append_text.trim();
+        if append_text.is_empty() {
+            return Err(domain("invalid_input", "追加的研发备注不能为空"));
+        }
+        if append_text.chars().count() > 10_000 {
+            return Err(domain(
+                "invalid_input",
+                "单次追加的研发备注不能超过 10000 个字符",
+            ));
+        }
+        let draft = self
+            .get_draft(recipe_id)?
+            .ok_or_else(|| domain("not_found", "找不到配方草稿"))?;
+        if draft.updated_at != expected_updated_at {
+            return Err(domain(
+                "stale_reference",
+                "配方草稿已发生变化，请重新估算后再追加备注",
+            ));
+        }
+        let mut payload = draft.payload;
+        let payload_object = payload
+            .as_object_mut()
+            .ok_or_else(|| domain("storage_failure", "配方草稿内容无法读取"))?;
+        let current = payload_object
+            .get("markdownNotes")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .trim();
+        let next = if current.is_empty() {
+            append_text.to_string()
+        } else {
+            format!("{current}\n\n{append_text}")
+        };
+        payload_object.insert("markdownNotes".into(), serde_json::Value::String(next));
+        let timestamp = (self.clock)();
+        let changed = self.connection.execute(
+            "UPDATE recipe_drafts
+             SET payload_json = ?1, updated_at = ?2
+             WHERE recipe_id = ?3 AND updated_at = ?4",
+            params![
+                serde_json::to_string(&payload)?,
+                timestamp,
+                recipe_id,
+                expected_updated_at
+            ],
+        )?;
+        if changed == 0 {
+            return Err(domain(
+                "stale_reference",
+                "配方草稿已发生变化，请重新估算后再追加备注",
+            ));
+        }
+        self.get_draft(recipe_id)?
+            .ok_or_else(|| domain("not_found", "找不到配方草稿"))
+    }
+
     pub fn create_version(
         &mut self,
         input: RecipeVersionInput,

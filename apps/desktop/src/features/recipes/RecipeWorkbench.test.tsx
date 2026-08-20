@@ -551,6 +551,17 @@ describe("RecipeWorkbench", () => {
     expect(
       await screen.findByRole("row", { name: /糖浆.*V1/ }),
     ).toBeTruthy();
+    await user.click(
+      screen.getByRole("button", { name: "查看糖浆的营养信息" }),
+    );
+    const nutritionDialog = await screen.findByRole("dialog", {
+      name: "糖浆",
+    });
+    expect(within(nutritionDialog).getByText("半成品正式版本 V1")).toBeTruthy();
+    expect(within(nutritionDialog).queryByRole("textbox")).toBeNull();
+    await user.click(
+      within(nutritionDialog).getByRole("button", { name: "关闭营养信息" }),
+    );
     await waitFor(
       async () => {
         expect(await api.getRecipeDraft(formula.id)).toMatchObject({

@@ -18,6 +18,9 @@ import { IngredientImportDraftList } from "./IngredientImportDraftList";
 import { useAgentConversation } from "./useAgentConversation";
 import type { RecipeAgentWorkbenchContext } from "../recipes/recipe-agent-analysis";
 import { RecipeAgentWorkspace } from "./RecipeAgentWorkspace";
+import { AgentRecipeEstimateCardList } from "./AgentRecipeEstimateCardList";
+import { RndReferenceLibrary } from "./RndReferenceLibrary";
+import type { RndReferenceCard } from "../../api/rnd-reference-types";
 
 interface AgentPanelProps {
   api: DesktopApi;
@@ -67,6 +70,10 @@ export function AgentPanel({
   );
   const [reviewProposal, setReviewProposal] =
     useState<AgentRecipeProposal | null>(null);
+  const [referenceLibraryOpen, setReferenceLibraryOpen] = useState(false);
+  const [referenceFocusIds, setReferenceFocusIds] = useState<string[]>([]);
+  const [references, setReferences] = useState<RndReferenceCard[]>([]);
+  const [contextError, setContextError] = useState("");
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -78,15 +85,59 @@ export function AgentPanel({
   }, [draftRefreshToken, workflow.refreshDrafts]);
 
   useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void api
+      .listRndReferenceCards()
+      .then((next) => {
+        if (active) setReferences(next);
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        setContextError(
+          cause instanceof Error ? cause.message : "研发参考资料库读取失败",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, open]);
+
+  useEffect(() => {
     if (
       open &&
-      (workflow.proposals.length > 0 || workflow.drafts.length > 0)
+      (workflow.proposals.length > 0 ||
+        workflow.drafts.length > 0 ||
+        workflow.estimates.length > 0)
     ) {
       timelineEndRef.current?.scrollIntoView?.({ block: "end" });
     }
-  }, [open, workflow.drafts.length, workflow.proposals.length]);
+  }, [
+    open,
+    workflow.drafts.length,
+    workflow.estimates.length,
+    workflow.proposals.length,
+  ]);
+
+  function openReferenceLibrary(ids: string[] = []) {
+    setReferenceFocusIds([...new Set(ids)]);
+    setReferenceLibraryOpen(true);
+  }
 
   async function sendNow(nextText: string, nextFiles: ImportFileReference[]) {
+    if (recipeContext) {
+      setContextError("");
+      try {
+        await recipeContext.saveDraftNow();
+      } catch (cause) {
+        setContextError(
+          cause instanceof Error
+            ? cause.message
+            : "当前配方草稿保存失败，暂未启动 Agent",
+        );
+        return;
+      }
+    }
     const run = await workflow.send(nextText, nextFiles, {
       ...(recipeContext
         ? {
@@ -225,6 +276,13 @@ export function AgentPanel({
             workflow.preferences?.enabled && workflow.activeProvider,
           )}
           context={recipeContext}
+          onOpenReferenceLibrary={() => openReferenceLibrary()}
+          onRequestEstimate={() =>
+            void sendNow(
+              "请估算当前配方的甜度参考值。先读取当前实际投料、供应商规格、出成重量和草稿版本，再检索已审批参考卡；只估算当前值，不建议目标甜度。缺少浓度、纯度、活性物含量或适用参考卡时，最多追问两个关键条件，仍不足就生成“需要补充信息”卡且不要给中心值。",
+              [],
+            )
+          }
           onRequestRetrospective={() =>
             void sendNow(
               "请复盘当前配方的研发记录：读取当前草稿、研发备注和确定性试算结果，按“已记录事实 / 需要确认 / 下一轮打样建议”整理。没有记录的工艺、感官或调整原因请明确写“未记录”，不要猜测，也不要修改配方或保存正式版本。",
@@ -232,6 +290,9 @@ export function AgentPanel({
             )
           }
         />
+      ) : null}
+      {contextError ? (
+        <p className="agent-context-error" role="alert">{contextError}</p>
       ) : null}
 
       {needsConfiguration ? (
@@ -299,6 +360,12 @@ export function AgentPanel({
               onOpenAccepted={(recipeId) => onOpenRecipeDraft?.(recipeId)}
               proposals={workflow.proposals}
             />
+            <AgentRecipeEstimateCardList
+              cards={workflow.estimates}
+              context={recipeContext}
+              onOpenReferences={openReferenceLibrary}
+              references={references}
+            />
             <div aria-hidden="true" ref={timelineEndRef} />
           </div>
           {!busy ? (
@@ -364,6 +431,13 @@ export function AgentPanel({
           proposal={reviewProposal}
         />
       ) : null}
+      <RndReferenceLibrary
+        api={api}
+        focusCardIds={referenceFocusIds}
+        onCardsChanged={setReferences}
+        onClose={() => setReferenceLibraryOpen(false)}
+        open={referenceLibraryOpen}
+      />
     </aside>
   );
 }

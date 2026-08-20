@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { BrowserAgentEventSource } from "./agent-event-source";
 import { BrowserDemoApi } from "./browser-demo-api";
+import { calculateRecipeDraft } from "../features/recipes/recipe-calculation";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -223,5 +224,184 @@ describe("BrowserDemoApi Agent", () => {
     expect((await api.getRecipeDraft(recipe.id))?.markdownNotes).toBe(
       "甜度降低后口感偏硬。",
     );
+  });
+
+  it("creates an auditable sweetness estimate and appends notes only with the matching draft version", async () => {
+    const storage = new MemoryStorage();
+    const events = new BrowserAgentEventSource();
+    const listener = vi.fn();
+    await events.subscribe(listener);
+    let sequence = 0;
+    let tick = 0;
+    const api = new BrowserDemoApi({
+      storage,
+      agentEvents: events,
+      createId: () => `estimate-${++sequence}`,
+      now: () => `2026-08-20T08:00:${String(tick++).padStart(2, "0")}.000Z`,
+    });
+    const sugar = (await api.listMaterialGroups("白砂糖"))[0];
+    const milkPowder = (await api.listMaterialGroups("脱脂乳粉"))[0];
+    expect(sugar).toBeDefined();
+    expect(milkPowder).toBeDefined();
+    const variant = sugar!.variants[0]!;
+    const milkVariant = milkPowder!.variants[0]!;
+    const recipe = await api.createRecipe({
+      name: "甜度估算测试饮料",
+      code: null,
+      tags: [],
+      kind: "formula",
+    });
+    const baseDraft = await api.saveRecipeDraft({
+      recipeId: recipe.id,
+      basedOnVersionId: null,
+      source: "manual",
+      targetBatchGrams: "1000",
+      finishedMassGrams: null,
+      servingMassGrams: null,
+      packageCount: null,
+      items: [
+        {
+          id: "sugar-line",
+          kind: "ingredient",
+          position: 0,
+          amount: "100",
+          unit: "g",
+          locked: false,
+          autoFill: false,
+          ingredientVariantId: variant.id,
+        },
+        {
+          id: "milk-line",
+          kind: "ingredient",
+          position: 1,
+          amount: "900",
+          unit: "g",
+          locked: false,
+          autoFill: false,
+          ingredientVariantId: milkVariant.id,
+        },
+      ],
+      packagingCosts: [],
+      additionalCosts: [],
+      targets: [],
+      markdownNotes: "原备注",
+      calculation: null,
+      calculationIssues: [],
+    });
+    const calculated = calculateRecipeDraft({
+      draft: baseDraft,
+      referencedVersions: [],
+      nutrientDefinitions: await api.listNutrientDefinitions(),
+      calculatedAt: "2026-08-20T08:30:00.000Z",
+    });
+    expect(calculated.ok).toBe(true);
+    if (!calculated.ok) throw new Error("test recipe calculation failed");
+    const draft = await api.saveRecipeDraft({
+      recipeId: recipe.id,
+      basedOnVersionId: null,
+      source: "manual",
+      targetBatchGrams: "1000",
+      finishedMassGrams: "1000",
+      servingMassGrams: null,
+      packageCount: null,
+      items: baseDraft.items,
+      packagingCosts: [],
+      additionalCosts: [],
+      targets: [],
+      markdownNotes: "原备注",
+      calculation: calculated.value.calculation,
+      calculationIssues: calculated.warnings,
+    });
+    const conversation = await api.createAgentConversation("甜度估算");
+    const run = await api.startAgentRun({
+      conversationId: conversation.id,
+      content: "请估算当前配方甜度",
+      files: [],
+      recipeContext: {
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        draftFingerprint: draft.updatedAt,
+      },
+    });
+
+    const cards = await api.listAgentRecipeEstimateCards(conversation.id);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      status: "ready",
+      estimatedValue: "10",
+      minimumValue: "10",
+      maximumValue: "10",
+      citedReferenceCardIds: ["sweetness-sucrose"],
+    });
+    expect(cards[0]!.calculationSummary).toContain("实际");
+    expect(listener).toHaveBeenCalledWith({
+      type: "recipe_estimate_cards_changed",
+      runId: run.id,
+    });
+    expect(await api.listAgentRecipeProposals(conversation.id)).toHaveLength(0);
+
+    const appended = await api.appendRecipeDraftNotes({
+      recipeId: recipe.id,
+      expectedDraftUpdatedAt: cards[0]!.sourceDraftUpdatedAt,
+      appendText: cards[0]!.notePreview,
+    });
+    expect(appended.markdownNotes).toContain("原备注");
+    expect(appended.markdownNotes).toContain("当前估计：10");
+    await expect(
+      api.appendRecipeDraftNotes({
+        recipeId: recipe.id,
+        expectedDraftUpdatedAt: cards[0]!.sourceDraftUpdatedAt,
+        appendText: "不应写入",
+      }),
+    ).rejects.toMatchObject({ code: "stale_reference" });
+    expect((await api.listAgentRecipeEstimateCards(conversation.id))[0]?.status).toBe(
+      "stale",
+    );
+  });
+
+  it("confirms, searches, edits and archives personal reference cards", async () => {
+    const api = new BrowserDemoApi({
+      storage: new MemoryStorage(),
+      now: () => "2026-08-20T09:00:00.000Z",
+    });
+    const source = {
+      title: "供应商规格书",
+      publisher: "测试供应商",
+      url: null,
+      publishedAt: null,
+      locator: "第 2 页",
+      evidenceType: "supplier_document" as const,
+    };
+    const created = await api.createPersonalRndReferenceCard({
+      title: "测试糖参考卡",
+      parameterKey: "relative_sweetness",
+      ingredientNames: ["测试糖"],
+      specification: "纯度 99%",
+      applicability: "测试配方",
+      unit: "x_sucrose",
+      basis: "sucrose_1",
+      typicalValue: "1.2",
+      minimumValue: "1.1",
+      maximumValue: "1.3",
+      source,
+    });
+    expect((await api.listRndReferenceCards("测试糖"))[0]?.id).toBe(created.id);
+    const updated = await api.updatePersonalRndReferenceCard(created.id, {
+      title: "测试糖参考卡 V2",
+      parameterKey: "relative_sweetness",
+      ingredientNames: ["测试糖"],
+      specification: "纯度 99%",
+      applicability: "测试配方",
+      unit: "x_sucrose",
+      basis: "sucrose_1",
+      typicalValue: "1.25",
+      minimumValue: "1.1",
+      maximumValue: "1.3",
+      source,
+    });
+    expect(updated.reviewVersion).toBe(2);
+    await api.archivePersonalRndReferenceCard(created.id);
+    expect(await api.listRndReferenceCards("测试糖")).toHaveLength(0);
+    expect(await api.listRndReferenceCards("测试糖", true)).toHaveLength(1);
   });
 });

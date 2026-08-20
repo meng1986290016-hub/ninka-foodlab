@@ -84,7 +84,7 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 91);
+    assert_eq!(REGISTERED_COMMANDS.len(), 97);
     for command in [
         "list_categories",
         "create_supplier",
@@ -101,6 +101,12 @@ fn every_grouped_desktop_api_method_is_registered() {
         "delete_draft_recipe",
         "permanently_delete_recipe",
         "delete_recipe_version",
+        "append_recipe_draft_notes",
+        "list_rnd_reference_cards",
+        "create_personal_rnd_reference_card",
+        "update_personal_rnd_reference_card",
+        "archive_personal_rnd_reference_card",
+        "list_agent_recipe_estimate_cards",
         "export_sample_sheet",
         "database_status",
     ] {

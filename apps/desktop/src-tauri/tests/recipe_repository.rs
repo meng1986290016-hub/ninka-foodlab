@@ -113,7 +113,7 @@ fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 16);
     for object in [
         "recipes",
         "recipe_drafts",
@@ -596,4 +596,31 @@ fn direct_and_indirect_recipe_cycles_are_rejected() {
         .unwrap_err();
     assert_eq!(indirect.code(), "recipe_cycle");
     assert_eq!(repository.list_versions(&base_recipe.id).unwrap().len(), 1);
+}
+
+#[test]
+fn draft_notes_append_requires_the_exact_expected_draft_version() {
+    let mut repository = controlled_repository();
+    let recipe = repository
+        .create_recipe(recipe_input("备注并发测试", RecipeKind::Formula))
+        .unwrap();
+    let draft = repository.save_draft(draft_input(&recipe.id)).unwrap();
+
+    let updated = repository
+        .append_draft_notes(&recipe.id, &draft.updated_at, "Agent 参考估算")
+        .unwrap();
+    assert_eq!(
+        updated.payload["markdownNotes"].as_str(),
+        Some("Agent 参考估算")
+    );
+
+    let stale = repository
+        .append_draft_notes(&recipe.id, &draft.updated_at, "不应写入")
+        .unwrap_err();
+    assert_eq!(stale.code(), "stale_reference");
+    let current = repository.get_draft(&recipe.id).unwrap().unwrap();
+    assert_eq!(
+        current.payload["markdownNotes"].as_str(),
+        Some("Agent 参考估算")
+    );
 }

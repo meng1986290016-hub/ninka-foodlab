@@ -40,8 +40,9 @@ describe("TauriDesktopApi", () => {
         text: true,
         images: true,
         tools: true,
-        structuredOutput: true,
-        streaming: true,
+      structuredOutput: true,
+      streaming: true,
+      nativeWebSearch: false,
       },
     };
 

@@ -170,6 +170,27 @@ pub fn save_recipe_draft(input: Value, state: State<'_, AppState>) -> Result<Val
     save_recipe_draft_at_path(&state.database_path, input)
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppendRecipeDraftNotesInput {
+    recipe_id: String,
+    expected_draft_updated_at: String,
+    append_text: String,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn append_recipe_draft_notes(
+    input: AppendRecipeDraftNotesInput,
+    state: State<'_, AppState>,
+) -> Result<Value, CommandError> {
+    let draft = recipe_repository(&state)?.append_draft_notes(
+        &input.recipe_id,
+        &input.expected_draft_updated_at,
+        &input.append_text,
+    )?;
+    materialize_draft(&state.database_path, draft)
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn list_recipe_versions(
     recipe_id: String,

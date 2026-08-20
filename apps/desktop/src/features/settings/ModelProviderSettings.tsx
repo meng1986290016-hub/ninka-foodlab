@@ -268,6 +268,9 @@ function ProviderEditor({
         {provider.capabilities.images ? <span>图片</span> : null}
         <span>工具</span>
         <span>结构化输出</span>
+        {provider.capabilities.nativeWebSearch ? (
+          <span>原生联网检索</span>
+        ) : null}
       </div>
 
       {!provider.capabilities.images ? (

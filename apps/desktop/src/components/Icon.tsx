@@ -26,6 +26,7 @@ import {
   IconFolderOpen,
   IconGripVertical,
   IconHelpHexagon,
+  IconInfoCircle,
   IconLock,
   IconLockOpen,
   IconMessageCircle,
@@ -98,6 +99,7 @@ export type IconName =
   | "ingredient-library"
   | "ingredient-version"
   | "ingredients"
+  | "info"
   | "lock"
   | "message"
   | "more"
@@ -153,6 +155,7 @@ const icons: Record<IconName, TablerIcon> = {
   "ingredient-library": IconFolder,
   "ingredient-version": IconVersions,
   ingredients: IconTags,
+  info: IconInfoCircle,
   lock: IconLock,
   message: IconMessageCircle,
   more: IconDots,

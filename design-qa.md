@@ -46,6 +46,46 @@ final result: passed
 
 ---
 
+# Ninka FoodLab 配方原料名称与营养入口 QA
+
+- source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-8c4f502a-daa5-4413-82e1-5d2b08d6e4bd.png`
+- implementation screenshot path: `/private/tmp/recipe-identity-after-same-size.png`
+- paired comparison input: 上述两张图片在同一次原始尺寸视觉检查中并列输入
+- browser viewport: `1342 × 584` CSS px；桌面表格布局
+- source dimensions: `1678 × 730` px
+- implementation dimensions: `1678 × 729` px
+- state: 配方工作台、直接原料名称可查看营养、供应商／规格副信息可见
+
+## Visible issue and fix
+
+- [P2] 原料单元格的旧选择器把所有后代 `span` 强制设为块级元素，导致名称后的营养图标独占下一行。
+  - impact: 名称、图标和供应商／版本信息混成三层，行内视觉重心偏左且相邻列难以垂直对齐。
+  - fix: 名称、详情和营养入口改用独立类名；入口使用 `inline-flex`，名称与 15 px 信息图标保持同一行，副信息继续单独一行。
+
+## Measured evidence
+
+- “白砂糖”入口实测为 `inline-flex`、`align-items: center`，名称与图标共用 `18.9 px` 高的同一行。
+- 名称边界为 `x = 323.8`、`y = 362.5`；图标边界为 `x = 371.8`、`y = 364.5`，不存在上下换行或覆盖。
+- 信息图标由 Tabler `IconInfoCircle` 提供，继承现有颜色 token；悬停和键盘聚焦时只改变强调色并上移 1 px。
+- 供应商／规格保持 12 px 次级文字和省略规则，长内容不会挤压用量、单位、占比和数据列。
+
+## Interaction and accessibility
+
+- 名称与信息图标仍属于同一个 `role="button"`，可访问名称保持“查看某原料的营养信息”。
+- 浏览器实测点击后打开“营养信息”只读抽屉；关闭后焦点回到原触发器，页面中无残留 dialog。
+- 待补充原料仍不显示营养详情入口，编辑、删除和排序行为未改变。
+
+## Verification
+
+- Vitest：56 个测试文件、242 项测试全部通过。
+- TypeScript 类型检查通过。
+- Vite 生产构建和 `git diff --check` 通过；仅保留项目既有的大分块提示。
+- 原始截图与实现截图完成同一次视觉对照；无剩余 P0/P1/P2 问题。
+
+final result: passed
+
+---
+
 # Ninka FoodLab Agent 思考状态 QA
 
 - source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-2ac347eb-7a1e-4e39-bd69-51c20c20ef5d.png`

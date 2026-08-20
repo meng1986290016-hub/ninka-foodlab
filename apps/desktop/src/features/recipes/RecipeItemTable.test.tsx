@@ -131,9 +131,12 @@ describe("RecipeItemTable issue placement", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "查看脱脂乳粉的营养信息" }),
-    );
+    const nutritionTrigger = screen.getByRole("button", {
+      name: "查看脱脂乳粉的营养信息",
+    });
+    expect(nutritionTrigger.querySelector('[data-icon="info"]')).not.toBeNull();
+
+    await user.click(nutritionTrigger);
     expect(onViewNutrition).toHaveBeenCalledWith(ingredientItem);
 
     await user.click(screen.getByRole("button", { name: "80%" }));

@@ -118,7 +118,7 @@ export function RecipeItemTable({
                     </td>
                     <td className="recipe-identity-cell">
                       {item.kind === "material_need" || !onViewNutrition ? (
-                        <strong>{label}</strong>
+                        <strong className="recipe-identity-name">{label}</strong>
                       ) : (
                         <span
                           aria-label={`查看${label}的营养信息`}
@@ -132,11 +132,15 @@ export function RecipeItemTable({
                           role="button"
                           tabIndex={0}
                         >
-                          <strong>{label}</strong>
-                          <Icon name="nutrition" size={15} />
+                          <strong className="recipe-identity-name">{label}</strong>
+                          <Icon
+                            className="recipe-nutrition-link__icon"
+                            name="info"
+                            size={15}
+                          />
                         </span>
                       )}
-                      <span>
+                      <span className="recipe-identity-detail">
                         {itemDetail(item)}
                         {item.kind === "material_need" &&
                         item.materialNeed.status === "resolved" &&

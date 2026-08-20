@@ -24,6 +24,7 @@ describe("editableProvider", () => {
         tools: true,
         structuredOutput: true,
         streaming: true,
+        nativeWebSearch: false,
       },
       updatedAt: "2026-08-09T00:00:00Z",
     } satisfies AgentProviderConfig;
@@ -51,6 +52,7 @@ describe("editableProvider", () => {
         tools: true,
         structuredOutput: true,
         streaming: true,
+        nativeWebSearch: false,
       },
       updatedAt: "2026-08-09T00:00:00Z",
     } satisfies AgentProviderConfig;

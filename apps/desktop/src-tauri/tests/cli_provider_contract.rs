@@ -389,6 +389,7 @@ async fn both_cli_adapters_receive_the_same_task_scoped_mcp_context() {
             model: "test-model".into(),
             active_recipe_id: None,
             active_recipe_name: None,
+            active_draft_fingerprint: None,
         },
         Duration::from_secs(60),
     );

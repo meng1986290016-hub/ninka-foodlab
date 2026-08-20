@@ -274,12 +274,19 @@ pub async fn start_agent_run(
     let repository = AgentRepository::open_for_runtime(&state.database_path)?;
     let audit = AgentRepository::open_for_runtime(&state.database_path)?;
     let recipe_proposals = AgentRecipeRepository::open(&state.database_path)?;
+    let references =
+        crate::rnd_reference::repository::RndReferenceRepository::open(&state.database_path)?;
     let event_sink = Arc::new(move |event: AgentRuntimeEvent| {
         let _ = app.emit(AGENT_EVENT_NAME, event);
     });
     let mut runtime = AgentRuntime::new_with_factory(
         repository,
-        AgentToolRegistry::with_audit_and_recipes(coordinator, audit, recipe_proposals),
+        AgentToolRegistry::with_audit_recipes_and_references(
+            coordinator,
+            audit,
+            recipe_proposals,
+            references,
+        ),
         factory,
         config,
         event_sink,

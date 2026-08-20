@@ -79,6 +79,7 @@ fn run_provider(provider_kind: AgentProviderKind) -> (Vec<String>, Value, usize)
         model: "acceptance-model".into(),
         active_recipe_id: None,
         active_recipe_name: None,
+        active_draft_fingerprint: None,
     };
     let mut registry = AgentToolRegistry::new(coordinator);
     let tool_names = registry

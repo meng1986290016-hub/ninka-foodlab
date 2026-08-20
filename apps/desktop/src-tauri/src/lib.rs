@@ -8,6 +8,7 @@ pub mod ingredients;
 pub mod labels;
 pub mod recipes;
 pub mod reports;
+pub mod rnd_reference;
 
 use commands::agent::{
     cancel_agent_run, clear_agent_provider_secret, create_agent_conversation,
@@ -45,15 +46,19 @@ use commands::labels::{
     list_nutrition_labels, publish_nutrition_label, save_nutrition_label_draft,
 };
 use commands::recipes::{
-    archive_recipe, compare_recipe_versions, copy_recipe_version_to_draft, create_recipe,
-    create_recipe_alternative, create_recipe_version, delete_draft_recipe, delete_recipe_version,
-    get_recipe, get_recipe_draft, get_recipe_version, list_recipe_versions, list_recipes,
-    permanently_delete_recipe, restore_recipe, save_recipe_draft, update_recipe,
-    update_recipe_scheme,
+    append_recipe_draft_notes, archive_recipe, compare_recipe_versions,
+    copy_recipe_version_to_draft, create_recipe, create_recipe_alternative, create_recipe_version,
+    delete_draft_recipe, delete_recipe_version, get_recipe, get_recipe_draft, get_recipe_version,
+    list_recipe_versions, list_recipes, permanently_delete_recipe, restore_recipe,
+    save_recipe_draft, update_recipe, update_recipe_scheme,
 };
 use commands::reports::{
     create_research_report, export_research_report, export_sample_sheet, get_research_report,
     list_research_reports,
+};
+use commands::rnd_reference::{
+    archive_personal_rnd_reference_card, create_personal_rnd_reference_card,
+    list_agent_recipe_estimate_cards, list_rnd_reference_cards, update_personal_rnd_reference_card,
 };
 use tauri::Manager;
 
@@ -133,6 +138,11 @@ pub fn run() {
             cancel_agent_run,
             get_agent_run,
             list_agent_import_drafts,
+            list_rnd_reference_cards,
+            create_personal_rnd_reference_card,
+            update_personal_rnd_reference_card,
+            archive_personal_rnd_reference_card,
+            list_agent_recipe_estimate_cards,
             list_agent_recipe_proposals,
             get_agent_recipe_proposal,
             evaluate_agent_recipe_proposal,
@@ -155,6 +165,7 @@ pub fn run() {
             delete_recipe_version,
             get_recipe_draft,
             save_recipe_draft,
+            append_recipe_draft_notes,
             list_recipe_versions,
             get_recipe_version,
             create_recipe_version,

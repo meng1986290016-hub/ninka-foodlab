@@ -180,6 +180,7 @@ export type DesktopErrorCode =
   | "duplicate_variant"
   | "reference_conflict"
   | "missing_reference"
+  | "stale_reference"
   | "recipe_cycle"
   | "archived"
   | "conversion_unavailable"

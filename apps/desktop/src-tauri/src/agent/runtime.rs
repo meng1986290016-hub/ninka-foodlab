@@ -108,6 +108,8 @@ pub enum AgentRuntimeEvent {
     #[serde(rename_all = "camelCase")]
     RecipeProposalsChanged { run_id: String },
     #[serde(rename_all = "camelCase")]
+    RecipeEstimateCardsChanged { run_id: String },
+    #[serde(rename_all = "camelCase")]
     RunCompleted { run_id: String },
     #[serde(rename_all = "camelCase")]
     RunFailed {
@@ -313,6 +315,9 @@ impl AgentRuntime {
             active_recipe_name: recipe_context
                 .as_ref()
                 .map(|context| context.recipe_name.clone()),
+            active_draft_fingerprint: recipe_context
+                .as_ref()
+                .map(|context| context.draft_fingerprint.clone()),
         };
         let task_kind = classify_task(
             &content,
@@ -549,7 +554,7 @@ impl AgentRuntime {
                 .find(|message| message.role == AgentMessageRole::User)
             {
                 message.content.push_str(&format!(
-                    "\n\n[当前工作台上下文：配方“{recipe_name}”，recipeId={recipe_id}。当用户要求诊断当前配方时必须调用 diagnose_recipe；要求复盘研发记录或给出下一轮打样建议时必须调用 review_recipe_development，并严格区分已记录事实、待确认项和建议，没有记录的工艺或感官信息必须明确写未记录；比较供应商替代影响时必须调用 compare_supplier_variant。这些工具只读，不能宣称已经修改配方。]"
+                    "\n\n[当前工作台上下文：配方“{recipe_name}”，recipeId={recipe_id}。当用户要求诊断当前配方时必须调用 diagnose_recipe；要求复盘研发记录或给出下一轮打样建议时必须调用 review_recipe_development，并严格区分已记录事实、待确认项和建议，没有记录的工艺或感官信息必须明确写未记录；比较供应商替代影响时必须调用 compare_supplier_variant。用户询问当前配方的甜度参考值、蔗糖当量或当前甜度时，必须依次调用 read_recipe_reference_context、search_rnd_reference_cards 和 create_recipe_estimate_card；只估算当前值，不提供目标甜度，最多追问两个最关键条件，也不得在没有本地参考卡时用模型常识补数。缺少关键规格或依据时创建 needs_input 卡且中心值为空。黏度、货架期、杀菌充分性、实际感官甜度等不能由当前配方可靠推导的指标不得生成数值。这些工具不会直接修改配方或研发备注。]"
                 ));
             }
             let turn = self
@@ -732,6 +737,11 @@ impl AgentRuntime {
                 run_id: context.run_id.clone(),
             });
         }
+        if mutates_recipe_estimates(&call.name) {
+            (self.events)(AgentRuntimeEvent::RecipeEstimateCardsChanged {
+                run_id: context.run_id.clone(),
+            });
+        }
         Ok(ProviderToolResult {
             call_id: call.id,
             name: call.name,
@@ -765,6 +775,11 @@ impl AgentRuntime {
             }
             if mutates_recipe_proposals(&call.name) {
                 (self.events)(AgentRuntimeEvent::RecipeProposalsChanged {
+                    run_id: run_id.into(),
+                });
+            }
+            if mutates_recipe_estimates(&call.name) {
+                (self.events)(AgentRuntimeEvent::RecipeEstimateCardsChanged {
                     run_id: run_id.into(),
                 });
             }
@@ -954,6 +969,10 @@ impl AgentTaskKind {
                 "diagnose_recipe",
                 "review_recipe_development",
                 "compare_supplier_variant",
+                "read_recipe_reference_context",
+                "search_rnd_reference_cards",
+                "create_recipe_estimate_card",
+                "prepare_personal_rnd_reference_card",
             ],
         }
     }
@@ -967,7 +986,19 @@ fn classify_task(content: &str, has_attachments: bool, has_recipe_context: bool)
 
     if has_recipe_context
         && [
-            "诊断", "复盘", "比较", "对比", "替代", "建议", "优化", "调整",
+            "诊断",
+            "复盘",
+            "比较",
+            "对比",
+            "替代",
+            "建议",
+            "优化",
+            "调整",
+            "理论甜度",
+            "蔗糖当量",
+            "甜味参考",
+            "当前甜度",
+            "估算甜度",
         ]
         .iter()
         .any(|action| compact.contains(action))
@@ -1079,6 +1110,10 @@ fn mutates_drafts(name: &str) -> bool {
 
 fn mutates_recipe_proposals(name: &str) -> bool {
     matches!(name, "create_recipe_proposal" | "update_recipe_proposal")
+}
+
+fn mutates_recipe_estimates(name: &str) -> bool {
+    name == "create_recipe_estimate_card"
 }
 
 fn append_attachment_scope(

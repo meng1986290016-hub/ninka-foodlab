@@ -6,6 +6,7 @@ pub mod ingredients;
 pub mod labels;
 pub mod recipes;
 pub mod reports;
+pub mod rnd_reference;
 
 use std::{
     collections::HashMap,
@@ -25,7 +26,7 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 91] = [
+pub const REGISTERED_COMMANDS: [&str; 97] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -82,6 +83,11 @@ pub const REGISTERED_COMMANDS: [&str; 91] = [
     "cancel_agent_run",
     "get_agent_run",
     "list_agent_import_drafts",
+    "list_rnd_reference_cards",
+    "create_personal_rnd_reference_card",
+    "update_personal_rnd_reference_card",
+    "archive_personal_rnd_reference_card",
+    "list_agent_recipe_estimate_cards",
     "list_recipes",
     "get_recipe",
     "create_recipe",
@@ -95,6 +101,7 @@ pub const REGISTERED_COMMANDS: [&str; 91] = [
     "delete_recipe_version",
     "get_recipe_draft",
     "save_recipe_draft",
+    "append_recipe_draft_notes",
     "list_recipe_versions",
     "get_recipe_version",
     "create_recipe_version",

@@ -93,6 +93,7 @@ fn context(job_id: &str, attachment_ids: impl IntoIterator<Item = String>) -> Ag
         model: "test-model".into(),
         active_recipe_id: None,
         active_recipe_name: None,
+        active_draft_fingerprint: None,
     }
 }
 
@@ -154,6 +155,10 @@ fn registry_exposes_only_approved_review_scoped_tools() {
             "diagnose_recipe",
             "review_recipe_development",
             "compare_supplier_variant",
+            "read_recipe_reference_context",
+            "search_rnd_reference_cards",
+            "create_recipe_estimate_card",
+            "prepare_personal_rnd_reference_card",
         ]
     );
     assert!(!names.contains(&"save_ingredient_variant".to_string()));
@@ -319,6 +324,7 @@ fn recipe_diagnosis_and_supplier_comparison_are_deterministic_read_only_tools() 
         model: "test-model".into(),
         active_recipe_id: Some(recipe.id.clone()),
         active_recipe_name: Some(recipe.name.clone()),
+        active_draft_fingerprint: Some("draft-fingerprint-1".into()),
     };
 
     let diagnosis = registry

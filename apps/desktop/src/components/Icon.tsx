@@ -1,9 +1,12 @@
+import { useId, useMemo } from "react";
+
 import {
   IconAlertHexagon,
   IconAlertTriangle,
   IconArchive,
   IconArrowDown,
   IconArrowLeft,
+  IconArrowRight,
   IconArrowUp,
   IconArrowsDiff,
   IconBrain,
@@ -55,17 +58,17 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 
-import aiAgentIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ai-agent-r01.svg?url";
-import ingredientIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-r01.svg?url";
-import ingredientLibraryIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-library-r02.svg?url";
-import ingredientVersionIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-version-r01.svg?url";
-import nutritionLabelIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/nutrition-label-r01.svg?url";
-import recipeLibraryIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-library-r05.svg?url";
-import recipeVersionIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-version-r01.svg?url";
-import recipeWorkbenchIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/recipe-workbench-r02.svg?url";
-import researchReportIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/research-report-r01.svg?url";
-import sampleSheetIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/sample-sheet-r01.svg?url";
-import supplierIconUrl from "../../../../assets/icons/ninka-foodlab/pilot/supplier-r01.svg?url";
+import aiAgentIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/ai-agent-r01.svg?raw";
+import ingredientIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-r01.svg?raw";
+import ingredientLibraryIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-library-r02.svg?raw";
+import ingredientVersionIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/ingredient-version-r01.svg?raw";
+import nutritionLabelIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/nutrition-label-r01.svg?raw";
+import recipeLibraryIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/recipe-library-r05.svg?raw";
+import recipeVersionIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/recipe-version-r01.svg?raw";
+import recipeWorkbenchIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/recipe-workbench-r02.svg?raw";
+import researchReportIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/research-report-r01.svg?raw";
+import sampleSheetIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/sample-sheet-r01.svg?raw";
+import supplierIconSvg from "../../../../assets/icons/ninka-foodlab/pilot/supplier-r01.svg?raw";
 
 /**
  * Ninka FoodLab icon vocabulary.
@@ -81,6 +84,7 @@ export type IconName =
   | "archive"
   | "arrow-down"
   | "arrow-left"
+  | "arrow-right"
   | "arrow-up"
   | "backup"
   | "check"
@@ -137,6 +141,7 @@ const icons: Record<IconName, TablerIcon> = {
   archive: IconArchive,
   "arrow-down": IconArrowDown,
   "arrow-left": IconArrowLeft,
+  "arrow-right": IconArrowRight,
   "arrow-up": IconArrowUp,
   backup: IconDatabaseExport,
   check: IconCheck,
@@ -193,24 +198,37 @@ const icons: Record<IconName, TablerIcon> = {
  * Legacy semantic names intentionally point at the same approved master so
  * older feature surfaces cannot silently fall back to generic geometry.
  */
-const customIconUrls: Partial<Record<IconName, string>> = {
-  "ai-assistant": aiAgentIconUrl,
-  "ai-suggestion": aiAgentIconUrl,
-  flask: recipeWorkbenchIconUrl,
-  formula: recipeVersionIconUrl,
-  ingredient: ingredientIconUrl,
-  "ingredient-library": ingredientLibraryIconUrl,
-  "ingredient-version": ingredientVersionIconUrl,
-  ingredients: ingredientIconUrl,
-  nutrition: nutritionLabelIconUrl,
-  "nutrition-label": nutritionLabelIconUrl,
-  "recipe-library": recipeLibraryIconUrl,
-  "recipe-version": recipeVersionIconUrl,
-  "recipe-workbench": recipeWorkbenchIconUrl,
-  report: researchReportIconUrl,
-  "sample-sheet": sampleSheetIconUrl,
-  supplier: supplierIconUrl,
+const customIconSvgs: Partial<Record<IconName, string>> = {
+  "ai-assistant": aiAgentIconSvg,
+  "ai-suggestion": aiAgentIconSvg,
+  flask: recipeWorkbenchIconSvg,
+  formula: recipeVersionIconSvg,
+  ingredient: ingredientIconSvg,
+  "ingredient-library": ingredientLibraryIconSvg,
+  "ingredient-version": ingredientVersionIconSvg,
+  ingredients: ingredientIconSvg,
+  nutrition: nutritionLabelIconSvg,
+  "nutrition-label": nutritionLabelIconSvg,
+  "recipe-library": recipeLibraryIconSvg,
+  "recipe-version": recipeVersionIconSvg,
+  "recipe-workbench": recipeWorkbenchIconSvg,
+  report: researchReportIconSvg,
+  "sample-sheet": sampleSheetIconSvg,
+  supplier: supplierIconSvg,
 };
+
+function scopeSvgIds(svg: string, prefix: string) {
+  const ids = Array.from(svg.matchAll(/\bid="([^"]+)"/g), (match) => match[1])
+    .filter((id): id is string => Boolean(id));
+  return ids.reduce(
+    (output, id) =>
+      output
+        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
+        .replaceAll(`aria-labelledby="${id}"`, `aria-labelledby="${prefix}-${id}"`)
+        .replaceAll(`#${id}`, `#${prefix}-${id}`),
+    svg,
+  );
+}
 
 export interface IconProps {
   className?: string;
@@ -219,7 +237,12 @@ export interface IconProps {
 }
 
 export function Icon({ className, name, size = 20 }: IconProps) {
-  const customIconUrl = customIconUrls[name];
+  const customIconSvg = customIconSvgs[name];
+  const instanceId = useId().replaceAll(":", "");
+  const themedSvg = useMemo(
+    () => (customIconSvg ? scopeSvgIds(customIconSvg, `ninka-${instanceId}`) : ""),
+    [customIconSvg, instanceId],
+  );
   const Glyph = icons[name];
   const classes = ["ninka-icon", className].filter(Boolean).join(" ");
 
@@ -227,16 +250,15 @@ export function Icon({ className, name, size = 20 }: IconProps) {
     <span
       aria-hidden="true"
       className={classes}
-      data-custom-icon={customIconUrl ? "true" : undefined}
+      data-custom-icon={customIconSvg ? "true" : undefined}
       data-icon={name}
       style={{ height: size, width: size }}
     >
-      {customIconUrl ? (
-        <img
-          alt=""
+      {customIconSvg ? (
+        <span
           className="icon__custom"
-          draggable={false}
-          src={customIconUrl}
+          // The source is a compile-time local, approved SVG asset.
+          dangerouslySetInnerHTML={{ __html: themedSvg }}
         />
       ) : (
         <Glyph className="icon__glyph" size={size} stroke={1.75} />

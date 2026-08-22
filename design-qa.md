@@ -46,6 +46,65 @@ final result: passed
 
 ---
 
+# Ninka FoodLab Agent 固定覆盖层与会话改名 QA
+
+- source visual truth paths:
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-3277979d-5d30-48b9-93e5-d00318eb5f4c.png`
+  - `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-825a08e3-e86e-4e8b-978f-a0460161f4c9.png`
+- implementation screenshot path: `/private/tmp/foodlab-agent-overlay-browser.png`
+- combined comparison path: `/private/tmp/foodlab-agent-qa-comparison.png`
+- source dimensions: `2560 × 1600` px，macOS Retina 截图约对应 `1280 × 800` CSS px、density `2`
+- implementation dimensions: `1600 × 900` px，浏览器 viewport `1600 × 900` CSS px、density `1`
+- density normalization: 组合图将两张截图等比归一到 `1600 px` 宽；不以插值后的字体锐度判断缺陷，只比较主要区域比例、遮挡和会话栏可见性
+- state: 深色主题、原料库、Agent 打开；源图使用真实本地数据，实现图使用浏览器演示数据，因此内容条目不同，几何关系和交互结构可直接比较
+
+## Full-view comparison evidence
+
+- 源图中 Agent 作为 AppShell 第三列参与布局，原料库被压成狭窄列，按钮与中文文字出现逐字换行；会话栏只剩约 `58 px` 的无文字窄条。
+- 实现图中 AppShell class 保持 `app-shell`，Agent 打开后主内容实测仍为 `1432 px`，等于 `1600 px` 窗口减去 `168 px` 主侧栏，未因 Agent 改变宽度。
+- Agent 以 `760 px` 固定覆盖在右侧；会话栏实测 `214 px`，新建和搜索入口持续可见。页面中拖拽分隔条数量为 `0`，折叠状态数量为 `0`。
+
+## Focused region comparison evidence
+
+- 本次缺陷位于两个大区之间的布局关系，完整对照已经能清楚判断主工作区是否缩窄、会话栏是否消失，因此不再从不同数据状态中裁切局部区域，避免产生错误的像素级结论。
+- 会话改名属于交互缺陷而非源截图的视觉目标；组件测试验证点击编辑后出现带原名称的行内输入框，保存调用携带正确 `taskId` 与新标题，完成后标题即时更新。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 未改变现有字体、字号或层级；固定覆盖后底层页面恢复正常横向空间，中文按钮和标题不再被面板挤成逐字竖排。
+- Spacing and layout rhythm: Agent 固定 `760 px`，会话栏固定 `214 px`；独立窗口仍占满窗口，主窗口下层页面尺寸保持不变。
+- Colors and visual tokens: 继续使用现有 Forest、Cream、Grain 和深色主题 token；本轮没有引入新颜色或硬编码浅色表面。
+- Image quality and asset fidelity: 保留现有 Ninka 品牌 SVG 和 Agent 图标资源，无重新绘制、拉伸或位图替换。
+- Copy and content: 保留“新建会话”“搜索会话”“重命名”“归档”等产品文案；移除了用户不需要的“调整面板宽度”和“收起会话栏”操作。
+
+## Findings and comparison history
+
+### Pass 1
+
+- [P1] Agent 宽度可拖至过大并进入 AppShell 网格，导致研发页面严重压缩。
+  - fix: 删除宽度状态、拖拽分隔条和本地宽度持久化；AppShell 不再写入 `is-agent-open` 布局类，Agent 改为固定右侧覆盖层。
+- [P1] 会话栏可以折叠到只剩图标窄条，并在窄窗口断点继续隐藏标题和搜索。
+  - fix: 删除折叠状态、按钮和本地存储；会话栏固定可见，并在桌面目标的窄窗口保持 `190 px` 最小宽度。
+- [P1] 重命名依赖 Tauri WebView 中不可靠的 `window.prompt()`，按钮看得到但无法完成编辑。
+  - fix: 改为会话行内输入框，提供保存、取消、Escape 和空标题错误处理。
+
+### Pass 2
+
+- post-fix visual evidence: `/private/tmp/foodlab-agent-overlay-browser.png`
+- post-fix combined evidence: `/private/tmp/foodlab-agent-qa-comparison.png`
+- 布局实测、浏览器打开交互、行内改名组件测试和生产构建均通过；无剩余 P0/P1/P2 视觉问题。
+
+## Verification
+
+- primary interactions tested: 打开/关闭 Agent、会话栏常驻、无拖拽分隔条、行内改名保存。
+- focused Vitest: `HarnessAgentPanel.test.tsx` 与 `AppShell.test.tsx` 共 `4` 项通过。
+- TypeScript 与 Vite 生产构建通过；macOS `Ninka FoodLab.app` 重新生成成功。
+- 全量前端回归共有 `53` 个测试文件、`247` 项通过；另 `9` 项既有重型用例在并行运行时达到测试超时，均非断言失败，本轮高关联用例单独运行通过。
+
+final result: passed
+
+---
+
 # Ninka FoodLab 配方原料名称与营养入口 QA
 
 - source visual truth path: `/private/var/folders/m6/jrlh0fwd1wgg3kd1qj8313m00000gp/T/codex-clipboard-8c4f502a-daa5-4413-82e1-5d2b08d6e4bd.png`

@@ -35,8 +35,14 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     create_offline_backup(source.backup_source(), &backup_path).unwrap();
 
     let preflight = preflight_offline_backup(&backup_path).unwrap();
-    assert_eq!(preflight.source_schema_version, 16);
-    assert_eq!(preflight.target_schema_version, 16);
+    assert_eq!(
+        preflight.source_schema_version,
+        migrations::LATEST_SCHEMA_VERSION
+    );
+    assert_eq!(
+        preflight.target_schema_version,
+        migrations::LATEST_SCHEMA_VERSION
+    );
     assert!(!preflight.requires_migration);
     assert_eq!(preflight.attachment_count, 1);
     assert!(preflight.attachment_bytes > 0);
@@ -46,7 +52,10 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     let result = restore_offline_backup(&backup_path, fixture.target()).unwrap();
 
     assert_eq!(result.preflight, preflight);
-    assert_eq!(result.restored_schema_version, 16);
+    assert_eq!(
+        result.restored_schema_version,
+        migrations::LATEST_SCHEMA_VERSION
+    );
     assert!(
         result
             .safety_backup_file_name
@@ -55,7 +64,10 @@ fn preflight_and_restore_replace_real_files_after_creating_a_safety_backup() {
     let safety = fixture
         .safety_backup_directory
         .join(&result.safety_backup_file_name);
-    assert_eq!(inspect_offline_backup(&safety).unwrap().schema_version, 16);
+    assert_eq!(
+        inspect_offline_backup(&safety).unwrap().schema_version,
+        migrations::LATEST_SCHEMA_VERSION,
+    );
     assert_database_has_only_material(&fixture.database_path, "备份数据原料");
     assert!(
         fixture
@@ -137,10 +149,16 @@ fn historical_schema_is_migrated_but_future_schema_is_rejected_without_mutation(
 
     let preflight = preflight_offline_backup(&historical_backup).unwrap();
     assert_eq!(preflight.source_schema_version, 1);
-    assert_eq!(preflight.target_schema_version, 16);
+    assert_eq!(
+        preflight.target_schema_version,
+        migrations::LATEST_SCHEMA_VERSION
+    );
     assert!(preflight.requires_migration);
     let result = restore_offline_backup(&historical_backup, fixture.target()).unwrap();
-    assert_eq!(result.restored_schema_version, 16);
+    assert_eq!(
+        result.restored_schema_version,
+        migrations::LATEST_SCHEMA_VERSION
+    );
     assert_database_has_only_material(&fixture.database_path, "历史原料");
     let connection = Connection::open(&fixture.database_path).unwrap();
     assert_eq!(

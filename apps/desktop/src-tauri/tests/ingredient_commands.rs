@@ -84,7 +84,7 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 97);
+    assert_eq!(REGISTERED_COMMANDS.len(), 114);
     for command in [
         "list_categories",
         "create_supplier",
@@ -107,6 +107,11 @@ fn every_grouped_desktop_api_method_is_registered() {
         "update_personal_rnd_reference_card",
         "archive_personal_rnd_reference_card",
         "list_agent_recipe_estimate_cards",
+        "get_harness_health",
+        "start_harness",
+        "list_harness_tasks",
+        "preview_legacy_agent_reset",
+        "execute_legacy_agent_reset",
         "export_sample_sheet",
         "database_status",
     ] {

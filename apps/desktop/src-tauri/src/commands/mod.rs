@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_harness;
 pub mod agent_recipes;
 pub mod backup;
 pub mod ingest;
@@ -22,11 +23,12 @@ use crate::{
         runtime::AgentRuntimeControl,
         secrets::{KeyringSecretStore, SessionSecretStore},
     },
+    agent_harness::{CodexAppServerHost, HarnessHost},
     ingest::{IngestError, coordinator::IngredientIngestCoordinator},
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 97] = [
+pub const REGISTERED_COMMANDS: [&str; 130] = [
     "list_categories",
     "create_category",
     "rename_category",
@@ -66,6 +68,39 @@ pub const REGISTERED_COMMANDS: [&str; 97] = [
     "export_ingredient_library",
     "cleanup_orphan_attachments",
     "get_agent_preferences",
+    "get_harness_health",
+    "start_harness",
+    "stop_harness",
+    "agent_runtime_settings_call",
+    "save_agent_provider_profile",
+    "test_agent_provider_connection",
+    "get_agent_model_directory",
+    "select_agent_default_model",
+    "read_third_party_licenses",
+    "list_harness_tasks",
+    "get_agent_conversation_view",
+    "create_harness_task",
+    "rename_harness_task",
+    "archive_harness_task",
+    "restore_harness_task",
+    "select_harness_task_model",
+    "create_harness_turn",
+    "submit_agent_message",
+    "edit_agent_queued_message",
+    "delete_agent_queued_message",
+    "stop_agent_conversation",
+    "resume_agent_queue",
+    "select_agent_branch",
+    "edit_agent_turn",
+    "bind_agent_recipe",
+    "resolve_agent_recipe_references",
+    "sync_harness_task",
+    "cancel_harness_task",
+    "list_harness_turns",
+    "list_harness_events",
+    "list_harness_artifacts",
+    "preview_legacy_agent_reset",
+    "execute_legacy_agent_reset",
     "save_agent_preferences",
     "list_agent_provider_configs",
     "save_agent_provider_config",
@@ -132,6 +167,8 @@ pub struct AppState {
     pub(crate) attachment_root: PathBuf,
     pub(crate) active_agent_runs: Arc<Mutex<HashMap<String, AgentRuntimeControl>>>,
     pub(crate) provider_secrets: SessionSecretStore<KeyringSecretStore>,
+    pub(crate) harness: HarnessHost,
+    pub(crate) codex: Arc<CodexAppServerHost>,
 }
 
 impl AppState {
@@ -140,12 +177,46 @@ impl AppState {
         database_path: PathBuf,
         attachment_root: PathBuf,
     ) -> Self {
+        Self::new_with_agent_runtime(
+            coordinator,
+            database_path,
+            attachment_root,
+            PathBuf::from("__foodlab_agent_runtime_unavailable__"),
+            PathBuf::from("__foodlab_agent_node_unavailable__"),
+        )
+    }
+
+    pub fn new_with_agent_runtime(
+        coordinator: IngredientIngestCoordinator,
+        database_path: PathBuf,
+        attachment_root: PathBuf,
+        agent_runtime_root: PathBuf,
+        agent_node_binary: PathBuf,
+    ) -> Self {
+        let harness_home = database_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("foodlab-agent");
+        let codex_home = database_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("foodlab-chatgpt");
         Self {
             coordinator: Mutex::new(Some(coordinator)),
             database_path,
             attachment_root,
             active_agent_runs: Arc::new(Mutex::new(HashMap::new())),
             provider_secrets: SessionSecretStore::new(KeyringSecretStore),
+            harness: HarnessHost::new(
+                harness_home,
+                agent_runtime_root.clone(),
+                agent_node_binary.clone(),
+            ),
+            codex: Arc::new(CodexAppServerHost::new(
+                codex_home,
+                agent_runtime_root,
+                agent_node_binary,
+            )),
         }
     }
 }

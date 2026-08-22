@@ -1,4 +1,4 @@
-# Ninka FoodLab 0.1.0 内测说明
+# Ninka FoodLab 0.2.0 内测说明
 
 感谢你帮助测试 Ninka FoodLab。
 
@@ -8,26 +8,29 @@ Ninka FoodLab 是一款面向食品研发人员的本地桌面应用，目前提
 
 ## 系统要求
 
-- macOS 10.15 或更高版本。
-- 搭载 Apple Silicon 芯片的 Mac，例如 M1、M2、M3、M4。
-- 当前安装包暂不支持 Intel Mac 和 Windows。
+- macOS 13.5 或更高版本。
+- Apple Silicon（M1 及更新芯片）请选择 `arm64` 安装包。
+- Intel 芯片的 Mac 请选择 `x64` 安装包。
+- 当前安装包暂不支持 Windows。
 
 ## 安装文件
 
-- 文件名：`food-rd-studio-0.1.0-macos-arm64.dmg`
-- SHA-256：`f0462a04a37775931fb10a3c28e2c95b1c10320139036995658e25c07b060933`
+- Apple Silicon：`food-rd-studio-0.2.0-macos-arm64.dmg`
+- Intel：`food-rd-studio-0.2.0-macos-x64.dmg`
+- 两个文件的 SHA-256 均记录在同目录的 `SHA256SUMS.txt`。
 
 SHA-256 用于确认下载后的安装包没有损坏或被替换。普通内测不要求必须校验；如需校验，可在“终端”中运行：
 
 ```bash
-shasum -a 256 food-rd-studio-0.1.0-macos-arm64.dmg
+shasum -a 256 food-rd-studio-0.2.0-macos-arm64.dmg
+shasum -a 256 food-rd-studio-0.2.0-macos-x64.dmg
 ```
 
-输出值应与上方一致。
+输出值应与 `SHA256SUMS.txt` 中对应文件名的记录一致。
 
 ## 安装步骤
 
-1. 下载并双击 `food-rd-studio-0.1.0-macos-arm64.dmg`。
+1. 根据 Mac 芯片下载并双击对应的 `arm64` 或 `x64` DMG。
 2. 将 `Ninka FoodLab.app` 拖入“应用程序”文件夹。
 3. 在“应用程序”中打开 `Ninka FoodLab`。
 4. 使用完安装镜像后，可以在 Finder 中推出 `Ninka FoodLab` 磁盘。
@@ -60,7 +63,7 @@ shasum -a 256 food-rd-studio-0.1.0-macos-arm64.dmg
 4. **实时结果**：检查当前投料合计、出成重量、营养试算和成本是否随配方变化。
 5. **版本管理**：保存正式版本、建立替代配方、归档和取消归档。
 6. **我要打样**：输入计划打样量，查看配料清单，并尝试打印或导出 Excel。
-7. **食品研发 Agent**：如已配置模型，可测试原料资料读取和配方提案；未配置模型时可以跳过。
+7. **Ninka Agent**：如已配置模型，可测试原料资料读取和配方提案；未配置模型时可以跳过。
 8. **关闭与重启**：退出应用后重新打开，确认已保存的数据仍然存在。
 
 营养和成本结果属于研发试算。原料缺失的数据不会被当作零，出现“数据不足”时请记录具体操作和页面。

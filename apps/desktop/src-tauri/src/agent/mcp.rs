@@ -14,7 +14,14 @@ use uuid::Uuid;
 
 use super::{
     AgentError,
+    repository::AgentRepository,
     tools::{AgentToolContext, AgentToolRegistry},
+};
+use crate::{
+    agent_harness::{model::TaskOutcome, repository::HarnessRepository},
+    agent_recipe::repository::AgentRecipeRepository,
+    ingest::coordinator::IngredientIngestCoordinator,
+    rnd_reference::repository::RndReferenceRepository,
 };
 
 pub const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -27,6 +34,46 @@ pub const MCP_TOKEN_ENV: &str = "FOOD_RD_MCP_TOKEN";
 pub const MCP_CAPABILITY_ENV: &str = "FOOD_RD_MCP_CAPABILITY_PATH";
 pub const MCP_DATABASE_ENV: &str = "FOOD_RD_MCP_DATABASE_PATH";
 pub const MCP_ATTACHMENT_ROOT_ENV: &str = "FOOD_RD_MCP_ATTACHMENT_ROOT";
+pub const MCP_V2_MODE_ENV: &str = "FOOD_RD_MCP_V2_MODE";
+
+/// Starts the private FoodLab MCP server using a one-use, task-scoped capability.
+///
+/// This lives in the library so both the dedicated development binary and the
+/// packaged Tauri executable (`--foodlab-mcp`) expose exactly the same surface.
+pub async fn run_mcp_from_env() -> Result<(), String> {
+    let token = required_env(MCP_TOKEN_ENV)?;
+    let capability_path = PathBuf::from(required_env(MCP_CAPABILITY_ENV)?);
+    let database_path = PathBuf::from(required_env(MCP_DATABASE_ENV)?);
+    let attachment_root = PathBuf::from(required_env(MCP_ATTACHMENT_ROOT_ENV)?);
+    let context = McpTaskCapability::consume(&capability_path, &token)
+        .map_err(|error| error.message().to_string())?;
+    let coordinator = IngredientIngestCoordinator::open(&database_path, &attachment_root)
+        .map_err(|error| error.message().to_string())?;
+    let audit = AgentRepository::open_for_runtime(&database_path)
+        .map_err(|error| error.message().to_string())?;
+    let recipe_proposals =
+        AgentRecipeRepository::open(&database_path).map_err(|error| error.message().to_string())?;
+    let references = RndReferenceRepository::open(&database_path)
+        .map_err(|error| error.message().to_string())?;
+    let registry = AgentToolRegistry::with_audit_recipes_and_references(
+        coordinator,
+        audit,
+        recipe_proposals,
+        references,
+    );
+    let server = if std::env::var(MCP_V2_MODE_ENV).as_deref() == Ok("1") {
+        McpServer::new_with_harness_policy(registry, context, database_path)
+    } else {
+        McpServer::new(registry, context)
+    };
+    serve_mcp(server, tokio::io::stdin(), tokio::io::stdout())
+        .await
+        .map_err(|_| "标准输入输出连接异常".into())
+}
+
+fn required_env(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|_| "缺少任务级授权信息".into())
+}
 
 #[derive(Clone, Debug)]
 pub struct McpTaskCapability {
@@ -189,6 +236,7 @@ pub struct McpServer {
     context: AgentToolContext,
     state: ServerState,
     cancelled: HashSet<String>,
+    harness_database_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,6 +253,21 @@ impl McpServer {
             context,
             state: ServerState::New,
             cancelled: HashSet::new(),
+            harness_database_path: None,
+        }
+    }
+
+    pub fn new_with_harness_policy(
+        registry: AgentToolRegistry,
+        context: AgentToolContext,
+        database_path: PathBuf,
+    ) -> Self {
+        Self {
+            registry,
+            context,
+            state: ServerState::New,
+            cancelled: HashSet::new(),
+            harness_database_path: Some(database_path),
         }
     }
 
@@ -259,7 +322,7 @@ impl McpServer {
                 },
                 "serverInfo": {
                     "name": "food-rd-agent-tools",
-                    "title": "Ninka FoodLab Agent 工具",
+                    "title": "Ninka Agent 工具",
                     "version": env!("CARGO_PKG_VERSION"),
                     "description": "仅提供当前食品研发任务范围内的读取与待复核草稿操作"
                 },
@@ -286,18 +349,80 @@ impl McpServer {
     }
 
     fn list_tools(&self, id: Value) -> Value {
-        let tools = self
+        let mut tools = self
             .registry
             .definitions()
             .into_iter()
             .map(|tool| {
+                let mut input_schema = tool.input_schema;
+                if self.harness_database_path.is_some()
+                    && let Some(object) = input_schema.as_object_mut()
+                {
+                    let properties = object.entry("properties").or_insert_with(|| json!({}));
+                    if let Some(properties) = properties.as_object_mut() {
+                        properties.insert(
+                            "taskId".into(),
+                            json!({
+                                "type": "string",
+                                "description": "FoodLab 当前任务 ID，必须与用户消息一致"
+                            }),
+                        );
+                        properties.insert(
+                            "turnId".into(),
+                            json!({
+                                "type": "string",
+                                "description": "FoodLab 当前 Turn ID，必须与用户消息一致"
+                            }),
+                        );
+                    }
+                    let required = object.entry("required").or_insert_with(|| json!([]));
+                    if let Some(required) = required.as_array_mut() {
+                        if !required.iter().any(|value| value == "taskId") {
+                            required.push(json!("taskId"));
+                        }
+                        if !required.iter().any(|value| value == "turnId") {
+                            required.push(json!("turnId"));
+                        }
+                    }
+                }
                 json!({
                     "name": tool.name,
                     "description": tool.description,
-                    "inputSchema": tool.input_schema
+                    "inputSchema": input_schema
                 })
             })
             .collect::<Vec<_>>();
+        if self.harness_database_path.is_some() {
+            tools.push(json!({
+                "name": "request_task_input",
+                "description": "缺少只能由用户决定或提供的必要条件时，生成结构化问题并将任务置为 needs_input；调用后应停止当前任务",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "taskId": { "type": "string" },
+                        "turnId": { "type": "string" },
+                        "prompt": { "type": "string", "minLength": 1 },
+                        "choices": {
+                            "type": ["array", "null"],
+                            "items": { "type": "string" },
+                            "maxItems": 8
+                        }
+                    },
+                    "required": ["taskId", "turnId", "prompt"],
+                    "additionalProperties": false
+                }
+            }));
+            tools.push(review_artifact_tool_definition(
+                "create_label_compliance_review",
+                "登记一份待复核标签合规审查草稿；正式法规结论必须基于本地官方全文或用户提供原文，搜索摘要不能单独作为证据",
+                true,
+            ));
+            tools.push(review_artifact_tool_definition(
+                "create_research_report_draft",
+                "登记一份待复核研发报告草稿；不会覆盖配方版本、导出文件或向外部发送",
+                false,
+            ));
+        }
         json_rpc_result(id, json!({ "tools": tools }))
     }
 
@@ -308,18 +433,26 @@ impl McpServer {
         else {
             return json_rpc_error(id, -32602, "工具调用缺少名称");
         };
-        let arguments = params
+        let mut arguments = params
             .and_then(|params| params.get("arguments"))
             .cloned()
             .unwrap_or_else(|| json!({}));
         if !arguments.is_object() {
             return json_rpc_error(id, -32602, "工具参数必须是 JSON 对象");
         }
-        if !self
-            .registry
-            .definitions()
-            .iter()
-            .any(|tool| tool.name == name)
+        let virtual_request_input =
+            self.harness_database_path.is_some() && name == "request_task_input";
+        let virtual_artifact = self
+            .harness_database_path
+            .as_ref()
+            .and_then(|_| virtual_artifact_kind(name));
+        if !virtual_request_input
+            && virtual_artifact.is_none()
+            && !self
+                .registry
+                .definitions()
+                .iter()
+                .any(|tool| tool.name == name)
         {
             let _ = self.registry.execute(&self.context, name, arguments);
             return json_rpc_error(id, -32602, "未知的食品研发工具");
@@ -328,7 +461,134 @@ impl McpServer {
             return json_rpc_error(id, -32800, "工具调用已取消");
         }
 
-        match self.registry.execute(&self.context, name, arguments) {
+        let mut execution_context = self.context.clone();
+        let mut task_identity: Option<(String, String)> = None;
+        if let Some(database_path) = &self.harness_database_path {
+            let Some(object) = arguments.as_object_mut() else {
+                return json_rpc_error(id, -32602, "工具参数必须是 JSON 对象");
+            };
+            let task_id = object
+                .remove("taskId")
+                .and_then(|value| value.as_str().map(str::to_string));
+            let turn_id = object
+                .remove("turnId")
+                .and_then(|value| value.as_str().map(str::to_string));
+            let (Some(task_id), Some(turn_id)) = (task_id, turn_id) else {
+                return json_rpc_error(id, -32602, "FoodLab 工具调用缺少 taskId 或 turnId");
+            };
+            let policy = match HarnessRepository::open(database_path).and_then(|repository| {
+                let task = repository.get_task(&task_id)?;
+                let turn = repository.get_turn(&turn_id)?;
+                let bridge = repository.legacy_bridge(&task_id)?;
+                let attachment_ids = repository.legacy_attachment_ids(&task_id)?;
+                Ok((task, turn, bridge, attachment_ids))
+            }) {
+                Ok(policy) => policy,
+                Err(error) => return json_rpc_error(id, -32602, error.message()),
+            };
+            let (task, turn, (run_id, import_job_id), attachment_ids) = policy;
+            if turn.task_id != task.id || turn.status != TaskOutcome::Running {
+                return json_rpc_error(id, -32602, "FoodLab 工具调用不属于当前运行中 Turn");
+            }
+            if !task
+                .task_contract
+                .allowed_tools
+                .iter()
+                .any(|allowed| allowed == name)
+            {
+                return json_rpc_error(id, -32602, "当前 TaskContract 不允许调用该工具");
+            }
+            execution_context.run_id = run_id;
+            execution_context.import_job_id = import_job_id;
+            execution_context.allowed_attachment_ids = attachment_ids.into_iter().collect();
+            execution_context.active_recipe_id = task.active_recipe_id;
+            execution_context.active_draft_fingerprint = task.active_draft_fingerprint;
+            task_identity = Some((task.id, turn.id));
+        }
+
+        if virtual_request_input {
+            let prompt = arguments
+                .get("prompt")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(prompt) = prompt else {
+                return json_rpc_error(id, -32602, "补充信息问题不能为空");
+            };
+            let choices = arguments
+                .get("choices")
+                .and_then(Value::as_array)
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .take(8)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let value = json!({
+                "outcome": "needs_input",
+                "question": { "prompt": prompt, "choices": choices }
+            });
+            return json_rpc_result(
+                id,
+                json!({
+                    "content": [{ "type": "text", "text": value.to_string() }],
+                    "structuredContent": value,
+                    "isError": false
+                }),
+            );
+        }
+
+        if let Some(kind) = virtual_artifact {
+            let title = arguments
+                .get("title")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty() && value.chars().count() <= 200);
+            let summary = arguments
+                .get("summary")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty() && value.chars().count() <= 20_000);
+            let (Some(title), Some(_summary), Some((task_id, turn_id))) =
+                (title, summary, task_identity)
+            else {
+                return json_rpc_error(id, -32602, "待复核成果缺少有效标题或正文");
+            };
+            let evidence_source = arguments.get("evidenceSource").and_then(Value::as_str);
+            if kind == "label_compliance_review"
+                && !matches!(
+                    evidence_source,
+                    Some("local_official_full_text" | "user_provided_original")
+                )
+            {
+                return json_rpc_error(
+                    id,
+                    -32602,
+                    "正式标签结论必须基于本地官方全文或用户提供原文",
+                );
+            }
+            let value = json!({
+                "artifactId": format!("{kind}:{task_id}:{turn_id}"),
+                "artifactKind": kind,
+                "title": title,
+                "status": "needs_review",
+                "evidenceSource": evidence_source,
+            });
+            return json_rpc_result(
+                id,
+                json!({
+                    "content": [{ "type": "text", "text": value.to_string() }],
+                    "structuredContent": value,
+                    "isError": false
+                }),
+            );
+        }
+
+        match self.registry.execute(&execution_context, name, arguments) {
             Ok(value) => {
                 let text = serde_json::to_string(&value).unwrap_or_else(|_| "{\"ok\":true}".into());
                 json_rpc_result(
@@ -361,6 +621,59 @@ impl McpServer {
             }
         }
     }
+}
+
+fn virtual_artifact_kind(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "create_label_compliance_review" => "label_compliance_review",
+        "create_research_report_draft" => "research_report",
+        _ => return None,
+    })
+}
+
+fn review_artifact_tool_definition(
+    name: &str,
+    description: &str,
+    evidence_required: bool,
+) -> Value {
+    let mut properties = serde_json::Map::from_iter([
+        ("taskId".into(), json!({ "type": "string" })),
+        ("turnId".into(), json!({ "type": "string" })),
+        (
+            "title".into(),
+            json!({ "type": "string", "minLength": 1, "maxLength": 200 }),
+        ),
+        (
+            "summary".into(),
+            json!({ "type": "string", "minLength": 1, "maxLength": 20000 }),
+        ),
+    ]);
+    let mut required = vec![
+        json!("taskId"),
+        json!("turnId"),
+        json!("title"),
+        json!("summary"),
+    ];
+    if evidence_required {
+        properties.insert(
+            "evidenceSource".into(),
+            json!({
+                "type": "string",
+                "enum": ["local_official_full_text", "user_provided_original"]
+            }),
+        );
+        required.push(json!("evidenceSource"));
+    }
+    json!({
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": false
+        }
+    })
 }
 
 pub async fn serve_mcp<R, W>(mut server: McpServer, reader: R, mut writer: W) -> std::io::Result<()>
@@ -484,4 +797,31 @@ fn restrict_directory_permissions(path: &Path) -> Result<(), AgentError> {
 
 fn absolute_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+#[cfg(test)]
+mod v2_contract_tests {
+    use super::*;
+
+    #[test]
+    fn review_artifact_tools_are_explicit_and_compliance_evidence_is_bounded() {
+        assert_eq!(
+            virtual_artifact_kind("create_label_compliance_review"),
+            Some("label_compliance_review")
+        );
+        assert_eq!(virtual_artifact_kind("save_recipe"), None);
+        let definition =
+            review_artifact_tool_definition("create_label_compliance_review", "review", true);
+        assert_eq!(
+            definition.pointer("/inputSchema/properties/evidenceSource/enum"),
+            Some(&json!([
+                "local_official_full_text",
+                "user_provided_original"
+            ]))
+        );
+        assert_eq!(
+            definition.pointer("/inputSchema/additionalProperties"),
+            Some(&Value::Bool(false))
+        );
+    }
 }

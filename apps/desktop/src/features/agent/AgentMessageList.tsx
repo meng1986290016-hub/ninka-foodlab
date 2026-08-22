@@ -72,7 +72,7 @@ export function AgentMessageList({
 
   return (
     <div
-      aria-label="食品研发 Agent 对话"
+      aria-label="Ninka Agent 对话"
       aria-live="polite"
       className="agent-message-list"
     >
@@ -120,7 +120,7 @@ export function AgentMessageList({
           ref={index === visibleMessages.length - 1 ? latestMessageRef : null}
         >
           <span className="agent-message__role">
-            {message.role === "user" ? "你" : "食品研发 Agent"}
+            {message.role === "user" ? "你" : "Ninka Agent"}
           </span>
           <p>{message.content || (message.status === "failed" ? "任务未完成" : "")}</p>
           {message.attachmentIds.length > 0 ? (
@@ -135,7 +135,7 @@ export function AgentMessageList({
 
       {streamingText ? (
         <article className="agent-message agent-message--assistant is-streaming">
-          <span className="agent-message__role">食品研发 Agent</span>
+          <span className="agent-message__role">Ninka Agent</span>
           <p>{streamingText}</p>
         </article>
       ) : null}

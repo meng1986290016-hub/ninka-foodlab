@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_sixteen() {
+fn fresh_database_applies_latest_schema_version_twenty_one() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 16);
+    assert_eq!(schema_version(&connection), 21);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -48,6 +48,11 @@ fn fresh_database_applies_latest_schema_version_sixteen() {
         "agent_messages",
         "agent_message_attachments",
         "agent_tool_calls",
+        "agent_v2_tasks",
+        "agent_v2_turns",
+        "agent_v2_events",
+        "agent_artifact_manifests",
+        "agent_legacy_reset_audits",
         "recipes",
         "recipe_drafts",
         "recipe_versions",
@@ -114,7 +119,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 16);
+    assert_eq!(schema_version(&connection), 21);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name

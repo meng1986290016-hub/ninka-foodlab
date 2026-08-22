@@ -10,7 +10,7 @@ Regenerate from the repository root with:
 pnpm licenses:generate
 ```
 
-## JavaScript dependencies (116)
+## JavaScript dependencies (215)
 
 | Package | Version | Declared license |
 | --- | --- | --- |
@@ -40,16 +40,25 @@ pnpm licenses:generate
 | `@tauri-apps/cli-darwin-arm64` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/plugin-dialog` | `2.4.2` | MIT OR Apache-2.0 |
+| `@tauri-apps/plugin-dialog` | `2.7.2` | MIT OR Apache-2.0 |
 | `@testing-library/dom` | `10.4.1` | MIT |
 | `@testing-library/react` | `16.3.2` | MIT |
 | `@testing-library/user-event` | `14.6.1` | MIT |
 | `@types/aria-query` | `5.0.4` | MIT |
 | `@types/chai` | `5.2.3` | MIT |
+| `@types/debug` | `4.1.13` | MIT |
 | `@types/deep-eql` | `4.0.2` | MIT |
+| `@types/estree-jsx` | `1.0.5` | MIT |
 | `@types/estree` | `1.0.9` | MIT |
+| `@types/hast` | `3.0.5` | MIT |
+| `@types/mdast` | `4.0.4` | MIT |
+| `@types/ms` | `2.1.0` | MIT |
 | `@types/node` | `24.13.3` | MIT |
 | `@types/react-dom` | `19.2.3` | MIT |
 | `@types/react` | `19.2.17` | MIT |
+| `@types/unist` | `2.0.11` | MIT |
+| `@types/unist` | `3.0.3` | MIT |
+| `@ungap/structured-clone` | `1.3.3` | ISC |
 | `@vitejs/plugin-react` | `6.0.3` | MIT |
 | `@vitest/expect` | `4.1.10` | MIT |
 | `@vitest/mocker` | `4.1.10` | MIT |
@@ -62,52 +71,131 @@ pnpm licenses:generate
 | `ansi-styles` | `5.2.0` | MIT |
 | `aria-query` | `5.3.0` | Apache-2.0 |
 | `assertion-error` | `2.0.1` | MIT |
+| `bail` | `2.0.2` | MIT |
 | `bidi-js` | `1.0.3` | MIT |
+| `ccount` | `2.0.1` | MIT |
 | `chai` | `6.2.2` | MIT |
+| `character-entities-html4` | `2.1.0` | MIT |
+| `character-entities-legacy` | `3.0.0` | MIT |
+| `character-entities` | `2.0.2` | MIT |
+| `character-reference-invalid` | `2.0.1` | MIT |
+| `comma-separated-tokens` | `2.0.3` | MIT |
 | `convert-source-map` | `2.0.0` | MIT |
 | `css-tree` | `3.2.1` | MIT |
 | `csstype` | `3.2.3` | MIT |
 | `data-urls` | `7.0.0` | MIT |
+| `debug` | `4.4.3` | MIT |
 | `decimal.js` | `10.6.0` | MIT |
+| `decode-named-character-reference` | `1.3.0` | MIT |
 | `dequal` | `2.0.3` | MIT |
 | `detect-libc` | `2.1.2` | Apache-2.0 |
+| `devlop` | `1.1.0` | MIT |
 | `dom-accessibility-api` | `0.5.16` | MIT |
 | `entities` | `8.0.0` | BSD-2-Clause |
 | `es-module-lexer` | `2.3.1` | MIT |
+| `escape-string-regexp` | `5.0.0` | MIT |
+| `estree-util-is-identifier-name` | `3.0.0` | MIT |
 | `estree-walker` | `3.0.3` | MIT |
 | `expect-type` | `1.4.0` | Apache-2.0 |
+| `extend` | `3.0.2` | MIT |
 | `fdir` | `6.5.0` | MIT |
 | `fsevents` | `2.3.3` | MIT |
+| `hast-util-to-jsx-runtime` | `2.3.6` | MIT |
+| `hast-util-whitespace` | `3.0.0` | MIT |
 | `html-encoding-sniffer` | `6.0.0` | MIT |
+| `html-url-attributes` | `3.0.1` | MIT |
+| `inline-style-parser` | `0.2.7` | MIT |
+| `is-alphabetical` | `2.0.1` | MIT |
+| `is-alphanumerical` | `2.0.1` | MIT |
+| `is-decimal` | `2.0.1` | MIT |
+| `is-hexadecimal` | `2.0.1` | MIT |
+| `is-plain-obj` | `4.1.0` | MIT |
 | `is-potential-custom-element-name` | `1.0.1` | MIT |
 | `js-tokens` | `4.0.0` | MIT |
 | `jsdom` | `29.1.1` | MIT |
 | `lightningcss-darwin-arm64` | `1.32.0` | MPL-2.0 |
 | `lightningcss` | `1.32.0` | MPL-2.0 |
+| `longest-streak` | `3.1.0` | MIT |
 | `lru-cache` | `11.5.2` | BlueOak-1.0.0 |
 | `lz-string` | `1.5.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
+| `markdown-table` | `3.0.4` | MIT |
+| `mdast-util-find-and-replace` | `3.0.2` | MIT |
+| `mdast-util-from-markdown` | `2.0.3` | MIT |
+| `mdast-util-gfm-autolink-literal` | `2.0.1` | MIT |
+| `mdast-util-gfm-footnote` | `2.1.0` | MIT |
+| `mdast-util-gfm-strikethrough` | `2.0.0` | MIT |
+| `mdast-util-gfm-table` | `2.0.0` | MIT |
+| `mdast-util-gfm-task-list-item` | `2.0.0` | MIT |
+| `mdast-util-gfm` | `3.1.0` | MIT |
+| `mdast-util-mdx-expression` | `2.0.1` | MIT |
+| `mdast-util-mdx-jsx` | `3.2.0` | MIT |
+| `mdast-util-mdxjs-esm` | `2.0.1` | MIT |
+| `mdast-util-phrasing` | `4.1.0` | MIT |
+| `mdast-util-to-hast` | `13.2.1` | MIT |
+| `mdast-util-to-markdown` | `2.1.2` | MIT |
+| `mdast-util-to-string` | `4.0.0` | MIT |
 | `mdn-data` | `2.27.1` | CC0-1.0 |
+| `micromark-core-commonmark` | `2.0.3` | MIT |
+| `micromark-extension-gfm-autolink-literal` | `2.1.0` | MIT |
+| `micromark-extension-gfm-footnote` | `2.1.0` | MIT |
+| `micromark-extension-gfm-strikethrough` | `2.1.0` | MIT |
+| `micromark-extension-gfm-table` | `2.1.1` | MIT |
+| `micromark-extension-gfm-tagfilter` | `2.0.0` | MIT |
+| `micromark-extension-gfm-task-list-item` | `2.1.0` | MIT |
+| `micromark-extension-gfm` | `3.0.0` | MIT |
+| `micromark-factory-destination` | `2.0.1` | MIT |
+| `micromark-factory-label` | `2.0.1` | MIT |
+| `micromark-factory-space` | `2.0.1` | MIT |
+| `micromark-factory-title` | `2.0.1` | MIT |
+| `micromark-factory-whitespace` | `2.0.1` | MIT |
+| `micromark-util-character` | `2.1.1` | MIT |
+| `micromark-util-chunked` | `2.0.1` | MIT |
+| `micromark-util-classify-character` | `2.0.1` | MIT |
+| `micromark-util-combine-extensions` | `2.0.1` | MIT |
+| `micromark-util-decode-numeric-character-reference` | `2.0.2` | MIT |
+| `micromark-util-decode-string` | `2.0.1` | MIT |
+| `micromark-util-encode` | `2.0.1` | MIT |
+| `micromark-util-html-tag-name` | `2.0.1` | MIT |
+| `micromark-util-normalize-identifier` | `2.0.1` | MIT |
+| `micromark-util-resolve-all` | `2.0.1` | MIT |
+| `micromark-util-sanitize-uri` | `2.0.1` | MIT |
+| `micromark-util-subtokenize` | `2.1.0` | MIT |
+| `micromark-util-symbol` | `2.0.1` | MIT |
+| `micromark-util-types` | `2.0.2` | MIT |
+| `micromark` | `4.0.2` | MIT |
+| `ms` | `2.1.3` | MIT |
 | `nanoid` | `3.3.16` | MIT |
 | `obug` | `2.1.3` | MIT |
+| `parse-entities` | `4.0.2` | MIT |
 | `parse5` | `8.0.1` | MIT |
 | `pathe` | `2.0.3` | MIT |
 | `picocolors` | `1.1.1` | ISC |
 | `picomatch` | `4.0.5` | MIT |
 | `postcss` | `8.5.19` | MIT |
 | `pretty-format` | `27.5.1` | MIT |
+| `property-information` | `7.2.0` | MIT |
 | `punycode` | `2.3.1` | MIT |
 | `react-dom` | `19.2.7` | MIT |
 | `react-is` | `17.0.2` | MIT |
+| `react-markdown` | `10.1.0` | MIT |
 | `react` | `19.2.7` | MIT |
+| `remark-gfm` | `4.0.1` | MIT |
+| `remark-parse` | `11.0.0` | MIT |
+| `remark-rehype` | `11.1.2` | MIT |
+| `remark-stringify` | `11.0.0` | MIT |
 | `require-from-string` | `2.0.2` | MIT |
 | `rolldown` | `1.1.5` | MIT |
 | `saxes` | `6.0.0` | ISC |
 | `scheduler` | `0.27.0` | MIT |
 | `siginfo` | `2.0.0` | ISC |
 | `source-map-js` | `1.2.1` | BSD-3-Clause |
+| `space-separated-tokens` | `2.0.2` | MIT |
 | `stackback` | `0.0.2` | MIT |
 | `std-env` | `4.2.0` | MIT |
+| `stringify-entities` | `4.0.4` | MIT |
+| `style-to-js` | `1.1.21` | MIT |
+| `style-to-object` | `1.0.14` | MIT |
 | `symbol-tree` | `3.2.4` | MIT |
 | `thinking-orbs` | `0.2.0` | MIT |
 | `tinybench` | `2.9.0` | MIT |
@@ -118,9 +206,19 @@ pnpm licenses:generate
 | `tldts` | `7.4.8` | MIT |
 | `tough-cookie` | `6.0.2` | BSD-3-Clause |
 | `tr46` | `6.0.0` | MIT |
+| `trim-lines` | `3.0.1` | MIT |
+| `trough` | `2.2.0` | MIT |
 | `typescript` | `5.9.3` | Apache-2.0 |
 | `undici-types` | `7.18.2` | MIT |
 | `undici` | `7.28.0` | MIT |
+| `unified` | `11.0.5` | MIT |
+| `unist-util-is` | `6.0.1` | MIT |
+| `unist-util-position` | `5.0.0` | MIT |
+| `unist-util-stringify-position` | `4.0.0` | MIT |
+| `unist-util-visit-parents` | `6.0.2` | MIT |
+| `unist-util-visit` | `5.1.0` | MIT |
+| `vfile-message` | `4.0.3` | MIT |
+| `vfile` | `6.0.3` | MIT |
 | `vite` | `8.1.4` | MIT |
 | `vitest` | `4.1.10` | MIT |
 | `w3c-xmlserializer` | `5.0.0` | MIT |
@@ -130,8 +228,468 @@ pnpm licenses:generate
 | `why-is-node-running` | `2.3.0` | MIT |
 | `xml-name-validator` | `5.0.0` | Apache-2.0 |
 | `xmlchars` | `2.2.0` | MIT |
+| `zwitch` | `2.0.4` | MIT |
 
-## Rust dependencies (593)
+## Embedded FoodLab Agent runtime (451)
+
+The corresponding license texts and attribution notices are included in the
+application bundle and in the DMG folder named `Third-Party Licenses`.
+
+| Package | Version | Declared license |
+| --- | --- | --- |
+| `@anthropic-ai/sdk` | `0.91.1` | MIT |
+| `@aws-crypto/sha256-browser` | `5.2.0` | Apache-2.0 |
+| `@aws-crypto/sha256-js` | `5.2.0` | Apache-2.0 |
+| `@aws-crypto/supports-web-crypto` | `5.2.0` | Apache-2.0 |
+| `@aws-crypto/util` | `5.2.0` | Apache-2.0 |
+| `@aws-sdk/client-bedrock-runtime` | `3.1048.0` | Apache-2.0 |
+| `@aws-sdk/core` | `3.977.8` | Apache-2.0 |
+| `@aws-sdk/credential-provider-env` | `3.972.69` | Apache-2.0 |
+| `@aws-sdk/credential-provider-http` | `3.972.71` | Apache-2.0 |
+| `@aws-sdk/credential-provider-ini` | `3.973.14` | Apache-2.0 |
+| `@aws-sdk/credential-provider-login` | `3.972.76` | Apache-2.0 |
+| `@aws-sdk/credential-provider-node` | `3.972.80` | Apache-2.0 |
+| `@aws-sdk/credential-provider-process` | `3.972.69` | Apache-2.0 |
+| `@aws-sdk/credential-provider-sso` | `3.973.13` | Apache-2.0 |
+| `@aws-sdk/credential-provider-web-identity` | `3.972.75` | Apache-2.0 |
+| `@aws-sdk/eventstream-handler-node` | `3.972.33` | Apache-2.0 |
+| `@aws-sdk/middleware-eventstream` | `3.972.28` | Apache-2.0 |
+| `@aws-sdk/middleware-websocket` | `3.972.51` | Apache-2.0 |
+| `@aws-sdk/nested-clients` | `3.997.43` | Apache-2.0 |
+| `@aws-sdk/signature-v4-multi-region` | `3.996.45` | Apache-2.0 |
+| `@aws-sdk/token-providers` | `3.1048.0` | Apache-2.0 |
+| `@aws-sdk/token-providers` | `3.1111.0` | Apache-2.0 |
+| `@aws-sdk/types` | `3.974.4` | Apache-2.0 |
+| `@aws-sdk/util-locate-window` | `3.965.10` | Apache-2.0 |
+| `@aws-sdk/xml-builder` | `3.972.39` | Apache-2.0 |
+| `@aws/lambda-invoke-store` | `0.3.0` | Apache-2.0 |
+| `@babel/code-frame` | `7.29.7` | MIT |
+| `@babel/helper-validator-identifier` | `7.29.7` | MIT |
+| `@babel/runtime` | `7.29.7` | MIT |
+| `@deepseek-ai/cordis-plugin-group` | `1.0.1` | MIT |
+| `@deepseek-ai/cordis-plugin-hmr` | `1.0.16` | MIT |
+| `@deepseek-ai/cordis-plugin-include` | `1.0.6` | MIT |
+| `@deepseek-ai/cordis-plugin-loader` | `1.0.2` | MIT |
+| `@deepseek-ai/cordis-plugin-timer` | `1.1.3` | MIT |
+| `@deepseek-ai/cordis` | `4.0.1` | MIT |
+| `@deepseek-ai/cosmokit` | `1.8.2` | MIT |
+| `@deepseek-ai/dsh-agent-default-model` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-agent-instructions` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-agent-loop` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-agent-presets` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-agent-tool-presentation` | `0.1.0-rc.6` | MIT |
+| `@deepseek-ai/dsh-agent` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-anonymous-user-id` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-api-gateway` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-api-remotes` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-app-boot` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-atomic-write` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-attachment-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-attachment` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-base` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-bash-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-bash-sandbox` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-brand` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-connection` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-hmr` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-locale` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-modules` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-runtime` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-agent-preset` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-attachment` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-brand-official` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-commands` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-conversation` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-cordis` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-deliverables` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-directory-picker-browse` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-directory-picker-native` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-goal` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-input-trigger` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-jobs` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-layout` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-message-feedback` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-model-selection` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-permission-presets` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-plan` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-reference` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-renderer` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-settings-general` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-settings-models` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-settings-plugins` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-settings` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-sidebar` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-skill` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-subagent` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-theme` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-tool` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-trajectory` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-user-questions` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-workflow-run` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-client-ui-workspace` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-cmdline` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-code-runtime-worker-thread` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-code-runtime` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-command-compact` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-command-feedback` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-command-goal` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-commands` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-compaction-basic` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-compaction-tool-result-pruner` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-compaction` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-cordis-client-runner` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-cordis-host-runner` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-credentials-local` | `0.1.0-rc.6` | MIT |
+| `@deepseek-ai/dsh-credentials-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-credentials` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-file-reference-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-file-reference` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-fs-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-fs-observation-policy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-fs-sandbox` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-fs` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-goal-round-driver` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-goal` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-headless` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-home-paths` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-apiproxy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-directory-picker-auto` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-directory-picker-browse` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-directory-picker-native` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-directory-picker` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-frontend-static` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-plugin-inventory` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-host-webserver` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-invariants` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-jobs-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-jobs` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-launch-environment` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-llm-deepseek` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-llm-pi-ai` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-llm-retry` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-llm` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-mcp-client` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-message-feedback` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-native-command` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-output-retention` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-permission-presets` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-persona` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-plan-mode` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-pwsh-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-pwsh-sandbox` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-repeat-tool-reminder` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-sandbox-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-sandbox-policy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-sandbox-windows-acl` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-sandbox` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-schedule` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-scope` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-checkpoint-policy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-log-export` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-persistence-jsonl` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-persistence` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-projection-cache` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-projection` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-query-sqlite` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-query` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-reference` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-stats` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-telemetry-otel` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-telemetry` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-title-first-prompt-llm` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-title-llm` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session-title` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-session` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-settings-file` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-settings` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-shell-env` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-shell` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-skill-badge` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-skill-filesystem` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-skill` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-spill-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-spill-policy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-spill` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-storage-domain` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-storage-json` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-storage` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subagent-fork-in-process` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subagent-in-process-driver` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subagent-spawn-in-process` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subagent` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subprocess-local` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-subprocess` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-system-prompt` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-terminal-bash` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-terminal` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-time-context` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-timeout` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tmux-context` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-token-meter` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-ask-user` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-bash-persistent` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-bash` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-call-timeout-policy` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-cordis` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-fs-search` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-fs` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-goal` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-jobs` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-pwsh` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-ralph` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-skill` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-str-replace-editor` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-subagent-control` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-subagent-report` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-subagent` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-todo` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-web` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tool-workflow` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-tools` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-typert-loader` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-typert-protocol` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-typert-registry` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-user-approval` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-user-questions` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-web-app` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-web-frontend` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-web-search-deepseek` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-web` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-workflow-worker-thread` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-workflow` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh-workspace` | `0.1.0-rc.8` | MIT |
+| `@deepseek-ai/dsh` | `0.1.0-rc.6` | MIT |
+| `@deepseek-ai/node-addon-landlock-run` | `0.1.1` | BSD-3-Clause |
+| `@deepseek-ai/schemastery` | `3.18.1` | MIT |
+| `@earendil-works/pi-ai` | `0.82.1` | MIT |
+| `@emnapi/runtime` | `1.11.3` | MIT |
+| `@google/genai` | `1.52.0` | Apache-2.0 |
+| `@hono/node-server` | `2.1.1` | MIT |
+| `@img/colour` | `1.1.0` | MIT |
+| `@img/sharp-darwin-arm64` | `0.35.3` | Apache-2.0 |
+| `@img/sharp-libvips-darwin-arm64` | `1.3.2` | LGPL-3.0-or-later |
+| `@img/sharp-wasm32` | `0.35.3` | Apache-2.0 AND LGPL-3.0-or-later AND MIT |
+| `@joplin/turndown-plugin-gfm` | `1.0.67` | MIT |
+| `@koromix/koffi-darwin-arm64` | `3.1.6` | MIT |
+| `@mistralai/mistralai` | `2.2.6` | Apache-2.0 |
+| `@mixmark-io/domino` | `2.2.0` | BSD-2-Clause |
+| `@modelcontextprotocol/sdk` | `1.30.0` | MIT |
+| `@openai/codex` | `0.148.0` | Apache-2.0 |
+| `@openai/codex` | `0.148.0-darwin-arm64` | Apache-2.0 |
+| `@opentelemetry/api-logs` | `0.220.0` | Apache-2.0 |
+| `@opentelemetry/api` | `1.9.0` | Apache-2.0 |
+| `@opentelemetry/api` | `1.9.1` | Apache-2.0 |
+| `@opentelemetry/core` | `2.10.0` | Apache-2.0 |
+| `@opentelemetry/core` | `2.9.0` | Apache-2.0 |
+| `@opentelemetry/exporter-logs-otlp-http` | `0.220.0` | Apache-2.0 |
+| `@opentelemetry/otlp-exporter-base` | `0.220.0` | Apache-2.0 |
+| `@opentelemetry/otlp-transformer` | `0.220.0` | Apache-2.0 |
+| `@opentelemetry/resources` | `2.10.0` | Apache-2.0 |
+| `@opentelemetry/resources` | `2.9.0` | Apache-2.0 |
+| `@opentelemetry/sdk-logs` | `0.220.0` | Apache-2.0 |
+| `@opentelemetry/sdk-metrics` | `2.9.0` | Apache-2.0 |
+| `@opentelemetry/sdk-trace` | `2.9.0` | Apache-2.0 |
+| `@opentelemetry/semantic-conventions` | `1.43.0` | Apache-2.0 |
+| `@protobufjs/aspromise` | `1.1.2` | BSD-3-Clause |
+| `@protobufjs/base64` | `1.1.2` | BSD-3-Clause |
+| `@protobufjs/codegen` | `2.0.5` | BSD-3-Clause |
+| `@protobufjs/eventemitter` | `1.1.1` | BSD-3-Clause |
+| `@protobufjs/fetch` | `1.1.1` | BSD-3-Clause |
+| `@protobufjs/float` | `1.0.2` | BSD-3-Clause |
+| `@protobufjs/path` | `1.1.2` | BSD-3-Clause |
+| `@protobufjs/pool` | `1.1.0` | BSD-3-Clause |
+| `@protobufjs/utf8` | `1.1.2` | BSD-3-Clause |
+| `@smithy/core` | `3.33.2` | Apache-2.0 |
+| `@smithy/credential-provider-imds` | `4.5.2` | Apache-2.0 |
+| `@smithy/fetch-http-handler` | `5.7.2` | Apache-2.0 |
+| `@smithy/is-array-buffer` | `2.2.0` | Apache-2.0 |
+| `@smithy/node-http-handler` | `4.11.2` | Apache-2.0 |
+| `@smithy/node-http-handler` | `4.7.3` | Apache-2.0 |
+| `@smithy/signature-v4` | `5.7.2` | Apache-2.0 |
+| `@smithy/types` | `4.17.2` | Apache-2.0 |
+| `@smithy/util-buffer-from` | `2.2.0` | Apache-2.0 |
+| `@smithy/util-utf8` | `2.3.0` | Apache-2.0 |
+| `@standard-schema/spec` | `1.1.0` | MIT |
+| `@tanstack/react-virtual` | `3.14.10` | MIT |
+| `@tanstack/virtual-core` | `3.17.8` | MIT |
+| `@types/node` | `26.2.0` | MIT |
+| `@types/retry` | `0.12.0` | MIT |
+| `@vscode/ripgrep-darwin-arm64` | `1.18.0` | MIT |
+| `@vscode/ripgrep` | `1.18.0` | MIT |
+| `accepts` | `2.0.0` | MIT |
+| `agent-base` | `7.1.4` | MIT |
+| `ajv-formats` | `3.0.1` | MIT |
+| `ajv` | `8.20.0` | MIT |
+| `argparse` | `2.0.1` | Python-2.0 |
+| `base64-js` | `1.5.1` | MIT |
+| `bignumber.js` | `9.3.1` | MIT |
+| `body-parser` | `2.3.0` | MIT |
+| `bowser` | `2.14.1` | MIT |
+| `buffer-equal-constant-time` | `1.0.1` | BSD-3-Clause |
+| `bundle-name` | `4.1.0` | MIT |
+| `bytes` | `3.1.2` | MIT |
+| `call-bind-apply-helpers` | `1.0.2` | MIT |
+| `call-bound` | `1.0.4` | MIT |
+| `chokidar` | `4.0.3` | MIT |
+| `chokidar` | `5.0.0` | MIT |
+| `clsx` | `2.1.1` | MIT |
+| `commander` | `15.0.0` | MIT |
+| `content-disposition` | `1.1.0` | MIT |
+| `content-type` | `1.0.5` | MIT |
+| `content-type` | `2.1.0` | MIT |
+| `cookie-signature` | `1.2.2` | MIT |
+| `cookie` | `0.7.2` | MIT |
+| `cors` | `2.8.6` | MIT |
+| `cross-spawn` | `7.0.6` | MIT |
+| `data-uri-to-buffer` | `4.0.1` | MIT |
+| `debug` | `4.4.3` | MIT |
+| `default-browser-id` | `5.0.1` | MIT |
+| `default-browser` | `5.5.1` | MIT |
+| `define-lazy-prop` | `3.0.0` | MIT |
+| `depd` | `2.0.0` | MIT |
+| `detect-libc` | `2.1.2` | Apache-2.0 |
+| `diff` | `9.0.0` | BSD-3-Clause |
+| `dunder-proto` | `1.0.1` | MIT |
+| `ecdsa-sig-formatter` | `1.0.11` | Apache-2.0 |
+| `ee-first` | `1.1.1` | MIT |
+| `encodeurl` | `2.0.0` | MIT |
+| `es-define-property` | `1.0.1` | MIT |
+| `es-errors` | `1.3.0` | MIT |
+| `es-object-atoms` | `1.1.2` | MIT |
+| `escape-html` | `1.0.3` | MIT |
+| `etag` | `1.8.1` | MIT |
+| `eventsource-parser` | `3.1.1` | MIT |
+| `eventsource` | `3.0.7` | MIT |
+| `express-rate-limit` | `8.6.2` | MIT |
+| `express` | `5.2.1` | MIT |
+| `extend` | `3.0.2` | MIT |
+| `fast-deep-equal` | `3.1.3` | MIT |
+| `fast-uri` | `3.1.5` | BSD-3-Clause |
+| `fetch-blob` | `3.2.0` | MIT |
+| `fflate` | `0.8.3` | MIT |
+| `finalhandler` | `2.1.1` | MIT |
+| `formdata-polyfill` | `4.0.10` | MIT |
+| `forwarded` | `0.2.0` | MIT |
+| `fresh` | `2.0.0` | MIT |
+| `function-bind` | `1.1.2` | MIT |
+| `gaxios` | `7.3.1` | Apache-2.0 |
+| `gcp-metadata` | `8.1.2` | Apache-2.0 |
+| `get-intrinsic` | `1.3.0` | MIT |
+| `get-proto` | `1.0.1` | MIT |
+| `google-auth-library` | `10.9.1` | Apache-2.0 |
+| `google-logging-utils` | `1.1.3` | Apache-2.0 |
+| `gopd` | `1.2.0` | MIT |
+| `has-symbols` | `1.1.0` | MIT |
+| `hasown` | `2.0.4` | MIT |
+| `hono` | `4.13.3` | MIT |
+| `http-errors` | `2.0.1` | MIT |
+| `http-proxy-agent` | `7.0.2` | MIT |
+| `https-proxy-agent` | `7.0.6` | MIT |
+| `iconv-lite` | `0.7.3` | MIT |
+| `immer` | `10.2.0` | MIT |
+| `inherits` | `2.0.4` | ISC |
+| `ip-address` | `10.5.0` | MIT |
+| `ipaddr.js` | `1.9.1` | MIT |
+| `is-docker` | `3.0.0` | MIT |
+| `is-in-ssh` | `1.0.0` | MIT |
+| `is-inside-container` | `1.0.0` | MIT |
+| `is-promise` | `4.0.0` | MIT |
+| `is-wsl` | `3.1.1` | MIT |
+| `isexe` | `2.0.0` | ISC |
+| `jose` | `6.2.9` | MIT |
+| `js-tokens` | `4.0.0` | MIT |
+| `js-yaml` | `4.3.1` | MIT |
+| `json-bigint` | `1.0.0` | MIT |
+| `json-schema-to-ts` | `3.1.1` | MIT |
+| `json-schema-traverse` | `1.0.0` | MIT |
+| `json-schema-typed` | `8.0.2` | BSD-2-Clause |
+| `jwa` | `2.0.1` | MIT |
+| `jws` | `4.0.1` | MIT |
+| `koffi` | `3.1.6` | MIT |
+| `long` | `5.3.2` | Apache-2.0 |
+| `loose-envify` | `1.4.0` | MIT |
+| `math-intrinsics` | `1.1.0` | MIT |
+| `media-typer` | `1.1.1` | MIT |
+| `merge-descriptors` | `2.0.0` | MIT |
+| `mime-db` | `1.54.0` | MIT |
+| `mime-types` | `3.0.2` | MIT |
+| `ms` | `2.1.3` | MIT |
+| `negotiator` | `1.0.0` | MIT |
+| `node-addon-api` | `7.1.1` | MIT |
+| `node-addon-native-custom-loader` | `0.1.5` | MIT |
+| `node-addon-require-builtin-darwin-arm64` | `0.1.5` | MIT |
+| `node-addon-require-builtin` | `0.1.5` | MIT |
+| `node-domexception` | `1.0.0` | MIT |
+| `node-fetch` | `3.3.2` | MIT |
+| `node-pty` | `1.2.0-beta.15` | MIT |
+| `Node.js` | `24.19.0` | MIT and bundled third-party licenses; see NODE_LICENSE |
+| `object-assign` | `4.1.1` | MIT |
+| `object-inspect` | `1.13.4` | MIT |
+| `on-finished` | `2.4.1` | MIT |
+| `once` | `1.4.0` | ISC |
+| `open` | `11.0.1` | MIT |
+| `openai` | `6.26.0` | Apache-2.0 |
+| `p-retry` | `4.6.2` | MIT |
+| `parseurl` | `1.3.3` | MIT |
+| `partial-json` | `0.1.7` | MIT |
+| `path-key` | `3.1.1` | MIT |
+| `path-to-regexp` | `8.4.2` | MIT |
+| `picocolors` | `1.1.1` | ISC |
+| `picomatch` | `4.0.5` | MIT |
+| `pkce-challenge` | `5.0.1` | MIT |
+| `powershell-utils` | `0.1.0` | MIT |
+| `powershell-utils` | `0.2.0` | MIT |
+| `protobufjs` | `7.6.5` | BSD-3-Clause |
+| `proxy-addr` | `2.0.7` | MIT |
+| `qs` | `6.15.3` | BSD-3-Clause |
+| `range-parser` | `1.3.0` | MIT |
+| `raw-body` | `3.0.2` | MIT |
+| `react-dom` | `19.2.8` | MIT |
+| `react` | `18.3.1` | MIT |
+| `react` | `19.2.8` | MIT |
+| `readdirp` | `4.1.2` | MIT |
+| `readdirp` | `5.1.1` | MIT |
+| `require-from-string` | `2.0.2` | MIT |
+| `retry` | `0.13.1` | MIT |
+| `router` | `2.2.0` | MIT |
+| `run-applescript` | `7.1.0` | MIT |
+| `safe-buffer` | `5.2.1` | MIT |
+| `safer-buffer` | `2.1.2` | MIT |
+| `scheduler` | `0.27.0` | MIT |
+| `semver` | `7.8.5` | ISC |
+| `send` | `1.2.1` | MIT |
+| `serve-static` | `2.2.1` | MIT |
+| `setprototypeof` | `1.2.0` | ISC |
+| `sharp` | `0.35.3` | Apache-2.0 |
+| `shebang-command` | `2.0.0` | MIT |
+| `shebang-regex` | `3.0.0` | MIT |
+| `side-channel-list` | `1.0.1` | MIT |
+| `side-channel-map` | `1.0.1` | MIT |
+| `side-channel-weakmap` | `1.0.2` | MIT |
+| `side-channel` | `1.1.1` | MIT |
+| `statuses` | `2.0.2` | MIT |
+| `toidentifier` | `1.0.1` | MIT |
+| `ts-algebra` | `2.0.0` | MIT |
+| `tslib` | `2.8.1` | 0BSD |
+| `turndown` | `7.2.4` | MIT |
+| `type-is` | `2.1.0` | MIT |
+| `typebox` | `1.1.38` | MIT |
+| `undici-types` | `8.3.0` | MIT |
+| `unpipe` | `1.0.0` | MIT |
+| `use-sync-external-store` | `1.2.0` | MIT |
+| `vary` | `1.1.2` | MIT |
+| `web-streams-polyfill` | `3.3.3` | MIT |
+| `which` | `2.0.2` | ISC |
+| `wrappy` | `1.0.2` | ISC |
+| `ws` | `8.21.3` | MIT |
+| `wsl-utils` | `1.0.0` | MIT |
+| `yaml` | `2.9.0` | ISC |
+| `zod-to-json-schema` | `3.25.2` | ISC |
+| `zod` | `4.4.3` | MIT |
+| `zustand` | `4.4.7` | MIT |
+
+## Rust dependencies (630)
 
 | Package | Version | Declared license |
 | --- | --- | --- |
@@ -147,6 +705,15 @@ pnpm licenses:generate
 | `arbitrary` | `1.4.2` | MIT OR Apache-2.0 |
 | `arrayvec` | `0.7.8` | MIT OR Apache-2.0 |
 | `assert-json-diff` | `2.0.2` | MIT |
+| `async-broadcast` | `0.7.2` | MIT OR Apache-2.0 |
+| `async-channel` | `2.5.0` | Apache-2.0 OR MIT |
+| `async-executor` | `1.14.0` | Apache-2.0 OR MIT |
+| `async-io` | `2.6.0` | Apache-2.0 OR MIT |
+| `async-lock` | `3.4.2` | Apache-2.0 OR MIT |
+| `async-process` | `2.5.0` | Apache-2.0 OR MIT |
+| `async-recursion` | `1.1.1` | MIT OR Apache-2.0 |
+| `async-signal` | `0.2.14` | Apache-2.0 OR MIT |
+| `async-task` | `4.7.1` | Apache-2.0 OR MIT |
 | `async-trait` | `0.1.91` | MIT OR Apache-2.0 |
 | `atk-sys` | `0.18.2` | MIT |
 | `atk` | `0.18.2` | MIT |
@@ -165,6 +732,7 @@ pnpm licenses:generate
 | `block-buffer` | `0.10.4` | MIT OR Apache-2.0 |
 | `block-padding` | `0.3.3` | MIT OR Apache-2.0 |
 | `block2` | `0.6.2` | MIT |
+| `blocking` | `1.6.2` | Apache-2.0 OR MIT |
 | `borsh-derive` | `1.8.0` | Apache-2.0 |
 | `borsh` | `1.8.0` | MIT OR Apache-2.0 |
 | `brotli-decompressor` | `5.0.3` | BSD-3-Clause/MIT |
@@ -199,6 +767,7 @@ pnpm licenses:generate
 | `cmake` | `0.1.58` | MIT OR Apache-2.0 |
 | `codepage` | `0.1.2` | Apache-2.0 OR MIT |
 | `combine` | `4.6.7` | MIT |
+| `concurrent-queue` | `2.5.0` | Apache-2.0 OR MIT |
 | `cookie` | `0.18.1` | MIT OR Apache-2.0 |
 | `core-foundation-sys` | `0.8.7` | MIT OR Apache-2.0 |
 | `core-foundation` | `0.10.1` | MIT OR Apache-2.0 |
@@ -254,10 +823,15 @@ pnpm licenses:generate
 | `embed_plist` | `1.2.2` | MIT OR Apache-2.0 |
 | `embed-resource` | `3.0.11` | MIT |
 | `encoding_rs` | `0.8.35` | (Apache-2.0 OR MIT) AND BSD-3-Clause |
+| `endi` | `1.1.1` | MIT |
+| `enumflags2_derive` | `0.7.12` | MIT OR Apache-2.0 |
+| `enumflags2` | `0.7.12` | MIT OR Apache-2.0 |
 | `equivalent` | `1.0.2` | Apache-2.0 OR MIT |
 | `erased-serde` | `0.4.10` | MIT OR Apache-2.0 |
 | `errno` | `0.3.14` | MIT OR Apache-2.0 |
 | `euclid` | `0.20.14` | MIT / Apache-2.0 |
+| `event-listener-strategy` | `0.5.4` | Apache-2.0 OR MIT |
+| `event-listener` | `5.4.2` | Apache-2.0 OR MIT |
 | `fallible-iterator` | `0.3.0` | MIT/Apache-2.0 |
 | `fallible-streaming-iterator` | `0.1.9` | MIT/Apache-2.0 |
 | `fast-float2` | `0.2.3` | MIT OR Apache-2.0 |
@@ -278,6 +852,7 @@ pnpm licenses:generate
 | `futures-core` | `0.3.32` | MIT OR Apache-2.0 |
 | `futures-executor` | `0.3.32` | MIT OR Apache-2.0 |
 | `futures-io` | `0.3.32` | MIT OR Apache-2.0 |
+| `futures-lite` | `2.6.1` | Apache-2.0 OR MIT |
 | `futures-macro` | `0.3.32` | MIT OR Apache-2.0 |
 | `futures-sink` | `0.3.32` | MIT OR Apache-2.0 |
 | `futures-task` | `0.3.32` | MIT OR Apache-2.0 |
@@ -342,6 +917,8 @@ pnpm licenses:generate
 | `infer` | `0.19.0` | MIT |
 | `inout` | `0.1.4` | MIT OR Apache-2.0 |
 | `ipnet` | `2.12.0` | MIT OR Apache-2.0 |
+| `is-docker` | `0.2.0` | MIT |
+| `is-wsl` | `0.4.0` | MIT |
 | `itoa` | `1.0.18` | MIT OR Apache-2.0 |
 | `javascriptcore-rs-sys` | `1.1.1` | MIT |
 | `javascriptcore-rs` | `1.1.2` | MIT |
@@ -370,6 +947,7 @@ pnpm licenses:generate
 | `libloading` | `0.7.4` | ISC |
 | `libredox` | `0.1.18` | MIT |
 | `libsqlite3-sys` | `0.38.1` | MIT |
+| `linux-raw-sys` | `0.12.1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `litemap` | `0.8.2` | Unicode-3.0 |
 | `lock_api` | `0.4.14` | MIT OR Apache-2.0 |
 | `log` | `0.4.33` | MIT OR Apache-2.0 |
@@ -413,12 +991,15 @@ pnpm licenses:generate
 | `objc2-web-kit` | `0.3.2` | Zlib OR Apache-2.0 OR MIT |
 | `objc2` | `0.6.4` | MIT |
 | `once_cell` | `1.21.4` | MIT OR Apache-2.0 |
+| `open` | `5.4.1` | MIT |
 | `openssl-probe` | `0.2.1` | MIT OR Apache-2.0 |
 | `option-ext` | `0.2.0` | MPL-2.0 |
+| `ordered-stream` | `0.2.0` | MIT OR Apache-2.0 |
 | `pango-sys` | `0.18.0` | MIT |
 | `pango` | `0.18.3` | MIT |
 | `parking_lot_core` | `0.9.12` | MIT OR Apache-2.0 |
 | `parking_lot` | `0.12.5` | MIT OR Apache-2.0 |
+| `parking` | `2.2.1` | Apache-2.0 OR MIT |
 | `pdf-extract` | `0.10.0` | MIT |
 | `percent-encoding` | `2.3.2` | MIT OR Apache-2.0 |
 | `phf_codegen` | `0.13.1` | MIT |
@@ -427,10 +1008,12 @@ pnpm licenses:generate
 | `phf_shared` | `0.13.1` | MIT |
 | `phf` | `0.13.1` | MIT |
 | `pin-project-lite` | `0.2.17` | Apache-2.0 OR MIT |
+| `piper` | `0.2.5` | MIT OR Apache-2.0 |
 | `pkg-config` | `0.3.33` | MIT OR Apache-2.0 |
 | `plist` | `1.10.0` | MIT |
 | `png` | `0.17.16` | MIT OR Apache-2.0 |
 | `png` | `0.18.1` | MIT OR Apache-2.0 |
+| `polling` | `3.11.0` | Apache-2.0 OR MIT |
 | `pom` | `1.1.0` | MIT |
 | `portable-atomic-util` | `0.2.7` | Apache-2.0 OR MIT |
 | `portable-atomic` | `1.14.0` | Apache-2.0 OR MIT |
@@ -490,6 +1073,7 @@ pnpm licenses:generate
 | `rust_xlsxwriter` | `0.92.4` | MIT OR Apache-2.0 |
 | `rustc_version` | `0.4.1` | MIT OR Apache-2.0 |
 | `rustc-hash` | `2.1.3` | Apache-2.0 OR MIT |
+| `rustix` | `1.1.4` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `rustls-native-certs` | `0.8.4` | Apache-2.0 OR ISC OR MIT |
 | `rustls-pki-types` | `1.15.1` | MIT OR Apache-2.0 |
 | `rustls-platform-verifier-android` | `0.1.1` | MIT OR Apache-2.0 |
@@ -561,12 +1145,14 @@ pnpm licenses:generate
 | `tauri-macros` | `2.6.3` | Apache-2.0 OR MIT |
 | `tauri-plugin-dialog` | `2.7.2` | Apache-2.0 OR MIT |
 | `tauri-plugin-fs` | `2.5.1` | Apache-2.0 OR MIT |
+| `tauri-plugin-opener` | `2.5.4` | Apache-2.0 OR MIT |
 | `tauri-plugin` | `2.6.3` | Apache-2.0 OR MIT |
 | `tauri-runtime-wry` | `2.11.4` | Apache-2.0 OR MIT |
 | `tauri-runtime` | `2.11.3` | Apache-2.0 OR MIT |
 | `tauri-utils` | `2.9.3` | Apache-2.0 OR MIT |
 | `tauri-winres` | `0.3.6` | MIT |
 | `tauri` | `2.11.5` | Apache-2.0 OR MIT |
+| `tempfile` | `3.27.0` | MIT OR Apache-2.0 |
 | `tendril` | `0.5.1` | MIT OR Apache-2.0 |
 | `thiserror-impl` | `1.0.69` | MIT OR Apache-2.0 |
 | `thiserror-impl` | `2.0.18` | MIT OR Apache-2.0 |
@@ -597,6 +1183,7 @@ pnpm licenses:generate
 | `tower-layer` | `0.3.3` | MIT |
 | `tower-service` | `0.3.3` | MIT |
 | `tower` | `0.5.3` | MIT |
+| `tracing-attributes` | `0.1.31` | MIT |
 | `tracing-core` | `0.1.36` | MIT |
 | `tracing` | `0.1.44` | MIT |
 | `tray-icon` | `0.24.1` | MIT OR Apache-2.0 |
@@ -606,6 +1193,7 @@ pnpm licenses:generate
 | `typed-path` | `0.12.3` | MIT OR Apache-2.0 |
 | `typeid` | `1.0.3` | MIT OR Apache-2.0 |
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 |
+| `uds_windows` | `1.2.1` | MIT |
 | `unic-char-property` | `0.9.0` | MIT/Apache-2.0 |
 | `unic-char-range` | `0.9.0` | MIT/Apache-2.0 |
 | `unic-common` | `0.9.0` | MIT/Apache-2.0 |
@@ -712,6 +1300,10 @@ pnpm licenses:generate
 | `x11` | `2.21.0` | MIT |
 | `yoke-derive` | `0.8.2` | Unicode-3.0 |
 | `yoke` | `0.8.3` | Unicode-3.0 |
+| `zbus_macros` | `5.19.0` | MIT |
+| `zbus_names` | `4.3.4` | MIT |
+| `zbus` | `5.19.0` | MIT |
+| `zcheapstr` | `1.1.0` | MIT |
 | `zerocopy-derive` | `0.8.54` | BSD-2-Clause OR Apache-2.0 OR MIT |
 | `zerocopy` | `0.8.54` | BSD-2-Clause OR Apache-2.0 OR MIT |
 | `zerofrom-derive` | `0.1.7` | Unicode-3.0 |
@@ -728,3 +1320,6 @@ pnpm licenses:generate
 | `zopfli` | `0.8.3` | Apache-2.0 |
 | `zune-core` | `0.5.1` | MIT OR Apache-2.0 OR Zlib |
 | `zune-jpeg` | `0.5.15` | MIT OR Apache-2.0 OR Zlib |
+| `zvariant_derive` | `5.15.0` | MIT |
+| `zvariant_utils` | `4.2.0` | MIT |
+| `zvariant` | `5.15.0` | MIT |

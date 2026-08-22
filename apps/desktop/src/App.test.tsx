@@ -12,12 +12,9 @@ describe("App navigation", () => {
     render(<App api={new BrowserDemoApi({ storage: window.localStorage })} />);
 
     await user.click(screen.getByRole("button", { name: "设置" }));
-    expect(screen.getByRole("heading", { name: "食品研发 Agent" })).toBeTruthy();
-    expect(
-      screen
-        .getByRole("switch", { name: "启用食品研发 Agent" })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
+    expect(screen.getByRole("heading", { name: "Ninka Agent" })).toBeTruthy();
+    expect(await screen.findByText("Agent 服务启动失败")).toBeTruthy();
+    expect(screen.queryByText(/Node|npm|@deepseek-ai\/dsh/)).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "LLM 模型" }));
     expect(screen.getByRole("heading", { name: "LLM 模型" })).toBeTruthy();

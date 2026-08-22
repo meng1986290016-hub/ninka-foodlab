@@ -115,7 +115,7 @@ export function AgentComposer({
         </div>
       ) : null}
       <textarea
-        aria-label="给食品研发 Agent 发消息"
+        aria-label="给 Ninka Agent 发消息"
         disabled={running || disabled}
         onChange={(event) => onTextChange(event.target.value)}
         onKeyDown={keyDown}

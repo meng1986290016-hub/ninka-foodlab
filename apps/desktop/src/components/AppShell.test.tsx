@@ -56,7 +56,7 @@ describe("AppShell", () => {
         activePage="ingredients"
         agentOpen={agentOpen}
         agentPanel={
-          agentOpen ? <aside aria-label="食品研发 Agent">Agent 内容</aside> : null
+          agentOpen ? <aside aria-label="Ninka Agent">Agent 内容</aside> : null
         }
         databaseStatus={null}
         onNavigate={() => undefined}
@@ -73,11 +73,11 @@ describe("AppShell", () => {
 
     expect(shell?.className).toBe(expandedShellClass);
     expect(
-      screen.getByRole("complementary", { name: "食品研发 Agent" }),
+      screen.getByRole("complementary", { name: "Ninka Agent" }),
     ).toBeTruthy();
     expect(
       screen
-        .getByRole("button", { name: "隐藏食品研发 Agent 面板" })
+        .getByRole("button", { name: "隐藏 Ninka Agent 面板" })
         .getAttribute("aria-expanded"),
     ).toBe("true");
 
@@ -87,8 +87,8 @@ describe("AppShell", () => {
     rerender(renderShell(false));
 
     expect(shell?.className).toContain("is-sidebar-collapsed");
-    expect(screen.queryByRole("complementary", { name: "食品研发 Agent" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "打开食品研发 Agent" }));
+    expect(screen.queryByRole("complementary", { name: "Ninka Agent" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "打开 Ninka Agent" }));
     expect(onToggleAgent).toHaveBeenCalledTimes(1);
   });
 });

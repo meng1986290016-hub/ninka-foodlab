@@ -18,6 +18,18 @@ import type {
   AgentRunRequest,
   CliDetectionResult,
 } from "./agent-types";
+import type {
+  ArtifactManifest,
+  AgentModelDirectory,
+  AgentRuntimeSettingsMethod,
+  HarnessHealth,
+  HarnessStartRequest,
+  HarnessTask,
+  HarnessTaskEvent,
+  HarnessTurn,
+  LegacyResetPreview,
+  LegacyResetResult,
+} from "./agent-harness-types";
 import type { BrowserAgentEventSource } from "./agent-event-source";
 import type {
   AcceptedAgentRecipeProposal,
@@ -48,6 +60,7 @@ import type {
   IngredientImportDraft,
   IngredientImportJob,
   IngredientImportJobRequest,
+  ImportFileReference,
   ImportIssue,
   DraftSourceLink,
   ReviewedIngredientImportDraft,
@@ -1853,6 +1866,242 @@ export class BrowserDemoApi implements DesktopApi {
     return { ...this.read().agentPreferences };
   }
 
+  async getHarnessHealth(): Promise<HarnessHealth> {
+    return {
+      status: "failed",
+      lastError: "浏览器演示模式不启动 Ninka Agent 服务",
+      reinstallRequired: false,
+    };
+  }
+
+  async startHarness(_request?: HarnessStartRequest): Promise<HarnessHealth> {
+    return this.getHarnessHealth();
+  }
+
+  async stopHarness(): Promise<HarnessHealth> {
+    return this.getHarnessHealth();
+  }
+
+  async agentRuntimeSettingsCall<T>(
+    _method: AgentRuntimeSettingsMethod,
+    _payload: unknown,
+  ): Promise<T> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不修改模型设置");
+  }
+
+  async saveAgentProviderProfile(
+    _input: import("./agent-harness-types").AgentProviderProfileSaveRequest,
+  ): Promise<{ revision: string | number; user: unknown }> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不保存模型设置");
+  }
+
+  async testAgentProviderConnection(_input: {
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<{ ok: boolean }> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不测试模型连接");
+  }
+
+  async getAgentModelDirectory(): Promise<AgentModelDirectory> {
+    return {
+      current: { provider: "", model: "" },
+      routable: false,
+      hasUsableProvider: false,
+      currentUsable: false,
+      groups: [],
+      failures: [],
+    };
+  }
+
+  async selectAgentDefaultModel(_input: {
+    engine?: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<{ selected: AgentModelDirectory["current"] }> {
+    return { selected: _input };
+  }
+
+  async readThirdPartyLicenses(): Promise<string> {
+    return "第三方开源许可随桌面安装包提供。";
+  }
+
+  async listHarnessTasks(
+    _scope: import("./agent-harness-types").HarnessTaskListScope = "active",
+  ): Promise<HarnessTask[]> {
+    return [];
+  }
+
+  async getAgentConversationView(
+    conversationId: string,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    const conversation = (await this.listHarnessTasks()).find((task) => task.id === conversationId);
+    if (!conversation) throw new DesktopApiError("not_found", "Agent 会话不存在");
+    return {
+      conversation,
+      activeTurns: await this.listHarnessTurns(conversationId),
+      queuedMessages: [],
+      queuePaused: false,
+    };
+  }
+
+  async createHarnessTask(_input: {
+    title: string;
+    workflow?: string;
+    content?: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+    files?: ImportFileReference[];
+  }): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不创建 Agent 任务");
+  }
+
+  async renameHarnessTask(_taskId: string, _title: string): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不重命名 Agent 会话");
+  }
+
+  async archiveHarnessTask(_taskId: string): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不归档 Agent 会话");
+  }
+
+  async restoreHarnessTask(_taskId: string): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不恢复 Agent 会话");
+  }
+
+  async selectHarnessTaskModel(_input: {
+    taskId: string;
+    engine: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不切换 Agent 模型");
+  }
+
+  async createHarnessTurn(_input: {
+    taskId: string;
+    parentTurnId?: string | null;
+    content: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+  }): Promise<HarnessTurn> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不创建 Agent 轮次");
+  }
+
+  async submitAgentMessage(
+    input: {
+      conversationId: string;
+      content: string;
+      references: import("./agent-harness-types").AgentRecipeReference[];
+      mode: import("./agent-harness-types").AgentDeliveryMode;
+    },
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    const turns = await this.listHarnessTurns(input.conversationId);
+    await this.createHarnessTurn({
+      taskId: input.conversationId,
+      parentTurnId: turns.at(-1)?.id ?? null,
+      content: input.content,
+      ...(input.references[0] ? { activeRecipeId: input.references[0].recipeId } : {}),
+    });
+    return this.getAgentConversationView(input.conversationId);
+  }
+
+  async editAgentQueuedMessage(
+    _input: {
+      messageId: string;
+      content: string;
+      references: import("./agent-harness-types").AgentRecipeReference[];
+    },
+  ): Promise<import("./agent-harness-types").AgentQueuedMessage> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不编辑排队消息");
+  }
+
+  async deleteAgentQueuedMessage(_messageId: string): Promise<void> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不删除排队消息");
+  }
+
+  async stopAgentConversation(
+    _conversationId: string,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不停止 Agent 会话");
+  }
+
+  async resumeAgentQueue(
+    _conversationId: string,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不继续 Agent 队列");
+  }
+
+  async selectAgentBranch(
+    _conversationId: string,
+    _turnId: string,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不切换回答分支");
+  }
+
+  async editAgentTurn(
+    _turnId: string,
+    _content: string,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不编辑 Agent 历史消息");
+  }
+
+  async bindAgentRecipe(
+    _conversationId: string,
+    _recipeId: string | null,
+  ): Promise<import("./agent-harness-types").AgentConversationView> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不绑定 Agent 配方");
+  }
+
+  async resolveAgentRecipeReferences(
+    _query: string,
+  ): Promise<import("./agent-harness-types").AgentRecipeMatchResult> {
+    return { kind: "none", matches: [] };
+  }
+
+  async syncHarnessTask(_taskId: string): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不同步 Agent 任务");
+  }
+
+  async cancelHarnessTask(_taskId: string): Promise<HarnessTask> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不取消 Agent 任务");
+  }
+
+  async listHarnessTurns(_taskId: string): Promise<HarnessTurn[]> {
+    return [];
+  }
+
+  async listHarnessEvents(
+    _taskId: string,
+    _afterSeq: number,
+  ): Promise<HarnessTaskEvent[]> {
+    return [];
+  }
+
+  async listHarnessArtifacts(_taskId: string): Promise<ArtifactManifest[]> {
+    return [];
+  }
+
+  async previewLegacyAgentReset(): Promise<LegacyResetPreview> {
+    return {
+      previewId: "browser-demo",
+      counts: [],
+      filePaths: [],
+      keychainAccounts: [],
+      conflicts: ["浏览器演示模式不操作桌面数据"],
+      confirmationPhrase: "永久重置旧 Agent 测试数据",
+      canExecute: false,
+    };
+  }
+
+  async executeLegacyAgentReset(
+    _previewId: string,
+    _confirmationPhrase: string,
+  ): Promise<LegacyResetResult> {
+    throw new DesktopApiError("unsupported_operation", "浏览器演示模式不删除桌面数据");
+  }
+
   async saveAgentPreferences(input: AgentPreferences) {
     const state = this.read();
     state.agentPreferences = { ...input };
@@ -2059,7 +2308,7 @@ export class BrowserDemoApi implements DesktopApi {
   async startAgentRun(request: AgentRunRequest) {
     let state = this.read();
     if (!state.agentPreferences.enabled) {
-      throw new DesktopApiError("invalid_state", "食品研发 Agent 已关闭");
+      throw new DesktopApiError("invalid_state", "Ninka Agent 已关闭");
     }
     if (!state.agentConversations[request.conversationId]) {
       throw new DesktopApiError("not_found", "找不到该对话");

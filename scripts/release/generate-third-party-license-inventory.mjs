@@ -55,6 +55,55 @@ async function nodePackages() {
   );
 }
 
+async function embeddedRuntimePackages() {
+  const modulesRoot =
+    "apps/desktop/src-tauri/generated/agent-runtime/node_modules";
+  if (!existsSync(modulesRoot)) {
+    throw new Error("缺少已生成的 FoodLab Agent 运行时，请先执行 pnpm agent-runtime:prepare");
+  }
+  const packages = new Map();
+  const visited = new Set();
+
+  async function scan(root) {
+    if (visited.has(root) || !existsSync(root)) return;
+    visited.add(root);
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const candidates = entry.name.startsWith("@")
+        ? (await readdir(join(root, entry.name), { withFileTypes: true }))
+            .filter((child) => child.isDirectory())
+            .map((child) => join(root, entry.name, child.name))
+        : [join(root, entry.name)];
+      for (const directory of candidates) {
+        const manifestPath = join(directory, "package.json");
+        if (!existsSync(manifestPath)) continue;
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        if (manifest.name && manifest.version) {
+          packages.set(`${manifest.name}@${manifest.version}`, {
+            name: manifest.name,
+            version: manifest.version,
+            license: normalizeLicense(manifest.license ?? manifest.licenses),
+          });
+        }
+        await scan(join(directory, "node_modules"));
+      }
+    }
+  }
+
+  await scan(modulesRoot);
+  packages.set("Node.js@24.19.0", {
+    name: "Node.js",
+    version: "24.19.0",
+    license: "MIT and bundled third-party licenses; see NODE_LICENSE",
+  });
+  return [...packages.values()].sort((left, right) =>
+    `${left.name}@${left.version}`.localeCompare(
+      `${right.name}@${right.version}`,
+      "en",
+    ),
+  );
+}
+
 function rustPackages() {
   const result = spawnSync(
     "cargo",
@@ -99,8 +148,9 @@ function table(packages) {
 }
 
 const javascript = await nodePackages();
+const embeddedRuntime = await embeddedRuntimePackages();
 const rust = rustPackages();
-const missing = [...javascript, ...rust].filter(
+const missing = [...javascript, ...embeddedRuntime, ...rust].filter(
   (item) => item.license === "UNKNOWN" || item.license.endsWith("UNKNOWN"),
 );
 if (missing.length > 0) {
@@ -125,6 +175,13 @@ pnpm licenses:generate
 
 ${table(javascript)}
 
+## Embedded FoodLab Agent runtime (${embeddedRuntime.length})
+
+The corresponding license texts and attribution notices are included in the
+application bundle and in the DMG folder named \`Third-Party Licenses\`.
+
+${table(embeddedRuntime)}
+
 ## Rust dependencies (${rust.length})
 
 ${table(rust)}
@@ -132,5 +189,5 @@ ${table(rust)}
 
 await writeFile("THIRD_PARTY_LICENSES.md", output, "utf8");
 console.log(
-  `已生成第三方许可证清单：JavaScript ${javascript.length} 个，Rust ${rust.length} 个`,
+  `已生成第三方许可证清单：JavaScript ${javascript.length} 个，Agent 运行时 ${embeddedRuntime.length} 个，Rust ${rust.length} 个`,
 );

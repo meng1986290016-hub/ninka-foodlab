@@ -7,15 +7,14 @@ describe("Icon", () => {
   it("renders approved Ninka SVG masters for product semantics", () => {
     const { container } = render(<Icon name="recipe-workbench" size={24} />);
     const icon = container.querySelector('[data-icon="recipe-workbench"]');
-    const custom = icon?.querySelector("img.icon__custom");
+    const custom = icon?.querySelector(".icon__custom svg");
 
     expect(icon?.getAttribute("style")).toContain("width: 24px");
     expect(icon?.getAttribute("data-custom-icon")).toBe("true");
-    const source = custom?.getAttribute("src") ?? "";
-    expect(source).toContain("data:image/svg+xml");
-    expect(decodeURIComponent(source)).toContain(
+    expect(custom?.querySelector("metadata")?.textContent).toContain(
       "Ninka FoodLab recipe-workbench r02",
     );
+    expect(custom?.querySelector('[stroke="#153D36"]')).toBeTruthy();
   });
 
   it("keeps utility actions in the shared 1.75px icon language", () => {
@@ -23,10 +22,10 @@ describe("Icon", () => {
       <Icon name="ingredient-library" size={20} />,
     );
 
-    expect(container.querySelector("img.icon__custom")).toBeTruthy();
+    expect(container.querySelector(".icon__custom svg")).toBeTruthy();
 
     rerender(<Icon name="trash" size={20} />);
-    expect(container.querySelector("img.icon__custom")).toBeNull();
+    expect(container.querySelector(".icon__custom")).toBeNull();
     expect(container.querySelector("svg")?.getAttribute("stroke-width")).toBe(
       "1.75",
     );

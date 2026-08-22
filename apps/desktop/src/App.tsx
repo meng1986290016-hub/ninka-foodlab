@@ -27,6 +27,11 @@ import type { SampleSheetLaunch } from "./features/recipes/sample-sheet-source";
 import type { RecipeAgentWorkbenchContext } from "./features/recipes/recipe-agent-analysis";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import "./styles/app.css";
+import {
+  applyThemePreference,
+  readThemePreference,
+  subscribeThemePreference,
+} from "./theme";
 
 interface AppProps {
   api?: DesktopApi;
@@ -35,6 +40,10 @@ interface AppProps {
 }
 
 export function App({ api, agentEvents, filePicker }: AppProps) {
+  useState(() => {
+    applyThemePreference(readThemePreference());
+    return true;
+  });
   const [eventSource] = useState(
     () => agentEvents ?? createAgentEventSource(),
   );
@@ -77,6 +86,11 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [resumeNutritionItemId, setResumeNutritionItemId] = useState<
     string | null
   >(null);
+  const isAgentSurface = new URLSearchParams(window.location.search).get("surface") === "agent";
+
+  useEffect(() => {
+    return subscribeThemePreference();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +134,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   }
 
   function configureAgent(section: "general" | "models") {
+    if (isAgentSurface) window.history.replaceState(null, "", window.location.pathname);
     setSettingsSection(section);
     setActivePage("settings");
     setAgentOpen(true);
@@ -169,6 +184,23 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     setReviewQueue([]);
     setReviewQueueTotal(0);
     setReviewQueueCompleted(0);
+  }
+
+  if (isAgentSurface) {
+    return (
+      <main className="agent-window-root">
+        <AgentPanel
+          api={desktopApi}
+          events={eventSource}
+          filePicker={sourcePicker}
+          onClose={() => {}}
+          onConfigure={configureAgent}
+          onOpenImported={() => {}}
+          onReviewDraft={() => {}}
+          open
+        />
+      </main>
+    );
   }
 
   return (

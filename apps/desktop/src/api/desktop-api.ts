@@ -13,6 +13,23 @@ import type {
   CliDetectionResult,
 } from "./agent-types";
 import type {
+  ArtifactManifest,
+  AgentModelDirectory,
+  AgentConversationView,
+  AgentDeliveryMode,
+  AgentQueuedMessage,
+  AgentRecipeMatchResult,
+  AgentRecipeReference,
+  AgentRuntimeSettingsMethod,
+  HarnessHealth,
+  HarnessStartRequest,
+  HarnessTask,
+  HarnessTaskEvent,
+  HarnessTurn,
+  LegacyResetPreview,
+  LegacyResetResult,
+} from "./agent-harness-types";
+import type {
   AcceptedAgentRecipeProposal,
   AgentRecipeProposal,
   AgentRecipeProposalAcceptInput,
@@ -38,6 +55,7 @@ import type {
   IngredientImportDraft,
   IngredientImportJob,
   IngredientImportJobRequest,
+  ImportFileReference,
   ReviewedIngredientImportDraft,
 } from "./import-types";
 import type {
@@ -92,6 +110,86 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  getHarnessHealth(): Promise<HarnessHealth>;
+  startHarness(request?: HarnessStartRequest): Promise<HarnessHealth>;
+  stopHarness(): Promise<HarnessHealth>;
+  agentRuntimeSettingsCall<T>(
+    method: AgentRuntimeSettingsMethod,
+    payload: unknown,
+  ): Promise<T>;
+  saveAgentProviderProfile(
+    input: import("./agent-harness-types").AgentProviderProfileSaveRequest,
+  ): Promise<{ revision: string | number; user: unknown }>;
+  testAgentProviderConnection(input: {
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<{ ok: boolean }>;
+  getAgentModelDirectory(): Promise<AgentModelDirectory>;
+  selectAgentDefaultModel(input: {
+    engine?: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<{ selected: AgentModelDirectory["current"] }>;
+  readThirdPartyLicenses(): Promise<string>;
+  listHarnessTasks(
+    scope?: import("./agent-harness-types").HarnessTaskListScope,
+  ): Promise<HarnessTask[]>;
+  getAgentConversationView(conversationId: string): Promise<AgentConversationView>;
+  createHarnessTask(input: {
+    title: string;
+    workflow?: string;
+    content?: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+    files?: ImportFileReference[];
+  }): Promise<HarnessTask>;
+  renameHarnessTask(taskId: string, title: string): Promise<HarnessTask>;
+  archiveHarnessTask(taskId: string): Promise<HarnessTask>;
+  restoreHarnessTask(taskId: string): Promise<HarnessTask>;
+  selectHarnessTaskModel(input: {
+    taskId: string;
+    engine: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }): Promise<HarnessTask>;
+  createHarnessTurn(input: {
+    taskId: string;
+    parentTurnId?: string | null;
+    content: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+  }): Promise<HarnessTurn>;
+  submitAgentMessage(input: {
+    conversationId: string;
+    content: string;
+    references: AgentRecipeReference[];
+    mode: AgentDeliveryMode;
+  }): Promise<AgentConversationView>;
+  editAgentQueuedMessage(input: {
+    messageId: string;
+    content: string;
+    references: AgentRecipeReference[];
+  }): Promise<AgentQueuedMessage>;
+  deleteAgentQueuedMessage(messageId: string): Promise<void>;
+  stopAgentConversation(conversationId: string): Promise<AgentConversationView>;
+  resumeAgentQueue(conversationId: string): Promise<AgentConversationView>;
+  selectAgentBranch(conversationId: string, turnId: string): Promise<AgentConversationView>;
+  editAgentTurn(turnId: string, content: string): Promise<AgentConversationView>;
+  bindAgentRecipe(conversationId: string, recipeId: string | null): Promise<AgentConversationView>;
+  resolveAgentRecipeReferences(query: string): Promise<AgentRecipeMatchResult>;
+  syncHarnessTask(taskId: string): Promise<HarnessTask>;
+  cancelHarnessTask(taskId: string): Promise<HarnessTask>;
+  listHarnessTurns(taskId: string): Promise<HarnessTurn[]>;
+  listHarnessEvents(taskId: string, afterSeq: number): Promise<HarnessTaskEvent[]>;
+  listHarnessArtifacts(taskId: string): Promise<ArtifactManifest[]>;
+  previewLegacyAgentReset(): Promise<LegacyResetPreview>;
+  executeLegacyAgentReset(
+    previewId: string,
+    confirmationPhrase: string,
+  ): Promise<LegacyResetResult>;
   createDataBackup(destinationPath: string): Promise<BackupManifest>;
   inspectDataBackup(sourcePath: string): Promise<BackupPreflight>;
   restoreDataBackup(

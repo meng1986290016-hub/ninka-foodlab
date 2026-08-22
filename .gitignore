@@ -12,3 +12,5 @@ output/playwright/
 *.log
 **/src-tauri/target/
 **/src-tauri/gen/
+/apps/desktop/src-tauri/generated/
+/apps/desktop/src-tauri/binaries/foodlab-agent-node-*

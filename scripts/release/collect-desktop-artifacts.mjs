@@ -13,18 +13,24 @@ const distributionFiles = [
 ];
 
 async function walk(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
+  const pending = [directory];
   const files = [];
-
-  for (const entry of entries) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await walk(path)));
-    } else {
-      files.push(path);
+  while (pending.length) {
+    const current = pending.pop();
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        // Installers are siblings of the application bundle. Descending into a
+        // bundled runtime is both expensive and can misclassify dependency files.
+        if (!entry.name.endsWith(".app") && !entry.name.endsWith(".dSYM")) {
+          pending.push(path);
+        }
+      } else {
+        files.push(path);
+      }
     }
   }
-
   return files;
 }
 

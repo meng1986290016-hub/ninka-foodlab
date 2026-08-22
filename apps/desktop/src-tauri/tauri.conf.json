@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ninka FoodLab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.foodrd.studio",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "npm run agent-runtime:prepare && npm run dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "npm run agent-runtime:prepare && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -42,11 +42,14 @@
     "resources": {
       "../../../LICENSE": "licenses/LICENSE",
       "../../../NOTICE": "licenses/NOTICE",
-      "../../../THIRD_PARTY_LICENSES.md": "licenses/THIRD_PARTY_LICENSES.md"
+      "../../../THIRD_PARTY_LICENSES.md": "licenses/THIRD_PARTY_LICENSES.md",
+      "generated/agent-runtime": "agent-runtime"
     },
+    "externalBin": ["binaries/foodlab-agent-node"],
     "macOS": {
-      "minimumSystemVersion": "10.15",
-      "signingIdentity": "-"
+      "minimumSystemVersion": "13.5",
+      "signingIdentity": "-",
+      "hardenedRuntime": false
     },
     "windows": {
       "nsis": {

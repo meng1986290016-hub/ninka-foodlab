@@ -1,0 +1,14 @@
+{
+  "name": "@food-rd/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "dependencies": {
+    "@openai/codex": "0.148.0",
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-credentials-local": "0.1.0-rc.6"
+  }
+}

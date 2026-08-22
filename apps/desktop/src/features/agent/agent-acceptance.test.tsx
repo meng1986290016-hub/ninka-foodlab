@@ -1,178 +1,145 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { App } from "../../App";
-import { BrowserAgentEventSource } from "../../api/agent-event-source";
+import type {
+  HarnessHealth,
+  HarnessTask,
+  HarnessTurn,
+} from "../../api/agent-harness-types";
 import { BrowserDemoApi } from "../../api/browser-demo-api";
-import type { ImportFilePicker } from "../../api/import-file-picker";
-import type { ImportFileReference } from "../../api/import-types";
 
-class MemoryStorage implements Storage {
-  private readonly values = new Map<string, string>();
-  get length() {
-    return this.values.size;
-  }
-  clear() {
-    this.values.clear();
-  }
-  getItem(key: string) {
-    return this.values.get(key) ?? null;
-  }
-  key(index: number) {
-    return [...this.values.keys()][index] ?? null;
-  }
-  removeItem(key: string) {
-    this.values.delete(key);
-  }
-  setItem(key: string, value: string) {
-    this.values.set(key, value);
-  }
-}
+class ReadyHarnessDemoApi extends BrowserDemoApi {
+  private readonly harnessTasks: HarnessTask[] = [];
+  private readonly turns = new Map<string, HarnessTurn[]>();
 
-function picker(files: ImportFileReference[]): ImportFilePicker {
-  return {
-    async pickSources() {
-      return files;
-    },
-    async pickDestination() {
-      return null;
-    },
-  };
-}
+  override async getHarnessHealth(): Promise<HarnessHealth> {
+    return {
+      status: "ready",
+      lastError: null,
+      reinstallRequired: false,
+    };
+  }
 
-describe("food R&D Agent acceptance", () => {
-  it("keeps one unsaved draft after two explicit human saves and restart", async () => {
-    const storage = new MemoryStorage();
-    const events = new BrowserAgentEventSource();
-    const api = new BrowserDemoApi({
-      storage,
-      agentEvents: events,
-      now: () => "2026-07-30T20:00:00.000Z",
-    });
-    const files: ImportFileReference[] = [
-      { kind: "browser_demo", value: "乳粉-A-标签.png", mediaType: "image/png" },
-      { kind: "browser_demo", value: "乳粉-B-标签.png", mediaType: "image/png" },
-      {
-        kind: "browser_demo",
-        value: "乳清蛋白-规格书.pdf",
-        mediaType: "application/pdf",
+  override async getAgentModelDirectory() {
+    return {
+      current: { provider: "mock", model: "mock-model" },
+      routable: true,
+      hasUsableProvider: true,
+      currentUsable: true,
+      groups: [{ provider: "mock", models: [{ id: "mock-model" }] }],
+      failures: [],
+    };
+  }
+
+  override async listHarnessTasks() {
+    return [...this.harnessTasks];
+  }
+
+  override async createHarnessTask(input: {
+    title: string;
+    workflow?: string;
+    content?: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+  }): Promise<HarnessTask> {
+    const workflow = input.workflow ?? "local_knowledge";
+    const task: HarnessTask = {
+      id: `task-${this.harnessTasks.length + 1}`,
+      harnessSessionId: null,
+      title: input.title,
+      workflow,
+      status: "running",
+      taskContract: {
+        workflow,
+        allowedTools: [
+          "read_recipe_reference_context",
+          "search_rnd_reference_cards",
+          "create_recipe_estimate_card",
+        ],
+        requiredSteps: [
+          "read_recipe_reference_context",
+          "search_rnd_reference_cards",
+          "create_recipe_estimate_card",
+        ],
+        requiredArtifactKinds: ["recipe_estimate_card"],
+        approvalPolicy: "automatic",
+        completionPredicate:
+          "an estimate card exists in ready or needs_input state",
       },
-    ];
+      activeRecipeId: input.activeRecipeId ?? null,
+      lastEventSeq: -1,
+      errorCode: null,
+      errorSummary: null,
+      activeRoute: { engine: "foodlab_runtime", provider: "mock", model: "mock-model" },
+      archivedAt: null,
+      createdAt: "2026-08-20T00:00:00Z",
+      updatedAt: "2026-08-20T00:00:00Z",
+    };
+    this.harnessTasks.unshift(task);
+    this.turns.set(task.id, []);
+    return task;
+  }
+
+  override async createHarnessTurn(input: {
+    taskId: string;
+    parentTurnId?: string | null;
+    content: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+  }): Promise<HarnessTurn> {
+    const turn: HarnessTurn = {
+      id: `turn-${(this.turns.get(input.taskId)?.length ?? 0) + 1}`,
+      taskId: input.taskId,
+      harnessTurnId: "0",
+      parentTurnId: input.parentTurnId ?? null,
+      status: "completed",
+      userContent: input.content,
+      contentBlocks: [{ type: "markdown", text: "已记录当前研发问题。" }],
+      route: { engine: "foodlab_runtime", provider: "mock", model: "mock-model" },
+      createdAt: "2026-08-20T00:00:00Z",
+      updatedAt: "2026-08-20T00:00:00Z",
+    };
+    this.turns.set(input.taskId, [...(this.turns.get(input.taskId) ?? []), turn]);
+    return turn;
+  }
+
+  override async listHarnessTurns(taskId: string) {
+    return [...(this.turns.get(taskId) ?? [])];
+  }
+
+  override async syncHarnessTask(taskId: string) {
+    return this.harnessTasks.find((task) => task.id === taskId)!;
+  }
+}
+
+describe("food R&D Agent V2 acceptance", () => {
+  it("keeps a contracted task visible after closing and reopening the panel", async () => {
+    const api = new ReadyHarnessDemoApi({ storage: window.localStorage });
     const user = userEvent.setup();
-    const view = render(
-      <App api={api} agentEvents={events} filePicker={picker(files)} />,
-    );
+    render(<App api={api} />);
 
     await user.click(
-      screen.getByRole("button", { name: "打开食品研发 Agent" }),
-    );
-    await user.click(
-      await screen.findByRole("button", { name: "添加原料资料" }),
+      screen.getByRole("button", { name: "打开 Ninka Agent" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "给食品研发 Agent 发消息" }),
-      "读取这些资料，分别建立供应商版本",
+      await screen.findByRole("textbox", { name: "给 Ninka Agent 发消息" }),
+      "请估算当前配方甜度",
     );
-    await user.click(screen.getByRole("button", { name: "发送" }));
-    expect(
-      await screen.findByText("已分别识别 3 份原料资料，并生成 3 张待人工复核草稿。"),
-    ).toBeTruthy();
-    expect(
-      await screen.findAllByRole("button", { name: "打开并检查" }),
-    ).toHaveLength(3);
+    await user.click(screen.getByRole("button", { name: "发送消息" }));
+    expect((await screen.findAllByText("请估算当前配方甜度")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("完成条件")).toBeNull();
+    expect(screen.queryByText("步骤时间线")).toBeNull();
 
-    async function saveNextSupplier(
-      supplierName: string,
-      proteinValue?: string,
-      continueToNext = false,
-      openDialog = true,
-    ) {
-      if (openDialog) {
-        await user.click(
-          screen.getAllByRole("button", { name: "打开并检查" })[0]!,
-        );
-      }
-      const dialog = await screen.findByRole("dialog", {
-        name: "人工复核原料草稿",
-      });
-      const material = within(dialog).getByLabelText("通用原料名称");
-      await user.clear(material);
-      await user.type(material, "Agent验收脱脂乳粉");
-      const supplier = within(dialog).getByLabelText(
-        "供应商名称（新建或修正）",
-      );
-      await user.clear(supplier);
-      await user.type(supplier, supplierName);
-      if (proteinValue !== undefined) {
-        await user.click(
-          within(dialog).getByRole("tab", { name: "营养与过敏原" }),
-        );
-        const protein = await within(dialog).findByLabelText("蛋白质（g）");
-        await user.clear(protein);
-        await user.type(protein, proteinValue);
-      }
-      await user.click(
-        within(dialog).getByRole("button", {
-          name: continueToNext ? "保存并复核下一张" : "仅保存并关闭",
-        }),
-      );
-      if (continueToNext) {
-        expect(await screen.findByText("第 2 / 3 张")).toBeTruthy();
-      } else {
-        await waitFor(() =>
-          expect(
-            screen.queryByRole("dialog", { name: "人工复核原料草稿" }),
-          ).toBeNull(),
-        );
-      }
-    }
-
-    await saveNextSupplier("供应商A", "0", true);
-    await saveNextSupplier("供应商B", undefined, false, false);
-    await waitFor(() =>
-      expect(
-        screen.getAllByRole("button", { name: "打开并检查" }),
-      ).toHaveLength(1),
-    );
-
-    const milkPowder = (await api.listMaterialGroups("Agent验收脱脂乳粉")).find(
-      (group) => group.name === "Agent验收脱脂乳粉",
-    )!;
-    expect(milkPowder.variants).toHaveLength(2);
-    expect(new Set(milkPowder.variants.map((variant) => variant.supplierId)).size).toBe(2);
-    const supplierA = milkPowder.variants.find(
-      (variant) => variant.supplierName === "供应商A",
-    )!;
-    const supplierB = milkPowder.variants.find(
-      (variant) => variant.supplierName === "供应商B",
-    )!;
-    expect(
-      supplierA.nutrition.values.find(
-        (value) => value.nutrientDefinitionId === "protein",
-      )?.value,
-    ).toBe("0");
-    expect(
-      supplierB.nutrition.values.find(
-        (value) => value.nutrientDefinitionId === "protein",
-      )?.value,
-    ).toBeNull();
-    expect(supplierA.internalCode).toBeNull();
-    expect(supplierB.internalCode).toBeNull();
-
-    view.unmount();
-    render(<App api={api} agentEvents={events} filePicker={picker(files)} />);
     await user.click(
-      screen.getByRole("button", { name: "打开食品研发 Agent" }),
+      screen.getByRole("button", { name: "关闭 Ninka Agent" }),
     );
-    expect(
-      await screen.findByText("读取这些资料，分别建立供应商版本"),
-    ).toBeTruthy();
-    expect(
-      await screen.findAllByRole("button", { name: "打开并检查" }),
-    ).toHaveLength(1);
-    expect(
-      screen.getAllByRole("button", { name: "在原料库查看" }),
-    ).toHaveLength(2);
-  }, 15_000);
+    await user.click(
+      screen.getByRole("button", { name: "打开 Ninka Agent" }),
+    );
+
+    expect((await screen.findAllByText("请估算当前配方甜度")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("已记录当前研发问题。")).toBeTruthy();
+  });
 });

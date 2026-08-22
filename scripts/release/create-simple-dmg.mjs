@@ -11,8 +11,23 @@ const config = JSON.parse(
 );
 const productName = config.productName;
 const version = config.version;
-const architecture = process.arch === "arm64" ? "arm64" : "x64";
-const bundleRoot = resolve("apps/desktop/src-tauri/target/release/bundle");
+const requestedTarget = process.env.FOODLAB_BUILD_TARGET?.trim();
+const target = requestedTarget === "x86_64-apple-darwin"
+  ? { architecture: "x64", directory: "x86_64-apple-darwin" }
+  : requestedTarget === "aarch64-apple-darwin"
+    ? { architecture: "arm64", directory: "aarch64-apple-darwin" }
+    : process.arch === "arm64"
+      ? { architecture: "arm64", directory: null }
+      : { architecture: "x64", directory: null };
+if (requestedTarget && requestedTarget !== `${target.directory}`) {
+  throw new Error(`不支持的 macOS 构建目标：${requestedTarget}`);
+}
+const architecture = target.architecture;
+const bundleRoot = resolve(
+  "apps/desktop/src-tauri/target",
+  ...(target.directory ? [target.directory] : []),
+  "release/bundle",
+);
 const appPath = join(bundleRoot, "macos", `${productName}.app`);
 const dmgRoot = join(bundleRoot, "dmg");
 const outputPath = join(
@@ -20,6 +35,9 @@ const outputPath = join(
   `food-rd-studio-${version}-macos-${architecture}.dmg`,
 );
 const distributionFiles = ["LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md"];
+const runtimeLicenseRoot = resolve(
+  "apps/desktop/src-tauri/generated/agent-runtime/licenses",
+);
 
 await mkdir(dmgRoot, { recursive: true });
 const stagingRoot = await mkdtemp(join(dmgRoot, ".staging-"));
@@ -48,6 +66,10 @@ try {
       preserveTimestamps: true,
     });
   }
+  await cp(runtimeLicenseRoot, join(stagingRoot, "Third-Party Licenses"), {
+    recursive: true,
+    preserveTimestamps: true,
+  });
   await symlink("/Applications", join(stagingRoot, "Applications"));
 
   await run("hdiutil", [

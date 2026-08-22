@@ -57,19 +57,19 @@ export function AgentGeneralSettings({ api }: AgentGeneralSettingsProps) {
   return (
     <section className="settings-section" aria-labelledby="agent-general-title">
       <div className="settings-section__heading">
-        <h2 id="agent-general-title">食品研发 Agent</h2>
+        <h2 id="agent-general-title">Ninka Agent</h2>
         <p>Agent 默认开启；所有原料导入结果都必须经过人工复核才能保存。</p>
       </div>
 
       <div className="settings-card">
         <div className="settings-row">
           <div>
-            <strong>启用食品研发 Agent</strong>
+            <strong>启用 Ninka Agent</strong>
             <p>关闭后不影响原料库、表格导入和其他手动研发功能。</p>
           </div>
           <button
             aria-checked={preferences.enabled}
-            aria-label="启用食品研发 Agent"
+            aria-label="启用 Ninka Agent"
             className={preferences.enabled ? "switch is-on" : "switch"}
             onClick={() =>
               void save({ ...preferences, enabled: !preferences.enabled })

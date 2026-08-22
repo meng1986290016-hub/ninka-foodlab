@@ -1,10 +1,11 @@
 {
   "name": "@food-rd/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "agent-runtime:prepare": "node ../../scripts/release/prepare-agent-runtime.mjs",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
     "dev": "vite",
     "tauri": "tauri",
@@ -17,10 +18,12 @@
     "@food-rd/core": "workspace:*",
     "@tabler/icons-react": "^3.46.0",
     "@tauri-apps/api": "2.11.1",
-    "@tauri-apps/plugin-dialog": "2.4.2",
+    "@tauri-apps/plugin-dialog": "2.7.2",
     "decimal.js": "10.6.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "thinking-orbs": "0.2.0"
   },
   "devDependencies": {

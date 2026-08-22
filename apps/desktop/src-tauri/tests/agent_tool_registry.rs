@@ -177,6 +177,24 @@ fn registry_exposes_only_approved_review_scoped_tools() {
         attachment_reader.input_schema["required"],
         json!(["attachmentIds"])
     );
+    for tool_name in [
+        "diagnose_recipe",
+        "review_recipe_development",
+        "compare_supplier_variant",
+        "read_recipe_reference_context",
+        "create_recipe_estimate_card",
+    ] {
+        let tool = definitions
+            .iter()
+            .find(|tool| tool.name == tool_name)
+            .unwrap();
+        assert!(tool.input_schema["properties"].get("recipeId").is_none());
+        assert!(
+            tool.input_schema["properties"]
+                .get("sourceDraftFingerprint")
+                .is_none()
+        );
+    }
 }
 
 #[test]
@@ -328,21 +346,13 @@ fn recipe_diagnosis_and_supplier_comparison_are_deterministic_read_only_tools() 
     };
 
     let diagnosis = registry
-        .execute(
-            &scoped_context,
-            "diagnose_recipe",
-            json!({ "recipeId": recipe.id.clone() }),
-        )
+        .execute(&scoped_context, "diagnose_recipe", json!({}))
         .unwrap();
     assert_eq!(diagnosis["status"], "attention");
     assert_eq!(diagnosis["readOnly"], true);
 
     let retrospective = registry
-        .execute(
-            &scoped_context,
-            "review_recipe_development",
-            json!({ "recipeId": recipe.id.clone() }),
-        )
+        .execute(&scoped_context, "review_recipe_development", json!({}))
         .unwrap();
     assert_eq!(
         retrospective["researchNotes"]["current"],
@@ -363,7 +373,6 @@ fn recipe_diagnosis_and_supplier_comparison_are_deterministic_read_only_tools() 
             &scoped_context,
             "compare_supplier_variant",
             json!({
-                "recipeId": recipe.id.clone(),
                 "itemId": "line-milk",
                 "candidateVariantId": candidate_variant.id.clone()
             }),

@@ -23,10 +23,6 @@ jobs:
             os: macos-15-intel
             command: desktop:bundle:macos
             artifact: macos-x64
-          - label: Windows x64
-            os: windows-2025
-            command: desktop:bundle:windows
-            artifact: windows-x64
 
     steps:
       - name: Checkout
@@ -40,7 +36,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24.14.0
+          node-version: 24.19.0
           cache: pnpm
 
       - name: Set up Python
@@ -62,6 +58,9 @@ jobs:
       - name: Install brand verification dependencies
         run: python -m pip install -r scripts/branding/requirements.txt
 
+      - name: Prepare embedded Agent runtime
+        run: pnpm agent-runtime:prepare
+
       - name: Verify frontend and brand assets
         env:
           PYTHONPATH: scripts/branding
@@ -73,6 +72,9 @@ jobs:
 
       - name: Build installer
         run: pnpm ${{ matrix.command }}
+
+      - name: Verify embedded Agent runtime in app bundle
+        run: pnpm agent-runtime:verify
 
       - name: Create non-interactive DMG
         if: runner.os == 'macOS'

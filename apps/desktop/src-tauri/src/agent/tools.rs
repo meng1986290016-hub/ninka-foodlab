@@ -201,9 +201,9 @@ impl AgentToolRegistry {
             "request_open_recipe_proposal_review" => {
                 self.request_open_recipe_proposal_review(context, arguments)
             }
-            "diagnose_recipe" => self.diagnose_recipe(arguments),
-            "review_recipe_development" => self.review_recipe_development(arguments),
-            "compare_supplier_variant" => self.compare_supplier_variant(arguments),
+            "diagnose_recipe" => self.diagnose_recipe(context, arguments),
+            "review_recipe_development" => self.review_recipe_development(context, arguments),
+            "compare_supplier_variant" => self.compare_supplier_variant(context, arguments),
             "read_recipe_reference_context" => {
                 self.read_recipe_reference_context(context, arguments)
             }
@@ -516,13 +516,17 @@ impl AgentToolRegistry {
         }))
     }
 
-    fn diagnose_recipe(&self, arguments: Value) -> Result<Value, AgentError> {
-        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
+    fn diagnose_recipe(
+        &self,
+        context: &AgentToolContext,
+        _arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let recipe_id = active_recipe_id(context)?;
         let source = self
             .recipes
             .as_ref()
             .ok_or_else(|| AgentError::provider_failure("配方诊断工具不可用"))?
-            .get_recipe_analysis_source(&arguments.recipe_id)?;
+            .get_recipe_analysis_source(recipe_id)?;
         let draft = source
             .get("draft")
             .filter(|value| !value.is_null())
@@ -644,13 +648,17 @@ impl AgentToolRegistry {
         }))
     }
 
-    fn review_recipe_development(&self, arguments: Value) -> Result<Value, AgentError> {
-        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
+    fn review_recipe_development(
+        &self,
+        context: &AgentToolContext,
+        _arguments: Value,
+    ) -> Result<Value, AgentError> {
+        let recipe_id = active_recipe_id(context)?;
         let source = self
             .recipes
             .as_ref()
             .ok_or_else(|| AgentError::provider_failure("研发复盘工具不可用"))?
-            .get_recipe_analysis_source(&arguments.recipe_id)?;
+            .get_recipe_analysis_source(recipe_id)?;
         let draft = source
             .get("draft")
             .filter(|value| !value.is_null())
@@ -670,9 +678,7 @@ impl AgentToolRegistry {
             .pointer("/snapshot/markdownNotes")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        let diagnosis = self.diagnose_recipe(json!({
-            "recipeId": arguments.recipe_id
-        }))?;
+        let diagnosis = self.diagnose_recipe(context, json!({}))?;
         let mut next_step_hints = Vec::new();
         if current_notes.trim().is_empty() {
             next_step_hints.push("当前研发备注为空；下一轮前先补记本轮工艺、感官结果和异常现象");
@@ -731,13 +737,18 @@ impl AgentToolRegistry {
         }))
     }
 
-    fn compare_supplier_variant(&self, arguments: Value) -> Result<Value, AgentError> {
+    fn compare_supplier_variant(
+        &self,
+        context: &AgentToolContext,
+        arguments: Value,
+    ) -> Result<Value, AgentError> {
         let arguments: CompareSupplierVariantArguments = parse_arguments(arguments)?;
+        let recipe_id = active_recipe_id(context)?;
         let source = self
             .recipes
             .as_ref()
             .ok_or_else(|| AgentError::provider_failure("替代原料分析工具不可用"))?
-            .get_recipe_analysis_source(&arguments.recipe_id)?;
+            .get_recipe_analysis_source(recipe_id)?;
         let draft = source
             .get("draft")
             .filter(|value| !value.is_null())
@@ -866,13 +877,13 @@ impl AgentToolRegistry {
         context: &AgentToolContext,
         arguments: Value,
     ) -> Result<Value, AgentError> {
-        let arguments: RecipeIdArguments = parse_arguments(arguments)?;
-        require_active_recipe(context, &arguments.recipe_id)?;
+        let _ = arguments;
+        let recipe_id = active_recipe_id(context)?;
         let source = self
             .recipes
             .as_ref()
             .ok_or_else(|| AgentError::provider_failure("配方参考估算工具不可用"))?
-            .get_recipe_analysis_source(&arguments.recipe_id)?;
+            .get_recipe_analysis_source(recipe_id)?;
         let draft = source
             .get("draft")
             .filter(|value| !value.is_null())
@@ -889,7 +900,6 @@ impl AgentToolRegistry {
         Ok(json!({
             "recipe": source["recipe"].clone(),
             "draftUpdatedAt": draft.get("updatedAt").cloned().unwrap_or(Value::Null),
-            "requestedDraftFingerprint": context.active_draft_fingerprint.clone(),
             "finishedMassGrams": payload.get("finishedMassGrams").cloned().unwrap_or(Value::Null),
             "inputMassGrams": draft.pointer("/calculation/inputMassGrams").cloned().unwrap_or(Value::Null),
             "basisMassGrams": draft.pointer("/calculation/basisMassGrams").cloned().unwrap_or(Value::Null),
@@ -978,15 +988,22 @@ impl AgentToolRegistry {
         context: &AgentToolContext,
         arguments: Value,
     ) -> Result<Value, AgentError> {
+        let recipe_id = active_recipe_id(context)?.to_string();
+        let draft_fingerprint = context
+            .active_draft_fingerprint
+            .clone()
+            .ok_or_else(|| AgentError::invalid_input("当前配方还没有可引用的已保存草稿"))?;
+        let mut arguments = arguments;
+        let card = arguments
+            .get_mut("card")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| AgentError::invalid_input("估算卡参数无效"))?;
+        card.insert("recipeId".into(), Value::String(recipe_id));
+        card.insert(
+            "sourceDraftFingerprint".into(),
+            Value::String(draft_fingerprint),
+        );
         let arguments: RecipeEstimateCardArguments = parse_arguments(arguments)?;
-        require_active_recipe(context, &arguments.card.recipe_id)?;
-        if context.active_draft_fingerprint.as_deref()
-            != Some(arguments.card.source_draft_fingerprint.as_str())
-        {
-            return Err(AgentError::scope_violation(
-                "估算卡草稿指纹与当前界面不一致，请重新读取当前配方",
-            ));
-        }
         let conversation_id = self
             .audit
             .as_ref()
@@ -1111,14 +1128,7 @@ struct ProposalIdArguments {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RecipeIdArguments {
-    recipe_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct CompareSupplierVariantArguments {
-    recipe_id: String,
     item_id: String,
     candidate_variant_id: String,
 }
@@ -1285,11 +1295,11 @@ fn parse_arguments<T: for<'de> Deserialize<'de>>(arguments: Value) -> Result<T, 
         .map_err(|_| AgentError::invalid_input("Agent 工具参数缺失或格式不正确"))
 }
 
-fn require_active_recipe(context: &AgentToolContext, recipe_id: &str) -> Result<(), AgentError> {
-    if context.active_recipe_id.as_deref() != Some(recipe_id) {
-        return Err(AgentError::scope_violation("只能估算当前打开的配方草稿"));
-    }
-    Ok(())
+fn active_recipe_id(context: &AgentToolContext) -> Result<&str, AgentError> {
+    context
+        .active_recipe_id
+        .as_deref()
+        .ok_or_else(|| AgentError::invalid_input("请先在会话中选择要分析的配方"))
 }
 
 fn require_allowed_attachments(
@@ -1394,29 +1404,28 @@ fn definition(name: &str) -> AgentToolDefinition {
             proposal_id_schema(),
         ),
         "diagnose_recipe" => (
-            "只读诊断指定配方的当前草稿，返回确定性计算结果、数据缺失、得率和成本风险；不会修改配方",
-            recipe_id_schema(),
+            "只读诊断会话已绑定配方的当前草稿，返回确定性计算结果、数据缺失、得率和成本风险；不会修改配方",
+            empty_schema(),
         ),
         "review_recipe_development" => (
-            "只读读取当前配方草稿、单一研发备注框、最新正式版本和确定性诊断，供模型整理本轮事实、待确认项与下一轮打样建议；不得编造未记录的工艺或感官结果",
-            recipe_id_schema(),
+            "只读读取会话已绑定配方的草稿、单一研发备注框、最新正式版本和确定性诊断，供模型整理本轮事实、待确认项与下一轮打样建议；不得编造未记录的工艺或感官结果",
+            empty_schema(),
         ),
         "compare_supplier_variant" => (
             "只读比较配方中一条直接投料原料与同种通用原料的候选供应商版本，确定性计算成本、营养和过敏原差异；不会修改草稿",
             json!({
                 "type": "object",
                 "properties": {
-                    "recipeId": { "type": "string" },
                     "itemId": { "type": "string" },
                     "candidateVariantId": { "type": "string" }
                 },
-                "required": ["recipeId", "itemId", "candidateVariantId"],
+                "required": ["itemId", "candidateVariantId"],
                 "additionalProperties": false
             }),
         ),
         "read_recipe_reference_context" => (
             "只读读取当前配方的投料、供应商规格、出成口径与草稿版本，用于当前甜度参考估算",
-            recipe_id_schema(),
+            empty_schema(),
         ),
         "search_rnd_reference_cards" => (
             "检索已审核的内置与个人研发参考卡；估算甜度时必须先调用，不得用模型常识补齐缺失因子",
@@ -1473,15 +1482,6 @@ fn proposal_id_schema() -> Value {
     })
 }
 
-fn recipe_id_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": { "recipeId": { "type": "string" } },
-        "required": ["recipeId"],
-        "additionalProperties": false
-    })
-}
-
 fn recipe_estimate_card_schema() -> Value {
     json!({
         "type": "object",
@@ -1489,9 +1489,7 @@ fn recipe_estimate_card_schema() -> Value {
             "card": {
                 "type": "object",
                 "properties": {
-                    "recipeId": { "type": "string" },
                     "sourceDraftUpdatedAt": { "type": "string" },
-                    "sourceDraftFingerprint": { "type": "string" },
                     "status": { "type": "string", "enum": ["ready", "needs_input"] },
                     "parameterKey": { "const": "relative_sweetness" },
                     "title": { "type": "string" },
@@ -1537,7 +1535,7 @@ fn recipe_estimate_card_schema() -> Value {
                     }
                 },
                 "required": [
-                    "recipeId", "sourceDraftUpdatedAt", "sourceDraftFingerprint", "status", "parameterKey", "title",
+                    "sourceDraftUpdatedAt", "status", "parameterKey", "title",
                     "estimatedValue", "minimumValue", "maximumValue", "unit", "basis",
                     "confidence", "formulaInputs", "citedReferenceCardIds", "calculationSummary",
                     "assumptions", "influencingFactors", "missingInputs", "conflict"

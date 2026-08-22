@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_harness;
 pub mod agent_recipe;
 pub mod backup;
 pub mod commands;
@@ -17,6 +18,18 @@ use commands::agent::{
     list_agent_messages, list_agent_provider_configs, list_agent_provider_models,
     save_agent_preferences, save_agent_provider_config, set_agent_provider_secret, start_agent_run,
     test_agent_provider,
+};
+use commands::agent_harness::{
+    agent_runtime_settings_call, archive_harness_task, bind_agent_recipe, cancel_harness_task,
+    create_harness_task, create_harness_turn, delete_agent_queued_message,
+    edit_agent_queued_message, edit_agent_turn, execute_legacy_agent_reset,
+    get_agent_conversation_view, get_agent_model_directory, get_harness_health,
+    list_harness_artifacts, list_harness_events, list_harness_tasks, list_harness_turns,
+    preview_legacy_agent_reset, read_third_party_licenses, rename_harness_task,
+    resolve_agent_recipe_references, restore_harness_task, resume_agent_queue,
+    save_agent_provider_profile, select_agent_branch, select_agent_default_model,
+    select_harness_task_model, start_harness, stop_agent_conversation, stop_harness,
+    submit_agent_message, sync_harness_task, test_agent_provider_connection,
 };
 use commands::agent_recipes::{
     accept_agent_recipe_proposal, discard_agent_recipe_proposal, dismiss_material_need,
@@ -63,21 +76,33 @@ use commands::rnd_reference::{
 use tauri::Manager;
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let data_directory = app.path().app_data_dir()?;
             let database_path = data_directory.join("food-rd.sqlite3");
             let attachment_root = data_directory.join("attachments");
+            let agent_runtime_root = app.path().resource_dir()?.join("agent-runtime");
+            let agent_node_binary = std::env::current_exe()?
+                .parent()
+                .ok_or_else(|| std::io::Error::other("无法确定 Agent 组件位置"))?
+                .join(if cfg!(windows) {
+                    "foodlab-agent-node.exe"
+                } else {
+                    "foodlab-agent-node"
+                });
             let coordinator = ingest::coordinator::IngredientIngestCoordinator::open(
                 &database_path,
                 &attachment_root,
             )?;
             agent::repository::AgentRepository::open(&database_path)?;
-            app.manage(commands::AppState::new(
+            app.manage(commands::AppState::new_with_agent_runtime(
                 coordinator,
                 database_path,
                 attachment_root,
+                agent_runtime_root,
+                agent_node_binary,
             ));
             Ok(())
         })
@@ -121,6 +146,39 @@ pub fn run() {
             export_ingredient_library,
             cleanup_orphan_attachments,
             get_agent_preferences,
+            get_harness_health,
+            start_harness,
+            stop_harness,
+            agent_runtime_settings_call,
+            save_agent_provider_profile,
+            test_agent_provider_connection,
+            get_agent_model_directory,
+            select_agent_default_model,
+            read_third_party_licenses,
+            list_harness_tasks,
+            get_agent_conversation_view,
+            create_harness_task,
+            rename_harness_task,
+            archive_harness_task,
+            restore_harness_task,
+            select_harness_task_model,
+            create_harness_turn,
+            submit_agent_message,
+            edit_agent_queued_message,
+            delete_agent_queued_message,
+            stop_agent_conversation,
+            resume_agent_queue,
+            select_agent_branch,
+            edit_agent_turn,
+            bind_agent_recipe,
+            resolve_agent_recipe_references,
+            sync_harness_task,
+            cancel_harness_task,
+            list_harness_turns,
+            list_harness_events,
+            list_harness_artifacts,
+            preview_legacy_agent_reset,
+            execute_legacy_agent_reset,
             save_agent_preferences,
             list_agent_provider_configs,
             save_agent_provider_config,
@@ -189,6 +247,19 @@ pub fn run() {
             inspect_data_backup,
             restore_data_backup,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Ninka FoodLab 启动失败");
+    app.run(|app_handle, event| {
+        if !matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            return;
+        }
+        let state = app_handle.state::<commands::AppState>();
+        tauri::async_runtime::block_on(async {
+            let _ = state.harness.stop().await;
+            state.codex.stop().await;
+        });
+    });
 }

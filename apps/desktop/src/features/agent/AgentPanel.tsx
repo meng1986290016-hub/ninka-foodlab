@@ -21,8 +21,9 @@ import { RecipeAgentWorkspace } from "./RecipeAgentWorkspace";
 import { AgentRecipeEstimateCardList } from "./AgentRecipeEstimateCardList";
 import { RndReferenceLibrary } from "./RndReferenceLibrary";
 import type { RndReferenceCard } from "../../api/rnd-reference-types";
+import { HarnessAgentPanel } from "./HarnessAgentPanel";
 
-interface AgentPanelProps {
+export interface AgentPanelProps {
   api: DesktopApi;
   events: AgentEventSource;
   filePicker: ImportFilePicker;
@@ -48,7 +49,11 @@ function isLocalProvider(kind: string) {
   return kind === "ollama" || kind === "codex_cli" || kind === "claude_code_cli";
 }
 
-export function AgentPanel({
+export function AgentPanel(props: AgentPanelProps) {
+  return <HarnessAgentPanel {...props} />;
+}
+
+export function LegacyAgentPanel({
   api,
   events,
   filePicker,
@@ -233,7 +238,7 @@ export function AgentPanel({
 
   return (
     <aside
-      aria-label="食品研发 Agent"
+      aria-label="Ninka Agent"
       aria-hidden={!open}
       className={`agent-panel${open ? " is-open" : ""}${recipeContext ? " has-recipe-context" : ""}`}
     >
@@ -241,7 +246,7 @@ export function AgentPanel({
         <div>
           <span className="agent-panel__eyebrow">食品研发助手</span>
           <div className="agent-panel__title-row">
-            <h2>食品研发 Agent</h2>
+            <h2>Ninka Agent</h2>
             <span className="agent-panel__provider">
               <i aria-hidden="true" />
               {workflow.activeProvider?.displayName ?? "模型未配置"}
@@ -259,7 +264,7 @@ export function AgentPanel({
             <Icon name="trash" size={17} />
           </button>
           <button
-            aria-label="关闭食品研发 Agent"
+            aria-label="关闭 Ninka Agent"
             onClick={onClose}
             type="button"
           >
@@ -301,7 +306,7 @@ export function AgentPanel({
           <h3>
             {workflow.preferences?.enabled
               ? "尚未启用聊天模型"
-              : "食品研发 Agent 已关闭"}
+              : "Ninka Agent 已关闭"}
           </h3>
           <p>原料库和表格导入仍可正常使用。</p>
           <button

@@ -1,6 +1,6 @@
 {
   "name": "food-rd-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "packageManager": "pnpm@11.7.0",
@@ -8,6 +8,8 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "agent-runtime:prepare": "npm --prefix apps/desktop run agent-runtime:prepare",
+    "agent-runtime:verify": "node scripts/release/verify-agent-runtime.mjs",
     "brand:generate": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/generate_all.py",
     "brand:verify": "PYTHONPATH=scripts/branding .venv-branding/bin/python scripts/branding/verify_assets.py",
     "build": "pnpm -r --if-present build",
@@ -18,8 +20,8 @@
     "dev:desktop": "pnpm --filter @food-rd/desktop dev",
     "licenses:generate": "node scripts/release/generate-third-party-license-inventory.mjs",
     "open-source:verify": "node scripts/release/verify-open-source-readiness.mjs",
-    "tauri:build": "pnpm --filter @food-rd/desktop tauri:build",
-    "tauri:dev": "pnpm --filter @food-rd/desktop tauri:dev",
+    "tauri:build": "npm --prefix apps/desktop run tauri:build",
+    "tauri:dev": "npm --prefix apps/desktop run tauri:dev",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test"
   }

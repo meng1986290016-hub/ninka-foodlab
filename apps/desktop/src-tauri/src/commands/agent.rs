@@ -362,7 +362,7 @@ pub fn list_agent_import_drafts(
     coordinator.list_drafts(&job_id).map_err(Into::into)
 }
 
-fn mcp_server_binary() -> Result<PathBuf, AgentError> {
+pub(crate) fn mcp_server_binary() -> Result<PathBuf, AgentError> {
     let current = std::env::current_exe()
         .map_err(|_| AgentError::provider_failure("无法确定应用程序位置"))?;
     let name = if cfg!(windows) {
@@ -380,6 +380,18 @@ fn mcp_server_binary() -> Result<PathBuf, AgentError> {
 mod tests {
     use super::*;
     use crate::agent::model::{AgentProviderCapabilities, ReasoningEffort};
+
+    #[test]
+    fn mcp_server_uses_the_packaged_sibling_binary() {
+        let current = std::env::current_exe().expect("current executable");
+        let mcp = mcp_server_binary().expect("MCP sidecar path");
+        assert_eq!(mcp.parent(), current.parent());
+        assert_eq!(
+            mcp.file_name().and_then(|name| name.to_str()),
+            Some("food_rd_mcp")
+        );
+        assert_ne!(mcp, current);
+    }
 
     #[test]
     fn provider_test_rejects_an_empty_model_before_network_access() {

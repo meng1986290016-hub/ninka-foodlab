@@ -91,7 +91,7 @@ export function AppShell({
         <button
           aria-expanded={agentOpen}
           aria-label={
-            agentOpen ? "隐藏食品研发 Agent 面板" : "打开食品研发 Agent"
+            agentOpen ? "隐藏 Ninka Agent 面板" : "打开 Ninka Agent"
           }
           className={
             agentOpen ? "agent-toggle-button is-active" : "agent-toggle-button"
@@ -100,7 +100,7 @@ export function AppShell({
           type="button"
         >
           <Icon name="ai-assistant" size={18} />
-          <span>{agentOpen ? "关闭 Agent" : "食品研发 Agent"}</span>
+          <span>{agentOpen ? "关闭 Ninka Agent" : "Ninka Agent"}</span>
         </button>
         <span className="topbar-spacer" />
         <div className="database-indicator">
@@ -116,7 +116,7 @@ export function AppShell({
 
       <footer className="statusbar">
         <span>{isBrowserDemo ? "浏览器演示数据" : "SQLite 本地数据"}</span>
-        <span>版本 0.1.0 · 离线模式</span>
+        <span>版本 0.2.0 · 离线模式</span>
       </footer>
     </div>
   );

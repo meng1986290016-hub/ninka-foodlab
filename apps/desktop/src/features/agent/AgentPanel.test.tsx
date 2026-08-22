@@ -2,13 +2,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { App } from "../../App";
 import { BrowserAgentEventSource } from "../../api/agent-event-source";
 import type { AgentRun, AgentRunRequest } from "../../api/agent-types";
 import { BrowserDemoApi } from "../../api/browser-demo-api";
 import type { ImportFilePicker } from "../../api/import-file-picker";
 import type { ImportFileReference } from "../../api/import-types";
-import { AgentPanel } from "./AgentPanel";
+import { LegacyAgentPanel as AgentPanel } from "./AgentPanel";
 import { recipeDraftFingerprint } from "../recipes/recipe-agent-analysis";
 import type { AgentRecipeEstimateCard } from "../../api/rnd-reference-types";
 
@@ -174,7 +173,7 @@ describe("AgentPanel", () => {
 
     await user.type(
       await screen.findByRole("textbox", {
-        name: "给食品研发 Agent 发消息",
+        name: "给 Ninka Agent 发消息",
       }),
       "帮我检查这份配方",
     );
@@ -214,36 +213,11 @@ describe("AgentPanel", () => {
     expect(
       (
         screen.getByRole("textbox", {
-          name: "给食品研发 Agent 发消息",
+          name: "给 Ninka Agent 发消息",
         }) as HTMLTextAreaElement
       ).value,
     ).toContain("我想设计一款新产品");
     expect(screen.getByText("人工复核后才会写入原料库或创建配方草稿")).toBeTruthy();
-  });
-
-  it("keeps the same conversation after closing, navigating, and reopening", async () => {
-    const { api, events } = setup();
-    const user = userEvent.setup();
-    render(<App api={api} agentEvents={events} filePicker={picker()} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "打开食品研发 Agent" }),
-    );
-    const composer = await screen.findByRole("textbox", {
-      name: "给食品研发 Agent 发消息",
-    });
-    await user.type(composer, "读取原料资料");
-    await user.click(screen.getByRole("button", { name: "发送" }));
-    expect(await screen.findByText("读取原料资料")).toBeTruthy();
-
-    await user.click(
-      screen.getByRole("button", { name: "关闭食品研发 Agent" }),
-    );
-    await user.click(screen.getByRole("button", { name: "设置" }));
-    await user.click(
-      screen.getByRole("button", { name: "打开食品研发 Agent" }),
-    );
-    expect(await screen.findByText("读取原料资料")).toBeTruthy();
   });
 
   it("shows a configuration action without breaking manual features", async () => {
@@ -315,7 +289,7 @@ describe("AgentPanel", () => {
       await screen.findByRole("button", { name: "添加原料资料" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "给食品研发 Agent 发消息" }),
+      screen.getByRole("textbox", { name: "给 Ninka Agent 发消息" }),
       "分别读取这些资料",
     );
     await user.click(screen.getByRole("button", { name: "发送" }));
@@ -361,7 +335,7 @@ describe("AgentPanel", () => {
 
     await user.type(
       await screen.findByRole("textbox", {
-        name: "给食品研发 Agent 发消息",
+        name: "给 Ninka Agent 发消息",
       }),
       "重新检查这份原料",
     );

@@ -15,6 +15,18 @@ import type {
   CliDetectionResult,
 } from "./agent-types";
 import type {
+  ArtifactManifest,
+  AgentModelDirectory,
+  AgentRuntimeSettingsMethod,
+  HarnessHealth,
+  HarnessStartRequest,
+  HarnessTask,
+  HarnessTaskEvent,
+  HarnessTurn,
+  LegacyResetPreview,
+  LegacyResetResult,
+} from "./agent-harness-types";
+import type {
   AcceptedAgentRecipeProposal,
   AgentRecipeProposal,
   AgentRecipeProposalAcceptInput,
@@ -41,6 +53,7 @@ import type {
   IngredientImportDraft,
   IngredientImportJob,
   IngredientImportJobRequest,
+  ImportFileReference,
   ReviewedIngredientImportDraft,
 } from "./import-types";
 import type {
@@ -110,12 +123,15 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "invalid_state",
   "provider_not_configured",
   "provider_failure",
+  "agent_runtime_failure",
   "invalid_model_output",
   "tool_denied",
   "cancelled",
   "invalid_backup",
   "unsupported_backup",
   "confirmation_required",
+  "preview_stale",
+  "delete_conflict",
   "restore_rollback_failed",
   "restore_completed_restart_required",
   "unsupported_operation",
@@ -149,6 +165,221 @@ export class TauriDesktopApi implements DesktopApi {
   private invoke<T>(command: string, args?: Record<string, unknown>) {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
+    });
+  }
+
+  getHarnessHealth() {
+    return this.invoke<HarnessHealth>("get_harness_health");
+  }
+
+  startHarness(request?: HarnessStartRequest) {
+    return this.invoke<HarnessHealth>("start_harness", { request });
+  }
+
+  stopHarness() {
+    return this.invoke<HarnessHealth>("stop_harness");
+  }
+
+  agentRuntimeSettingsCall<T>(
+    method: AgentRuntimeSettingsMethod,
+    payload: unknown,
+  ) {
+    return this.invoke<T>("agent_runtime_settings_call", { method, payload });
+  }
+
+  saveAgentProviderProfile(
+    request: import("./agent-harness-types").AgentProviderProfileSaveRequest,
+  ) {
+    return this.invoke<{ revision: string | number; user: unknown }>(
+      "save_agent_provider_profile",
+      { request },
+    );
+  }
+
+  testAgentProviderConnection(input: {
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }) {
+    return this.invoke<{ ok: boolean }>("test_agent_provider_connection", input);
+  }
+
+  getAgentModelDirectory() {
+    return this.invoke<AgentModelDirectory>("get_agent_model_directory");
+  }
+
+  selectAgentDefaultModel(input: {
+    engine?: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }) {
+    return this.invoke<{ selected: AgentModelDirectory["current"] }>(
+      "select_agent_default_model",
+      input,
+    );
+  }
+
+  readThirdPartyLicenses() {
+    return this.invoke<string>("read_third_party_licenses");
+  }
+
+  listHarnessTasks(
+    scope: import("./agent-harness-types").HarnessTaskListScope = "active",
+  ) {
+    return this.invoke<HarnessTask[]>("list_harness_tasks", { scope });
+  }
+
+  getAgentConversationView(conversationId: string) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "get_agent_conversation_view",
+      { conversationId },
+    );
+  }
+
+  createHarnessTask(request: {
+    title: string;
+    workflow?: string;
+    content?: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+    files?: ImportFileReference[];
+  }) {
+    return this.invoke<HarnessTask>("create_harness_task", { request });
+  }
+
+  renameHarnessTask(taskId: string, title: string) {
+    return this.invoke<HarnessTask>("rename_harness_task", { taskId, title });
+  }
+
+  archiveHarnessTask(taskId: string) {
+    return this.invoke<HarnessTask>("archive_harness_task", { taskId });
+  }
+
+  restoreHarnessTask(taskId: string) {
+    return this.invoke<HarnessTask>("restore_harness_task", { taskId });
+  }
+
+  selectHarnessTaskModel(input: {
+    taskId: string;
+    engine: import("./agent-harness-types").AgentEngine;
+    provider: string;
+    model: string;
+    reasoningEffort?: string;
+  }) {
+    return this.invoke<HarnessTask>("select_harness_task_model", input);
+  }
+
+  createHarnessTurn(request: {
+    taskId: string;
+    parentTurnId?: string | null;
+    content: string;
+    activeRecipeId?: string | null;
+    activeDraftFingerprint?: string | null;
+  }) {
+    return this.invoke<HarnessTurn>("create_harness_turn", { request });
+  }
+
+  submitAgentMessage(request: {
+    conversationId: string;
+    content: string;
+    references: import("./agent-harness-types").AgentRecipeReference[];
+    mode: import("./agent-harness-types").AgentDeliveryMode;
+  }) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "submit_agent_message",
+      { request },
+    );
+  }
+
+  editAgentQueuedMessage(request: {
+    messageId: string;
+    content: string;
+    references: import("./agent-harness-types").AgentRecipeReference[];
+  }) {
+    return this.invoke<import("./agent-harness-types").AgentQueuedMessage>(
+      "edit_agent_queued_message",
+      { request },
+    );
+  }
+
+  deleteAgentQueuedMessage(messageId: string) {
+    return this.invoke<void>("delete_agent_queued_message", { messageId });
+  }
+
+  stopAgentConversation(conversationId: string) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "stop_agent_conversation",
+      { conversationId },
+    );
+  }
+
+  resumeAgentQueue(conversationId: string) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "resume_agent_queue",
+      { conversationId },
+    );
+  }
+
+  selectAgentBranch(conversationId: string, turnId: string) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "select_agent_branch",
+      { conversationId, turnId },
+    );
+  }
+
+  editAgentTurn(turnId: string, content: string) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "edit_agent_turn",
+      { request: { turnId, content } },
+    );
+  }
+
+  bindAgentRecipe(conversationId: string, recipeId: string | null) {
+    return this.invoke<import("./agent-harness-types").AgentConversationView>(
+      "bind_agent_recipe",
+      { conversationId, recipeId },
+    );
+  }
+
+  resolveAgentRecipeReferences(query: string) {
+    return this.invoke<import("./agent-harness-types").AgentRecipeMatchResult>(
+      "resolve_agent_recipe_references",
+      { query },
+    );
+  }
+
+  syncHarnessTask(taskId: string) {
+    return this.invoke<HarnessTask>("sync_harness_task", { taskId });
+  }
+
+  cancelHarnessTask(taskId: string) {
+    return this.invoke<HarnessTask>("cancel_harness_task", { taskId });
+  }
+
+  listHarnessTurns(taskId: string) {
+    return this.invoke<HarnessTurn[]>("list_harness_turns", { taskId });
+  }
+
+  listHarnessEvents(taskId: string, afterSeq: number) {
+    return this.invoke<HarnessTaskEvent[]>("list_harness_events", {
+      taskId,
+      afterSeq,
+    });
+  }
+
+  listHarnessArtifacts(taskId: string) {
+    return this.invoke<ArtifactManifest[]>("list_harness_artifacts", { taskId });
+  }
+
+  previewLegacyAgentReset() {
+    return this.invoke<LegacyResetPreview>("preview_legacy_agent_reset");
+  }
+
+  executeLegacyAgentReset(previewId: string, confirmationPhrase: string) {
+    return this.invoke<LegacyResetResult>("execute_legacy_agent_reset", {
+      previewId,
+      confirmationPhrase,
     });
   }
 

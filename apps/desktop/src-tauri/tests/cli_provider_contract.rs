@@ -23,6 +23,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 fn fixture(name: &str) -> PathBuf {
+    let name = if cfg!(windows) {
+        format!("{name}.cmd")
+    } else {
+        name.to_string()
+    };
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -269,7 +274,7 @@ async fn manual_path_detection_reports_version_and_login_without_model_request()
     assert!(detected.installed);
     assert!(detected.authenticated);
     assert_eq!(detected.version.as_deref(), Some("codex-cli 9.9.9"));
-    assert!(detected.path.ends_with("fake-codex"));
+    assert_eq!(Path::new(&detected.path), fixture("fake-codex"));
     assert!(codex.test(ProviderTestKind::Connection).await.unwrap().ok);
 }
 
@@ -286,7 +291,7 @@ async fn claude_manual_path_detection_reports_version_and_login() {
     assert!(detected.installed);
     assert!(detected.authenticated);
     assert_eq!(detected.version.as_deref(), Some("2.1.0 (Claude Code)"));
-    assert!(detected.path.ends_with("fake-claude"));
+    assert_eq!(Path::new(&detected.path), fixture("fake-claude"));
 }
 
 #[tokio::test]

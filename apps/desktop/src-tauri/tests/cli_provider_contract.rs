@@ -1,10 +1,4 @@
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeSet, fs, path::PathBuf, sync::Arc, time::Duration};
 
 use food_rd_desktop::agent::{
     mcp::McpTaskLaunchConfig,
@@ -270,7 +264,10 @@ async fn manual_path_detection_reports_version_and_login_without_model_request()
     assert!(detected.installed);
     assert!(detected.authenticated);
     assert_eq!(detected.version.as_deref(), Some("codex-cli 9.9.9"));
-    assert_eq!(Path::new(&detected.path), fixture("fake-codex"));
+    assert_eq!(
+        fs::canonicalize(&detected.path).unwrap(),
+        fs::canonicalize(fixture("fake-codex")).unwrap()
+    );
     assert!(codex.test(ProviderTestKind::Connection).await.unwrap().ok);
 }
 
@@ -287,7 +284,10 @@ async fn claude_manual_path_detection_reports_version_and_login() {
     assert!(detected.installed);
     assert!(detected.authenticated);
     assert_eq!(detected.version.as_deref(), Some("2.1.0 (Claude Code)"));
-    assert_eq!(Path::new(&detected.path), fixture("fake-claude"));
+    assert_eq!(
+        fs::canonicalize(&detected.path).unwrap(),
+        fs::canonicalize(fixture("fake-claude")).unwrap()
+    );
 }
 
 #[tokio::test]

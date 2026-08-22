@@ -18,6 +18,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+          cache-on-failure: true
       - name: Prepare CI sidecar placeholder
         shell: bash
         run: |

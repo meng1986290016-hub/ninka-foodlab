@@ -6,7 +6,34 @@
 
 面向食品研发人员的开源、离线优先桌面应用。它把原料与供应商版本、配方设计、营养与成本试算、打样配料单、版本归档、标签预览、研发报告和受控 Agent 放在同一个本地工作台中。
 
-> 当前版本：`0.2.0` 内测版。macOS Apple Silicon 安装包已完成本机验证；Intel Mac 包和 Windows x64 包由对应架构的构建环境生成，仍需要在真实设备上完成试装验收。当前 macOS 与 Windows 安装包都没有付费开发者证书签名，只用于内部测试。
+> 当前版本：`0.2.0` 正式版。提供 macOS 13.5+（Apple Silicon / Intel）和 Windows 10/11 x64 安装包。当前安装包尚未使用商业开发者证书签名，首次打开时系统可能显示安全提示。
+
+## 下载与安装
+
+请从 [Ninka FoodLab v0.2.0 发布页](https://github.com/meng1986290016-hub/ninka-foodlab/releases/tag/v0.2.0)下载适合自己电脑的安装包。如果仓库当前为私有，需要先登录有访问权限的 GitHub 账号。
+
+| 电脑 | 下载文件 |
+| --- | --- |
+| Apple 芯片 Mac（M1、M2、M3、M4 等） | [`food-rd-studio-0.2.0-macos-arm64.dmg`](https://github.com/meng1986290016-hub/ninka-foodlab/releases/download/v0.2.0/food-rd-studio-0.2.0-macos-arm64.dmg) |
+| Intel 芯片 Mac | [`food-rd-studio-0.2.0-macos-x64.dmg`](https://github.com/meng1986290016-hub/ninka-foodlab/releases/download/v0.2.0/food-rd-studio-0.2.0-macos-x64.dmg) |
+| Windows 10/11 64 位电脑 | [`food-rd-studio-0.2.0-windows-x64-setup.exe`](https://github.com/meng1986290016-hub/ninka-foodlab/releases/download/v0.2.0/food-rd-studio-0.2.0-windows-x64-setup.exe) |
+
+不知道 Mac 使用哪种芯片时，点击左上角“苹果菜单 → 关于本机”：显示“芯片 Apple M…”请选择 `arm64`，显示“处理器 Intel…”请选择 `x64`。
+
+### macOS
+
+1. 下载并双击对应芯片的 `.dmg` 文件。
+2. 将 `Ninka FoodLab.app` 拖入“应用程序”文件夹。
+3. 从“应用程序”中打开 Ninka FoodLab。
+4. 如果 macOS 提示无法验证开发者，请先确认文件来自上面的正式发布页并核对 SHA-256，再到“系统设置 → 隐私与安全性”点击“仍要打开”。不要关闭整个 macOS 安全机制。
+
+### Windows
+
+1. 下载并双击 `food-rd-studio-0.2.0-windows-x64-setup.exe`。
+2. 按安装向导完成安装，然后从开始菜单打开 Ninka FoodLab。
+3. 如果 SmartScreen 显示“未知发布者”，请先确认文件来自上面的正式发布页并核对 SHA-256，再选择“更多信息 → 仍要运行”。
+
+发布版已经内置运行组件，普通用户不需要安装 Node.js 或 pnpm。安装包校验值见 [`SHA256SUMS.txt`](https://github.com/meng1986290016-hub/ninka-foodlab/releases/download/v0.2.0/SHA256SUMS.txt)；macOS 可运行 `shasum -a 256 文件名`，Windows PowerShell 可运行 `Get-FileHash .\文件名 -Algorithm SHA256` 进行核对。
 
 ## 为什么做这个项目
 

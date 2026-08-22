@@ -1,23 +1,23 @@
-# Ninka FoodLab 0.2.0 内测说明
+# Ninka FoodLab 0.2.0 安装与使用说明
 
-感谢你帮助测试 Ninka FoodLab。
+感谢你使用 Ninka FoodLab。
 
 Ninka FoodLab 是一款面向食品研发人员的本地桌面应用，目前提供原料管理、供应商与规格管理、配方研发、营养和成本试算、配方版本、打样清单以及食品研发 Agent 等功能。
 
-> 这是早期内测版本，不建议用于保存唯一一份正式研发资料，也不能代替实验检测、法规审核或正式成本核算。
+> 建议定期在“数据管理”中创建 `.foodrd-backup` 备份。营养、成本和法规结果属于研发估算与风险提示，不能代替实验检测、正式成本核算或标签合规审核。
 
 ## 系统要求
 
 - macOS 13.5 或更高版本：Apple Silicon（M1 及更新芯片）选择 `arm64`，Intel 芯片选择 `x64`。
 - Windows 10/11 64 位：选择 `windows-x64` 安装包。
 
-> Windows x64 安装包由 GitHub Actions 在 Windows 主机上构建和自动校验，但当前仍需要完成真实 Windows 电脑的首次试装。在该验收完成前，它只用于内部测试。
+> Windows x64 安装包已在 Windows 构建环境中完成构建、静默安装和内置运行组件校验；真实 Windows 10/11 设备上的界面、SmartScreen、覆盖升级与卸载仍待补充验证。
 
 ## 安装文件
 
 - Apple Silicon：`food-rd-studio-0.2.0-macos-arm64.dmg`
 - Intel Mac：`food-rd-studio-0.2.0-macos-x64.dmg`
-- Windows x64：`windows-x64` Artifact 或发布页中名称以 `-setup.exe` 结尾的安装包。
+- Windows x64：`food-rd-studio-0.2.0-windows-x64-setup.exe`
 - 每个平台文件的 SHA-256 均记录在与安装包一起提供的 `SHA256SUMS.txt`。
 
 SHA-256 用于确认下载后的安装包没有损坏或被替换。由于当前安装包没有正式开发者签名，强烈建议在安装前校验，尤其是在需要绕过 Gatekeeper 或 SmartScreen 提示时。macOS 可在“终端”中运行：
@@ -54,9 +54,9 @@ Get-FileHash .\*-setup.exe -Algorithm SHA256
 
 ### macOS
 
-当前内测包没有使用付费 Apple Developer ID 证书，也没有经过 Apple 公证，因此 macOS 第一次打开时可能提示无法验证开发者。
+当前安装包没有使用付费 Apple Developer ID 证书，也没有经过 Apple 公证，因此 macOS 第一次打开时可能提示无法验证开发者。
 
-请先确认安装包确实由测试邀请人提供，再按以下步骤操作：
+请先确认安装包来自项目的正式 GitHub Release 页面并核对 SHA-256，再按以下步骤操作：
 
 1. 尝试打开一次 `Ninka FoodLab`。
 2. 打开“系统设置”。
@@ -72,11 +72,11 @@ Get-FileHash .\*-setup.exe -Algorithm SHA256
 
 ### Windows
 
-当前 Windows 内测包没有 Authenticode 数字签名，因此 SmartScreen 可能显示“Windows 已保护你的电脑”或“未知发布者”。请先确认文件来自本项目并核对 SHA-256，再选择“更多信息 → 仍要运行”。不要对来源不明的安装包跳过此检查。
+当前 Windows 安装包没有 Authenticode 数字签名，因此 SmartScreen 可能显示“Windows 已保护你的电脑”或“未知发布者”。请先确认文件来自本项目的正式 GitHub Release 页面并核对 SHA-256，再选择“更多信息 → 仍要运行”。不要对来源不明的安装包跳过此检查。
 
-## 建议测试内容
+## 建议检查内容
 
-请按自己的真实研发习惯使用，也可以重点检查以下流程：
+首次使用时，可以按自己的真实研发习惯重点检查以下流程：
 
 1. **首次启动**：应用能否正常打开，页面是否完整，有无空白或错位。
 2. **原料库**：新建通用原料，增加不同供应商、型号或规格，填写价格和营养数据。
@@ -91,11 +91,11 @@ Get-FileHash .\*-setup.exe -Algorithm SHA256
 
 ## 数据与隐私
 
-- 原料、配方等业务数据默认保存在测试者自己的电脑上。
+- 原料、配方等业务数据默认保存在当前用户自己的电脑上。
 - macOS 本地数据库位置：`~/Library/Application Support/com.foodrd.studio/food-rd.sqlite3`。
 - Windows 本地数据默认位于当前用户的 `%APPDATA%\com.foodrd.studio\` 目录。
 - 不使用 Agent 时，日常原料和配方操作不需要上传到远程服务器。
-- 如果主动配置并使用第三方大模型 API，发送给模型的内容将受对应模型服务商的规则约束，请勿使用真实机密配方进行早期测试。
+- 如果主动配置并使用第三方大模型 API，发送给模型的内容将受对应模型服务商的规则约束；发送机密配方前，请先确认服务商的数据处理规则。
 - API 密钥不要放在反馈截图或聊天记录中。
 
 ## 如何反馈问题
@@ -128,7 +128,7 @@ Get-FileHash .\*-setup.exe -Algorithm SHA256
 
 在 macOS 中，只需在“应用程序”文件夹中将 `Ninka FoodLab.app` 移到废纸篓。在 Windows 中，请从“设置 → 应用 → 已安装的应用”中卸载。
 
-这样不会自动删除本地研发数据。如果确实要清空全部测试数据，请先做好备份，再删除：
+这样不会自动删除本地研发数据。如果确实要清空全部本地数据，请先做好备份，再删除：
 
 ```text
 ~/Library/Application Support/com.foodrd.studio/
@@ -137,4 +137,4 @@ Get-FileHash .\*-setup.exe -Algorithm SHA256
 
 删除这个目录会永久移除本机保存的原料、配方、设置和相关记录，请谨慎操作。
 
-感谢你的测试和真实反馈。
+感谢你的使用和反馈。

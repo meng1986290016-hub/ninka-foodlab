@@ -165,6 +165,7 @@ try {
       npmCli,
       "ci",
       "--omit=dev",
+      "--include=optional",
       "--ignore-scripts",
       "--audit=false",
       "--fund=false",

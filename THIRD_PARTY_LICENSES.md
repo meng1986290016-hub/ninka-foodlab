@@ -230,7 +230,7 @@ pnpm licenses:generate
 | `xmlchars` | `2.2.0` | MIT |
 | `zwitch` | `2.0.4` | MIT |
 
-## Embedded FoodLab Agent runtime (451)
+## Embedded FoodLab Agent runtime (449)
 
 The corresponding license texts and attribution notices are included in the
 application bundle and in the DMG folder named `Third-Party Licenses`.
@@ -463,20 +463,18 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `@deepseek-ai/node-addon-landlock-run` | `0.1.1` | BSD-3-Clause |
 | `@deepseek-ai/schemastery` | `3.18.1` | MIT |
 | `@earendil-works/pi-ai` | `0.82.1` | MIT |
-| `@emnapi/runtime` | `1.11.3` | MIT |
 | `@google/genai` | `1.52.0` | Apache-2.0 |
 | `@hono/node-server` | `2.1.1` | MIT |
 | `@img/colour` | `1.1.0` | MIT |
-| `@img/sharp-darwin-arm64` | `0.35.3` | Apache-2.0 |
-| `@img/sharp-libvips-darwin-arm64` | `1.3.2` | LGPL-3.0-or-later |
-| `@img/sharp-wasm32` | `0.35.3` | Apache-2.0 AND LGPL-3.0-or-later AND MIT |
+| `@img/sharp-darwin-x64` | `0.35.3` | Apache-2.0 |
+| `@img/sharp-libvips-darwin-x64` | `1.3.2` | LGPL-3.0-or-later |
 | `@joplin/turndown-plugin-gfm` | `1.0.67` | MIT |
-| `@koromix/koffi-darwin-arm64` | `3.1.6` | MIT |
+| `@koromix/koffi-darwin-x64` | `3.1.6` | MIT |
 | `@mistralai/mistralai` | `2.2.6` | Apache-2.0 |
 | `@mixmark-io/domino` | `2.2.0` | BSD-2-Clause |
 | `@modelcontextprotocol/sdk` | `1.30.0` | MIT |
 | `@openai/codex` | `0.148.0` | Apache-2.0 |
-| `@openai/codex` | `0.148.0-darwin-arm64` | Apache-2.0 |
+| `@openai/codex` | `0.148.0-darwin-x64` | Apache-2.0 |
 | `@opentelemetry/api-logs` | `0.220.0` | Apache-2.0 |
 | `@opentelemetry/api` | `1.9.0` | Apache-2.0 |
 | `@opentelemetry/api` | `1.9.1` | Apache-2.0 |
@@ -515,7 +513,7 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `@tanstack/virtual-core` | `3.17.8` | MIT |
 | `@types/node` | `26.2.0` | MIT |
 | `@types/retry` | `0.12.0` | MIT |
-| `@vscode/ripgrep-darwin-arm64` | `1.18.0` | MIT |
+| `@vscode/ripgrep-darwin-x64` | `1.18.0` | MIT |
 | `@vscode/ripgrep` | `1.18.0` | MIT |
 | `accepts` | `2.0.0` | MIT |
 | `agent-base` | `7.1.4` | MIT |
@@ -618,7 +616,7 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `negotiator` | `1.0.0` | MIT |
 | `node-addon-api` | `7.1.1` | MIT |
 | `node-addon-native-custom-loader` | `0.1.5` | MIT |
-| `node-addon-require-builtin-darwin-arm64` | `0.1.5` | MIT |
+| `node-addon-require-builtin-darwin-x64` | `0.1.5` | MIT |
 | `node-addon-require-builtin` | `0.1.5` | MIT |
 | `node-domexception` | `1.0.0` | MIT |
 | `node-fetch` | `3.3.2` | MIT |

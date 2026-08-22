@@ -388,7 +388,11 @@ mod tests {
         assert_eq!(mcp.parent(), current.parent());
         assert_eq!(
             mcp.file_name().and_then(|name| name.to_str()),
-            Some("food_rd_mcp")
+            Some(if cfg!(windows) {
+                "food_rd_mcp.exe"
+            } else {
+                "food_rd_mcp"
+            })
         );
         assert_ne!(mcp, current);
     }

@@ -286,8 +286,7 @@ fn project_turns(repository: &mut HarnessRepository, task_id: &str) -> Result<()
             blocks.push(FoodLabContentBlock::Markdown { text });
         } else if let Some((_, text)) = streamed_text
             .into_iter()
-            .filter(|(step, text)| !finalized_steps.contains(step) && !text.trim().is_empty())
-            .last()
+            .rfind(|(step, text)| !finalized_steps.contains(step) && !text.trim().is_empty())
         {
             blocks.push(FoodLabContentBlock::Markdown { text });
         }
@@ -967,7 +966,7 @@ mod tests {
         assert!(
             stored
                 .iter()
-                .all(|event| { event.payload.to_string().contains("private reasoning") == false })
+                .all(|event| { !event.payload.to_string().contains("private reasoning") })
         );
     }
 

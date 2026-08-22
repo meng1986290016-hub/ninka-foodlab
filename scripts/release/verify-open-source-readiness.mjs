@@ -13,7 +13,7 @@ const requiredFiles = [
   "docs/desktop-release.md",
   "docs/data-safety.md",
   "docs/upgrade-guide.md",
-  "docs/releases/v0.1.0-draft.md",
+  "docs/releases/v0.2.0.md",
   "docs/open-source-readiness.md",
   "docs/github-publishing.md",
   ".github/ISSUE_TEMPLATE/bug-report.yml",
@@ -109,7 +109,7 @@ const markdownFiles = [
   "CONTRIBUTING.md",
   "SECURITY.md",
   "docs/desktop-release.md",
-  "docs/releases/v0.1.0-draft.md",
+  "docs/releases/v0.2.0.md",
 ];
 
 function relativeTargets(markdown) {

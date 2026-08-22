@@ -548,10 +548,9 @@ fn parse_custom_header(header: &str) -> Option<CustomColumn> {
     let (category, remainder) = if let Some(value) = header.strip_prefix("自定义含量[营养相关]:")
     {
         (Some("nutrition".to_string()), value)
-    } else if let Some(value) = header.strip_prefix("自定义含量:") {
-        (None, value)
     } else {
-        return None;
+        let value = header.strip_prefix("自定义含量:")?;
+        (None, value)
     };
     let unit_start = remainder.rfind('(')?;
     let name = remainder[..unit_start].trim();

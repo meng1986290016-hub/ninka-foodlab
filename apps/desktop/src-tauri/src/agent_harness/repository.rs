@@ -930,6 +930,7 @@ impl HarnessRepository {
         self.get_turn(turn_id)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn append_event(
         &mut self,
         task_id: &str,
@@ -1020,6 +1021,7 @@ impl HarnessRepository {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_artifact(
         &mut self,
         task_id: &str,

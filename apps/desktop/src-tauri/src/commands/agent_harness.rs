@@ -573,31 +573,30 @@ pub async fn submit_agent_message(
             recipe_name,
             fingerprint,
         )?;
-        if request.mode == AgentDeliveryMode::Steer {
-            if let Err(error) =
+        if request.mode == AgentDeliveryMode::Steer
+            && let Err(error) =
                 steer_running_turn(&state, &task, &running_turn, &request.content).await
+        {
+            let _ = repository(&state)?.delete_queued_message_any(&queued.id);
+            // A racing completion must never lose the user's message.
+            if repository(&state)?.get_turn(&running_turn.id)?.status
+                != crate::agent_harness::model::TaskOutcome::Running
             {
-                let _ = repository(&state)?.delete_queued_message_any(&queued.id);
-                // A racing completion must never lose the user's message.
-                if repository(&state)?.get_turn(&running_turn.id)?.status
-                    != crate::agent_harness::model::TaskOutcome::Running
-                {
-                    repository(&state)?.enqueue_message(
-                        &task.id,
-                        Some(&running_turn.id),
-                        &running_turn.branch_id,
-                        &request.content,
-                        &request.references,
-                        AgentDeliveryMode::Queue,
-                        AgentQueuedMessageState::Queued,
-                        &route,
-                        recipe_id,
-                        recipe_name,
-                        fingerprint,
-                    )?;
-                } else {
-                    return Err(error);
-                }
+                repository(&state)?.enqueue_message(
+                    &task.id,
+                    Some(&running_turn.id),
+                    &running_turn.branch_id,
+                    &request.content,
+                    &request.references,
+                    AgentDeliveryMode::Queue,
+                    AgentQueuedMessageState::Queued,
+                    &route,
+                    recipe_id,
+                    recipe_name,
+                    fingerprint,
+                )?;
+            } else {
+                return Err(error);
             }
         }
         return conversation_view(&state, &task.id);
@@ -874,7 +873,7 @@ pub fn resolve_agent_recipe_references(
             matched.then_some((name.chars().count().max(code.chars().count()), summary))
         })
         .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
     if let Some(maximum) = candidates.first().map(|candidate| candidate.0) {
         candidates.retain(|candidate| candidate.0 == maximum);
     }
@@ -1964,10 +1963,9 @@ async fn ensure_codex_thread_for_branch(
     }
     if let Some((session_id, _)) =
         repository(state)?.runtime_session(&task.id, &task.active_route)?
+        && branch_id == "root"
     {
-        if branch_id == "root" {
-            return Ok(session_id);
-        }
+        return Ok(session_id);
     }
     let server_binary = std::env::current_exe()
         .map_err(|_| command_failure("无法确定 FoodLab 工具服务位置".into()))?;
@@ -2184,29 +2182,27 @@ fn settle_codex_turn(
                     .and_then(|value| value.get("artifactKind"))
                     .and_then(Value::as_str)
                     .or_else(|| artifact_kind_for_tool(tool));
-                if success {
-                    if let Some(kind) = kind {
-                        let title = structured
-                            .and_then(|value| value.get("title"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("FoodLab 研发成果");
-                        if repository
-                            .create_artifact(
-                                &task.id,
-                                &turn.id,
-                                call_id,
-                                kind,
-                                title,
-                                structured
-                                    .and_then(|value| value.get("artifactId"))
-                                    .and_then(Value::as_str),
-                                crate::agent_harness::model::ArtifactStatus::NeedsReview,
-                                &json!({ "engine": "codex_app_server", "tool": tool }),
-                            )
-                            .is_ok()
-                        {
-                            artifact_kinds.push(kind.to_string());
-                        }
+                if success && let Some(kind) = kind {
+                    let title = structured
+                        .and_then(|value| value.get("title"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("FoodLab 研发成果");
+                    if repository
+                        .create_artifact(
+                            &task.id,
+                            &turn.id,
+                            call_id,
+                            kind,
+                            title,
+                            structured
+                                .and_then(|value| value.get("artifactId"))
+                                .and_then(Value::as_str),
+                            crate::agent_harness::model::ArtifactStatus::NeedsReview,
+                            &json!({ "engine": "codex_app_server", "tool": tool }),
+                        )
+                        .is_ok()
+                    {
+                        artifact_kinds.push(kind.to_string());
                     }
                 }
                 if let Ok(current) = repository.get_task(&task.id) {

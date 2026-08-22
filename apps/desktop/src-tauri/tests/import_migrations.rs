@@ -26,12 +26,12 @@ fn table_exists(connection: &Connection, table: &str) -> bool {
 }
 
 #[test]
-fn fresh_database_applies_latest_schema_version_twenty_one() {
+fn fresh_database_applies_latest_schema_version_twenty_two() {
     let mut connection = database::open_in_memory().unwrap();
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 21);
+    assert_eq!(schema_version(&connection), 22);
     for table in [
         "source_attachments",
         "attachment_extractions",
@@ -119,7 +119,7 @@ fn existing_version_one_database_upgrades_without_losing_ingredients() {
 
     migrations::apply(&mut connection, "2026-07-19T00:00:00Z").unwrap();
 
-    assert_eq!(schema_version(&connection), 21);
+    assert_eq!(schema_version(&connection), 22);
     let saved_name: String = connection
         .query_row(
             "SELECT material_groups.name
@@ -449,15 +449,14 @@ fn research_metric_removal_migration_purges_values_and_snapshot_fields() {
             .unwrap(),
         "2"
     );
-    assert_eq!(
+    assert!(
         connection
             .query_row(
                 "SELECT json_type(?1, '$.items[0].ingredient.nutrientsPer100g.polyphenol') IS NULL",
                 [&snapshot],
                 |row| row.get::<_, bool>(0),
             )
-            .unwrap(),
-        true
+            .unwrap()
     );
     assert!(
         connection

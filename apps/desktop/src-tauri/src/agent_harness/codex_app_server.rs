@@ -10,6 +10,9 @@ use std::{
     time::Duration,
 };
 
+#[cfg(target_os = "windows")]
+use std::env;
+
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -187,13 +190,12 @@ impl CodexAppServerHost {
                 if event.get("method").and_then(Value::as_str) == Some("item/agentMessage/delta")
                     && event.pointer("/params/turnId").and_then(Value::as_str)
                         == Some(turn_id.as_str())
+                    && let Some(delta) = event.pointer("/params/delta").and_then(Value::as_str)
                 {
-                    if let Some(delta) = event.pointer("/params/delta").and_then(Value::as_str) {
-                        answer.push_str(delta);
-                        if answer.len().saturating_sub(emitted_len) >= 80 || delta.contains('\n') {
-                            on_text(&answer);
-                            emitted_len = answer.len();
-                        }
+                    answer.push_str(delta);
+                    if answer.len().saturating_sub(emitted_len) >= 80 || delta.contains('\n') {
+                        on_text(&answer);
+                        emitted_len = answer.len();
                     }
                 }
                 if event.get("method").and_then(Value::as_str) == Some("item/completed")
@@ -201,10 +203,9 @@ impl CodexAppServerHost {
                         == Some(turn_id.as_str())
                     && event.pointer("/params/item/type").and_then(Value::as_str)
                         == Some("mcpToolCall")
+                    && let Some(item) = event.pointer("/params/item").cloned()
                 {
-                    if let Some(item) = event.pointer("/params/item").cloned() {
-                        tool_items.push(item);
-                    }
+                    tool_items.push(item);
                 }
                 if event.get("method").and_then(Value::as_str) == Some("turn/completed")
                     && event.pointer("/params/turn/id").and_then(Value::as_str)
@@ -328,10 +329,10 @@ impl CodexAppServerHost {
     async fn ensure_started(&self) -> Result<(), String> {
         {
             let mut state = self.state.lock().await;
-            if let HostState::Running(host) = &mut *state {
-                if host.child.try_wait().ok().flatten().is_none() {
-                    return Ok(());
-                }
+            if let HostState::Running(host) = &mut *state
+                && host.child.try_wait().ok().flatten().is_none()
+            {
+                return Ok(());
             }
         }
         self.start().await
@@ -339,10 +340,10 @@ impl CodexAppServerHost {
 
     async fn start(&self) -> Result<(), String> {
         let mut state = self.state.lock().await;
-        if let HostState::Running(host) = &mut *state {
-            if host.child.try_wait().ok().flatten().is_none() {
-                return Ok(());
-            }
+        if let HostState::Running(host) = &mut *state
+            && host.child.try_wait().ok().flatten().is_none()
+        {
+            return Ok(());
         }
         let entrypoint = self.runtime.join("node_modules/@openai/codex/bin/codex.js");
         if !self.node_binary.is_file() || !entrypoint.is_file() {
@@ -394,12 +395,29 @@ impl CodexAppServerHost {
             .env_clear()
             .env("CODEX_HOME", &self.home)
             .env("HOME", &self.home)
-            .env("PATH", "/usr/bin:/bin")
             .current_dir(self.work_dir())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true);
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(system_root) = env::var_os("SystemRoot") {
+                let system32 = PathBuf::from(&system_root).join("System32");
+                command
+                    .env("SystemRoot", &system_root)
+                    .env("WINDIR", &system_root)
+                    .env("PATH", &system32);
+            }
+            command.env("USERPROFILE", &self.home);
+            for name in ["TEMP", "TMP", "PATHEXT", "ComSpec"] {
+                if let Some(value) = env::var_os(name) {
+                    command.env(name, value);
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        command.env("PATH", "/usr/bin:/bin");
         let mut child = command
             .spawn()
             .map_err(|_| "ChatGPT 服务启动失败，请重新安装 FoodLab".to_string())?;

@@ -47,6 +47,8 @@ macOS 先由 Tauri 生成并 ad-hoc 签名 `.app`，再用不调用 Finder Apple
 
 每个平台上传独立 Artifact，保留 14 天，并包含安装包、许可证文件、平台依赖清单和 `SHA256SUMS.txt`。工作流不会创建 GitHub Release；正式公开前仍需人工下载、试装、核对版本与校验和，再单独决定是否发布。
 
+Windows job 会在构建后将 NSIS 安装包静默安装到 runner 的临时目录，然后从安装结果中校验内置 Agent 运行时。这可以发现缺少文件、架构错误和安装器未包入资源等问题，但不能代替真实 Windows 电脑上的界面、WebView2、SmartScreen 和数据持久化验收。
+
 ## macOS 安装
 
 1. 下载与 Mac 架构匹配的 DMG：Apple Silicon 选择 `arm64`，Intel Mac 选择 `x64`。
@@ -54,13 +56,15 @@ macOS 先由 Tauri 生成并 ad-hoc 签名 `.app`，再用不调用 Finder Apple
 3. 打开 DMG，把“Ninka FoodLab”拖入“应用程序”。
 4. 首次打开如果被 Gatekeeper 阻止，前往“系统设置 → 隐私与安全性”，确认文件来自本项目后点击“仍要打开”；也可以在 Finder 中按住 Control 点击应用并选择“打开”。
 
-不要为了绕过提示而对来源不明的应用批量删除隔离属性。当前最低系统版本配置为 macOS 10.15；真实兼容性仍以每个发布版本的试装结果为准。
+不要为了绕过提示而对来源不明的应用批量删除隔离属性。当前最低系统版本配置为 macOS 13.5；真实兼容性仍以每个发布版本的试装结果为准。
 
 ## Windows 安装
 
 1. 下载 `windows-x64` Artifact 中的 `*-setup.exe`，并核对 `SHA256SUMS.txt`。
 2. 如果 SmartScreen 显示“Windows 已保护你的电脑”，确认来源和校验和无误后，点击“更多信息 → 仍要运行”。
 3. 安装器默认写入当前用户目录，不要求管理员权限。Windows 10/11 通常已经包含 WebView2；若系统缺失，安装过程可能需要联网获取运行环境。
+
+当前 Windows x64 包虽然会在 Windows GitHub Actions runner 上完成安装和运行时自检，但在真实 Windows 10/11 x64 设备完成首次试装前，必须继续标记为“待实机验证”。
 
 ## 发布前人工验收
 

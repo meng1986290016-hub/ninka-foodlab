@@ -113,7 +113,7 @@ fn latest_migration_keeps_recipe_tables_and_immutability_triggers() {
             |row| row.get::<_, i64>(0),
         )
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
     for object in [
         "recipes",
         "recipe_drafts",

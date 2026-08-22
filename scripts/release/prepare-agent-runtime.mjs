@@ -53,26 +53,61 @@ const AUDITED_IGNORED_LIFECYCLE_SCRIPTS = new Map([
 ]);
 
 const targets = {
-  arm64: {
+  "darwin-arm64": {
     archive: `node-v${NODE_VERSION}-darwin-arm64.tar.gz`,
     sha256: "8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d",
     triple: "aarch64-apple-darwin",
+    nodeExecutable: "bin/node",
+    npmCli: "lib/node_modules/npm/bin/npm-cli.js",
+    codexPackage: "@openai/codex-darwin-arm64",
+    codexExecutable: "vendor/aarch64-apple-darwin/bin/codex",
+    ptyFiles: [
+      "node_modules/node-pty/prebuilds/darwin-arm64/pty.node",
+      "node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper",
+    ],
+    koffiFile: "node_modules/@koromix/koffi-darwin-arm64/darwin_arm64/koffi.node",
   },
-  x64: {
+  "darwin-x64": {
     archive: `node-v${NODE_VERSION}-darwin-x64.tar.gz`,
     sha256: "d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316",
     triple: "x86_64-apple-darwin",
+    nodeExecutable: "bin/node",
+    npmCli: "lib/node_modules/npm/bin/npm-cli.js",
+    codexPackage: "@openai/codex-darwin-x64",
+    codexExecutable: "vendor/x86_64-apple-darwin/bin/codex",
+    ptyFiles: [
+      "node_modules/node-pty/prebuilds/darwin-x64/pty.node",
+      "node_modules/node-pty/prebuilds/darwin-x64/spawn-helper",
+    ],
+    koffiFile: "node_modules/@koromix/koffi-darwin-x64/darwin_x64/koffi.node",
+  },
+  "win32-x64": {
+    archive: `node-v${NODE_VERSION}-win-x64.zip`,
+    sha256: "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+    triple: "x86_64-pc-windows-msvc",
+    nodeExecutable: "node.exe",
+    npmCli: "node_modules/npm/bin/npm-cli.js",
+    codexPackage: "@openai/codex-win32-x64",
+    codexExecutable: "vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+    ptyFiles: [
+      "node_modules/node-pty/prebuilds/win32-x64/conpty.node",
+      "node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node",
+      "node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll",
+      "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
+    ],
+    koffiFile: "node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node",
   },
 };
 
-if (process.platform !== "darwin" || !targets[process.arch]) {
-  throw new Error("FoodLab Agent 内置运行时首版仅支持 macOS arm64/x64 构建。");
+const targetKey = `${process.platform}-${process.arch}`;
+if (!targets[targetKey]) {
+  throw new Error("Ninka Agent 内置运行时仅支持 macOS arm64/x64 与 Windows x64 构建。");
 }
 
-const target = targets[process.arch];
+const target = targets[targetKey];
 const nodeBinary = join(
   BINARIES,
-  `foodlab-agent-node-${target.triple}`,
+  `foodlab-agent-node-${target.triple}${process.platform === "win32" ? ".exe" : ""}`,
 );
 const packageLockPath = join(SOURCE, "package-lock.json");
 const lockBytes = await readFile(packageLockPath);
@@ -81,6 +116,7 @@ const expectedIdentity = {
   schemaVersion: 1,
   runtimeVersion: AGENT_RUNTIME_VERSION,
   nodeVersion: NODE_VERSION,
+  operatingSystem: process.platform,
   architecture: process.arch,
   targetTriple: target.triple,
   nodeArchiveSha256: target.sha256,
@@ -103,14 +139,16 @@ if (reuseVerifiedNode) {
 if (await isCurrent(expectedIdentity, nodeBinary)) {
   const currentManifestPath = join(GENERATED, "runtime-manifest.json");
   const currentManifest = JSON.parse(await readFile(currentManifestPath, "utf8"));
-  const nodeCodeDirectorySha256 = await signedNodeCodeDirectorySha256(nodeBinary);
-  if (currentManifest.nodeCodeDirectorySha256 !== nodeCodeDirectorySha256) {
-    currentManifest.nodeCodeDirectorySha256 = nodeCodeDirectorySha256;
-    currentManifest.createdAt = new Date().toISOString();
-    await writeFile(
-      currentManifestPath,
-      `${JSON.stringify(currentManifest, null, 2)}\n`,
-    );
+  if (process.platform === "darwin") {
+    const nodeCodeDirectorySha256 = await signedNodeCodeDirectorySha256(nodeBinary);
+    if (currentManifest.nodeCodeDirectorySha256 !== nodeCodeDirectorySha256) {
+      currentManifest.nodeCodeDirectorySha256 = nodeCodeDirectorySha256;
+      currentManifest.createdAt = new Date().toISOString();
+      await writeFile(
+        currentManifestPath,
+        `${JSON.stringify(currentManifest, null, 2)}\n`,
+      );
+    }
   }
   if (await isCurrent(expectedIdentity, nodeBinary)) {
     console.log(`FoodLab Agent 运行时已就绪：${process.arch}`);
@@ -148,10 +186,13 @@ try {
     if (sha256(archiveBytes) !== target.sha256) {
       throw new Error(`Node ${NODE_VERSION} ${process.arch} 校验失败。`);
     }
-    await run("tar", ["-xzf", archivePath, "-C", temporary]);
-    const extracted = join(temporary, target.archive.replace(/\.tar\.gz$/, ""));
-    installNode = join(extracted, "bin/node");
-    npmCli = join(extracted, "lib/node_modules/npm/bin/npm-cli.js");
+    await run(
+      "tar",
+      [target.archive.endsWith(".zip") ? "-xf" : "-xzf", archivePath, "-C", temporary],
+    );
+    const extracted = join(temporary, target.archive.replace(/\.(?:tar\.gz|zip)$/, ""));
+    installNode = join(extracted, target.nodeExecutable);
+    npmCli = join(extracted, target.npmCli);
     nodeLicense = await readFile(join(extracted, "LICENSE"));
   }
 
@@ -173,12 +214,12 @@ try {
     ],
     GENERATED,
   );
-  await verifyIgnoredLifecycleScripts(installNode);
+  await verifyIgnoredLifecycleScripts(installNode, target);
 
   await mkdir(BINARIES, { recursive: true });
   if (!reuseVerifiedNode) {
     await copyFile(installNode, nodeBinary);
-    await chmod(nodeBinary, 0o755);
+    if (process.platform !== "win32") await chmod(nodeBinary, 0o755);
   }
 
   const licenses = join(GENERATED, "licenses");
@@ -204,22 +245,24 @@ try {
     "node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html",
     "node_modules/@openai/codex/package.json",
     "node_modules/@openai/codex/bin/codex.js",
-    `node_modules/@openai/codex-darwin-${process.arch}/package.json`,
-    `node_modules/@openai/codex-darwin-${process.arch}/vendor/${target.triple}/bin/codex`,
+    `node_modules/${target.codexPackage}/package.json`,
+    `node_modules/${target.codexPackage}/${target.codexExecutable}`,
     "node_modules/node-pty/package.json",
-    `node_modules/node-pty/prebuilds/darwin-${process.arch}/pty.node`,
-    `node_modules/node-pty/prebuilds/darwin-${process.arch}/spawn-helper`,
+    ...target.ptyFiles,
     "node_modules/koffi/package.json",
-    `node_modules/@koromix/koffi-darwin-${process.arch}/darwin_${process.arch}/koffi.node`,
+    target.koffiFile,
   ]) {
     const bytes = await readFile(join(GENERATED, relative));
     criticalFiles[relative] = sha256(bytes);
   }
 
+  const nodeBinarySha256 = sha256(await readFile(nodeBinary));
   const manifest = {
     ...expectedIdentity,
-    nodeBinarySha256: sha256(await readFile(nodeBinary)),
-    nodeCodeDirectorySha256: await signedNodeCodeDirectorySha256(nodeBinary),
+    nodeBinarySha256,
+    ...(process.platform === "darwin"
+      ? { nodeCodeDirectorySha256: await signedNodeCodeDirectorySha256(nodeBinary) }
+      : {}),
     criticalFiles,
     components: {
       node: NODE_VERSION,
@@ -267,6 +310,9 @@ async function isCurrent(identity, binary) {
 }
 
 async function signedNodeCodeDirectorySha256(binary) {
+  if (process.platform !== "darwin") {
+    throw new Error("只有 macOS 运行时需要计算 Node 签名摘要。");
+  }
   const temporary = await mkdtemp(join(tmpdir(), "foodlab-agent-node-signature-"));
   const staged = join(temporary, "foodlab-agent-node");
   try {
@@ -316,7 +362,7 @@ function assertLifecycleScriptsAreAudited(lock) {
   }
 }
 
-async function verifyIgnoredLifecycleScripts(node) {
+async function verifyIgnoredLifecycleScripts(node, runtimeTarget) {
   for (const [packagePath, audited] of AUDITED_IGNORED_LIFECYCLE_SCRIPTS) {
     const packageJson = JSON.parse(
       await readFile(join(GENERATED, packagePath, "package.json"), "utf8"),
@@ -333,19 +379,45 @@ async function verifyIgnoredLifecycleScripts(node) {
     }
   }
 
-  const ptyRoot = join(GENERATED, `node_modules/node-pty/prebuilds/darwin-${process.arch}`);
-  const spawnHelper = join(ptyRoot, "spawn-helper");
-  await access(join(ptyRoot, "pty.node"));
-  if (((await stat(spawnHelper)).mode & 0o111) === 0) {
-    throw new Error("node-pty 预编译启动器不可执行；生命周期脚本仍保持禁用。");
+  for (const relative of runtimeTarget.ptyFiles) {
+    await access(join(GENERATED, relative));
   }
-  await access(
-    join(
+  if (process.platform === "darwin") {
+    const spawnHelper = join(
       GENERATED,
-      `node_modules/@koromix/koffi-darwin-${process.arch}/darwin_${process.arch}/koffi.node`,
-    ),
-  );
-  await run(node, ["-e", "require('node-pty'); require('koffi')"], GENERATED);
+      runtimeTarget.ptyFiles.find((relative) => relative.endsWith("/spawn-helper")),
+    );
+    if (((await stat(spawnHelper)).mode & 0o111) === 0) {
+      throw new Error("node-pty 预编译启动器不可执行；生命周期脚本仍保持禁用。");
+    }
+  }
+  await access(join(GENERATED, runtimeTarget.koffiFile));
+  if (process.platform === "win32") {
+    await run(node, ["-e", String.raw`
+      const pty = require('node-pty');
+      const koffi = require('koffi');
+      const kernel32 = koffi.load('kernel32.dll');
+      const getTickCount = kernel32.func('uint32_t __stdcall GetTickCount(void)');
+      if (!Number.isInteger(getTickCount())) throw new Error('koffi smoke test failed');
+      const shell = process.env.ComSpec || 'cmd.exe';
+      const child = pty.spawn(shell, ['/d', '/s', '/c', 'exit 0'], {
+        cols: 80,
+        rows: 24,
+        cwd: process.cwd(),
+        env: process.env,
+      });
+      const timer = setTimeout(() => {
+        child.kill();
+        process.exit(1);
+      }, 10000);
+      child.onExit(({ exitCode }) => {
+        clearTimeout(timer);
+        process.exit(exitCode === 0 ? 0 : 1);
+      });
+    `], GENERATED);
+  } else {
+    await run(node, ["-e", "require('node-pty'); require('koffi')"], GENERATED);
+  }
 }
 
 async function download(url, destination) {

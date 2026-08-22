@@ -10,7 +10,7 @@ jobs:
   build:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +23,10 @@ jobs:
             os: macos-15-intel
             command: desktop:bundle:macos
             artifact: macos-x64
+          - label: Windows x64
+            os: windows-2025
+            command: desktop:bundle:windows
+            artifact: windows-x64
 
     steps:
       - name: Checkout
@@ -73,8 +77,43 @@ jobs:
       - name: Build installer
         run: pnpm ${{ matrix.command }}
 
-      - name: Verify embedded Agent runtime in app bundle
+      - name: Verify embedded Agent runtime in macOS app bundle
+        if: runner.os == 'macOS'
         run: pnpm agent-runtime:verify
+
+      - name: Install Windows bundle and verify embedded Agent runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -Path "apps/desktop/src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" -File)
+
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one Windows NSIS installer, found $($installers.Count)."
+          }
+
+          $installer = $installers[0]
+          $installRoot = Join-Path $env:RUNNER_TEMP "NinkaFoodLabVerify"
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/D=$installRoot") -PassThru
+
+          if (-not $process.WaitForExit(600000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "Windows NSIS installer did not finish within ten minutes."
+          }
+
+          if ($process.ExitCode -ne 0) {
+            throw "Windows NSIS installer exited with code $($process.ExitCode)."
+          }
+
+          foreach ($required in @("food-rd-desktop.exe", "food_rd_mcp.exe", "foodlab-agent-node.exe", "agent-runtime/runtime-manifest.json")) {
+            if (-not (Test-Path (Join-Path $installRoot $required))) {
+              throw "Windows installation is missing $required."
+            }
+          }
+
+          pnpm agent-runtime:verify -- "$installRoot"
+          $env:FOODLAB_INSTALLED_RUNTIME_ROOT = Join-Path $installRoot "agent-runtime"
+          $env:FOODLAB_INSTALLED_NODE_BINARY = Join-Path $installRoot "foodlab-agent-node.exe"
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml installed_runtime_matches_the_rust_host_contract_when_requested
 
       - name: Create non-interactive DMG
         if: runner.os == 'macOS'

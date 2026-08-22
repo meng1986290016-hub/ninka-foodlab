@@ -3,9 +3,12 @@ use std::{
     env, fs,
     net::{IpAddr, SocketAddr, TcpStream as StdTcpStream},
     path::{Path, PathBuf},
-    process::{Command as StdCommand, Stdio},
+    process::Stdio,
     time::Duration,
 };
+
+#[cfg(target_os = "macos")]
+use std::process::Command as StdCommand;
 
 use getrandom::fill;
 use serde::Deserialize;
@@ -362,47 +365,58 @@ impl HarnessHost {
         }
         let manifest: RuntimeManifest =
             serde_json::from_slice(&manifest_bytes).map_err(|_| damaged_runtime())?;
-        let (expected_arch, expected_triple, expected_node_sha256) =
-            if cfg!(target_arch = "aarch64") {
+        let (expected_os, expected_arch, expected_triple, expected_node_sha256) =
+            if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
                 (
+                    "darwin",
                     "arm64",
                     "aarch64-apple-darwin",
                     "8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d",
                 )
-            } else if cfg!(target_arch = "x86_64") {
+            } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
                 (
+                    "darwin",
                     "x64",
                     "x86_64-apple-darwin",
                     "d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316",
                 )
+            } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+                (
+                    "win32",
+                    "x64",
+                    "x86_64-pc-windows-msvc",
+                    "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+                )
             } else {
                 return Err(damaged_runtime());
             };
+        let code_directory_digest_valid = if cfg!(target_os = "macos") {
+            manifest
+                .node_code_directory_sha256
+                .as_deref()
+                .is_some_and(is_sha256)
+        } else {
+            manifest.node_code_directory_sha256.is_none()
+        };
         if manifest.schema_version != 1
             || manifest.runtime_version != EXPECTED_HARNESS_VERSION
             || manifest.node_version != EXPECTED_NODE_VERSION
+            || manifest.operating_system != expected_os
             || manifest.architecture != expected_arch
             || manifest.target_triple != expected_triple
             || manifest.node_archive_sha256 != expected_node_sha256
-            || manifest.package_lock_sha256.len() != 64
-            || !manifest
-                .package_lock_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
-            || manifest.node_code_directory_sha256.len() != 64
-            || !manifest
-                .node_code_directory_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
+            || !is_sha256(&manifest.package_lock_sha256)
+            || !is_sha256(&manifest.node_binary_sha256)
+            || !code_directory_digest_valid
         {
             return Err(damaged_runtime());
         }
         verify_node_binary(
             &self.node_binary,
             &manifest.node_binary_sha256,
-            &manifest.node_code_directory_sha256,
+            manifest.node_code_directory_sha256.as_deref(),
         )?;
-        let required_critical_files = [
+        let mut required_critical_files = vec![
             "package.json".to_string(),
             "package-lock.json".to_string(),
             "node_modules/@deepseek-ai/dsh/package.json".to_string(),
@@ -412,18 +426,34 @@ impl HarnessHost {
             "node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html".to_string(),
             "node_modules/@openai/codex/package.json".to_string(),
             "node_modules/@openai/codex/bin/codex.js".to_string(),
-            format!("node_modules/@openai/codex-darwin-{expected_arch}/package.json"),
-            format!(
-                "node_modules/@openai/codex-darwin-{expected_arch}/vendor/{expected_triple}/bin/codex"
-            ),
             "node_modules/node-pty/package.json".to_string(),
-            format!("node_modules/node-pty/prebuilds/darwin-{expected_arch}/pty.node"),
-            format!("node_modules/node-pty/prebuilds/darwin-{expected_arch}/spawn-helper"),
             "node_modules/koffi/package.json".to_string(),
-            format!(
-                "node_modules/@koromix/koffi-darwin-{expected_arch}/darwin_{expected_arch}/koffi.node"
-            ),
         ];
+        if cfg!(target_os = "windows") {
+            required_critical_files.extend([
+                "node_modules/@openai/codex-win32-x64/package.json".to_string(),
+                format!(
+                    "node_modules/@openai/codex-win32-x64/vendor/{expected_triple}/bin/codex.exe"
+                ),
+                "node_modules/node-pty/prebuilds/win32-x64/conpty.node".to_string(),
+                "node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node".to_string(),
+                "node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll".to_string(),
+                "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe".to_string(),
+                "node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node".to_string(),
+            ]);
+        } else {
+            required_critical_files.extend([
+                format!("node_modules/@openai/codex-darwin-{expected_arch}/package.json"),
+                format!(
+                    "node_modules/@openai/codex-darwin-{expected_arch}/vendor/{expected_triple}/bin/codex"
+                ),
+                format!("node_modules/node-pty/prebuilds/darwin-{expected_arch}/pty.node"),
+                format!("node_modules/node-pty/prebuilds/darwin-{expected_arch}/spawn-helper"),
+                format!(
+                    "node_modules/@koromix/koffi-darwin-{expected_arch}/darwin_{expected_arch}/koffi.node"
+                ),
+            ]);
+        }
         if required_critical_files
             .iter()
             .any(|relative| !manifest.critical_files.contains_key(relative))
@@ -431,7 +461,7 @@ impl HarnessHost {
             return Err(damaged_runtime());
         }
         for (relative, expected) in &manifest.critical_files {
-            if relative.starts_with('/') || relative.contains("..") {
+            if !is_safe_manifest_path(relative) {
                 return Err(damaged_runtime());
             }
             verify_sha256(&self.runtime.join(relative), expected)?;
@@ -484,12 +514,14 @@ struct RuntimeManifest {
     schema_version: u32,
     runtime_version: String,
     node_version: String,
+    operating_system: String,
     architecture: String,
     target_triple: String,
     node_archive_sha256: String,
     package_lock_sha256: String,
     node_binary_sha256: String,
-    node_code_directory_sha256: String,
+    #[serde(default)]
+    node_code_directory_sha256: Option<String>,
     critical_files: BTreeMap<String, String>,
 }
 
@@ -529,14 +561,44 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn is_safe_manifest_path(value: &str) -> bool {
+    let path = Path::new(value);
+    !value.contains('\\')
+        && !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
 fn verify_node_binary(
     path: &Path,
     unsigned_sha256: &str,
-    signed_code_directory_sha256: &str,
+    signed_code_directory_sha256: Option<&str>,
 ) -> Result<(), String> {
     if verify_sha256(path, unsigned_sha256).is_ok() {
         return Ok(());
     }
+    verify_signed_node_binary(path, signed_code_directory_sha256)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn verify_signed_node_binary(
+    _path: &Path,
+    _signed_code_directory_sha256: Option<&str>,
+) -> Result<(), String> {
+    Err(damaged_runtime())
+}
+
+#[cfg(target_os = "macos")]
+fn verify_signed_node_binary(
+    path: &Path,
+    signed_code_directory_sha256: Option<&str>,
+) -> Result<(), String> {
+    let signed_code_directory_sha256 = signed_code_directory_sha256.ok_or_else(damaged_runtime)?;
     let verified = StdCommand::new("/usr/bin/codesign")
         .args(["--verify", "--strict"])
         .arg(path)
@@ -935,6 +997,33 @@ mod tests {
             "https://proxy.example.com:8443"
         ));
         assert!(!unreachable_loopback_proxy("not a url"));
+    }
+
+    #[test]
+    fn runtime_manifest_accepts_only_normal_relative_paths() {
+        assert!(is_safe_manifest_path(
+            "node_modules/@openai/codex/package.json"
+        ));
+        assert!(!is_safe_manifest_path("../credentials.yaml"));
+        assert!(!is_safe_manifest_path("/tmp/runtime"));
+        assert!(!is_safe_manifest_path("C:\\runtime\\node.exe"));
+        assert!(!is_safe_manifest_path("\\\\server\\share\\runtime"));
+    }
+
+    #[test]
+    fn installed_runtime_matches_the_rust_host_contract_when_requested() {
+        let (Ok(runtime), Ok(node_binary)) = (
+            std::env::var("FOODLAB_INSTALLED_RUNTIME_ROOT"),
+            std::env::var("FOODLAB_INSTALLED_NODE_BINARY"),
+        ) else {
+            return;
+        };
+        let host = HarnessHost::new(
+            PathBuf::from("unused-runtime-verification-home"),
+            PathBuf::from(runtime),
+            PathBuf::from(node_binary),
+        );
+        assert_eq!(host.verify_runtime(), Ok(()));
     }
 
     #[tokio::test]

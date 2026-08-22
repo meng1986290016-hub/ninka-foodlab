@@ -6,7 +6,7 @@
 
 面向食品研发人员的开源、离线优先桌面应用。它把原料与供应商版本、配方设计、营养与成本试算、打样配料单、版本归档、标签预览、研发报告和受控 Agent 放在同一个本地工作台中。
 
-> 当前版本：`0.1.0` 预发布开发版。macOS Apple Silicon 安装包已完成本机验证；Windows x64 与 Intel Mac 的安装包仍待对应平台验证。目前还没有公开下载页，建议从源码运行。
+> 当前版本：`0.2.0` 内测版。macOS Apple Silicon 安装包已完成本机验证；Intel Mac 包和 Windows x64 包由对应架构的构建环境生成，仍需要在真实设备上完成试装验收。当前 macOS 与 Windows 安装包都没有付费开发者证书签名，只用于内部测试。
 
 ## 为什么做这个项目
 
@@ -20,7 +20,7 @@
 - **我要打样**：按期望出成量或计划投料量生成配料清单，支持打印和 Excel 导出。
 - **营养标签与报告**：支持 GB 28050-2011 / 2025 规则包、研发报告和多种离线导出格式。
 - **本地备份**：创建并预检 `.foodrd-backup`，恢复前自动保护当前状态，失败时原子回滚。
-- **食品研发 Agent**：支持 API、Codex CLI 和 Claude Code CLI；可以辅助原料资料识别、配方提案和标签逆向，但正式写入必须人工复核。
+- **Ninka Agent**：支持 API 模型；可以辅助原料资料识别、配方提案和标签逆向，但正式写入必须人工复核。
 
 未知营养值不会被当作零。应用中的营养、标签和法规输出是研发估算与风险提示，不是检测报告，也不替代正式标签合规审核。
 
@@ -36,9 +36,9 @@
 
 ![配方工作台](docs/assets/screenshots/recipe-workbench.jpg)
 
-### 食品研发 Agent
+### Ninka Agent
 
-![食品研发 Agent](docs/assets/screenshots/agent.jpg)
+![Ninka Agent](docs/assets/screenshots/agent.jpg)
 
 ## 从源码运行
 

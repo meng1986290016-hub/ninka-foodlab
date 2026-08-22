@@ -23,15 +23,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 fn fixture(name: &str) -> PathBuf {
-    let name = if cfg!(windows) {
-        format!("{name}.cmd")
-    } else {
-        name.to_string()
-    };
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
+    match name {
+        "fake-codex" => PathBuf::from(env!("CARGO_BIN_EXE_fake_codex_fixture")),
+        "fake-claude" => PathBuf::from(env!("CARGO_BIN_EXE_fake_claude_fixture")),
+        _ => panic!("unknown CLI fixture: {name}"),
+    }
 }
 
 fn config(

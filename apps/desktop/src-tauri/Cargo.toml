@@ -13,6 +13,14 @@ path = "src/lib.rs"
 name = "food_rd_mcp"
 path = "src/bin/food_rd_mcp.rs"
 
+[[bin]]
+name = "fake_codex_fixture"
+path = "tests/fixtures/fake_codex_fixture.rs"
+
+[[bin]]
+name = "fake_claude_fixture"
+path = "tests/fixtures/fake_claude_fixture.rs"
+
 [dependencies]
 async-trait = "0.1"
 base64 = "0.22"

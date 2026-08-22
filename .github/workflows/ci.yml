@@ -9,6 +9,28 @@ permissions:
   contents: read
 
 jobs:
+  windows-cli-contract:
+    name: Windows CLI contract (fast)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Prepare CI sidecar placeholder
+        shell: bash
+        run: |
+          target="$(rustc --version --verbose | sed -n 's/^host: //p')"
+          if [ -z "$target" ]; then
+            echo "Unable to determine the Rust host target" >&2
+            exit 1
+          fi
+          mkdir -p apps/desktop/src-tauri/binaries
+          mkdir -p apps/desktop/src-tauri/generated/agent-runtime
+          touch "apps/desktop/src-tauri/binaries/foodlab-agent-node-${target}.exe"
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test cli_provider_contract
+
   verify:
     name: Verify (${{ matrix.os }})
     strategy:
@@ -28,6 +50,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
       - name: Prepare CI sidecar placeholder
         shell: bash
         run: |

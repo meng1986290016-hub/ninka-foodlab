@@ -41,6 +41,7 @@ jobs:
             *-windows-*) suffix=".exe" ;;
           esac
           mkdir -p apps/desktop/src-tauri/binaries
+          mkdir -p apps/desktop/src-tauri/generated/agent-runtime
           touch "apps/desktop/src-tauri/binaries/foodlab-agent-node-${target}${suffix}"
       - run: pnpm install --frozen-lockfile
       - run: pnpm open-source:verify

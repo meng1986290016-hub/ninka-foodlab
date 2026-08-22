@@ -211,6 +211,10 @@ fn sanitized_display_name(path: &Path) -> Result<String, IngestError> {
         .file_name()
         .and_then(OsStr::to_str)
         .ok_or_else(|| IngestError::domain("attachment_failure", "附件名称无效"))?;
+    sanitize_display_name(name)
+}
+
+fn sanitize_display_name(name: &str) -> Result<String, IngestError> {
     let sanitized = name
         .chars()
         .map(|character| {
@@ -232,4 +236,21 @@ fn media_type_for(extension: &str) -> String {
         .first_or_octet_stream()
         .essence_str()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_display_name;
+
+    #[test]
+    fn display_name_sanitization_does_not_require_an_invalid_filesystem_name() {
+        assert_eq!(
+            sanitize_display_name("bad\nname.TXT").unwrap(),
+            "bad_name.TXT"
+        );
+        assert_eq!(
+            sanitize_display_name("folder\\name.TXT").unwrap(),
+            "folder_name.TXT"
+        );
+    }
 }

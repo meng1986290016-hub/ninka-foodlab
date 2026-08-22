@@ -115,11 +115,11 @@ fn unsupported_extensions_and_escaping_paths_are_rejected() {
 }
 
 #[test]
-fn display_names_are_sanitized_and_media_types_are_normalized() {
+fn valid_display_names_are_preserved_and_media_types_are_normalized() {
     let fixture = AttachmentFixture::new();
-    let staged = fixture.stage("bad\nname.TXT", b"plain text");
+    let staged = fixture.stage("bad name.TXT", b"plain text");
 
-    assert_eq!(staged.original_name, "bad_name.TXT");
+    assert_eq!(staged.original_name, "bad name.TXT");
     assert_eq!(staged.media_type, "text/plain");
     assert!(staged.relative_path.ends_with(".txt"));
 }

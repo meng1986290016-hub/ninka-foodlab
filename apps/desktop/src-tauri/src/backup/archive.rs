@@ -266,7 +266,10 @@ fn create_database_snapshot(source: &Path, snapshot_path: &Path) -> Result<(), R
     drop(backup);
     destination.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
     drop(destination);
-    File::open(snapshot_path)
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(snapshot_path)
         .map_err(RepositoryError::io)?
         .sync_all()
         .map_err(RepositoryError::io)?;

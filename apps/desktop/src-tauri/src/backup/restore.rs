@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::Read,
     path::{Component, Path, PathBuf},
 };
@@ -237,7 +237,10 @@ fn migrate_staged_database(path: &Path, migrated_at: &str) -> Result<(), Reposit
         return Err(invalid_state("备份数据库升级未完成"));
     }
     drop(connection);
-    File::open(path)
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
         .map_err(RepositoryError::io)?
         .sync_all()
         .map_err(RepositoryError::io)

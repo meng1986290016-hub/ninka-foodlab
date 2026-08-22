@@ -792,6 +792,8 @@ fn restrict_directory_permissions(path: &Path) -> Result<(), AgentError> {
         fs::set_permissions(path, fs::Permissions::from_mode(0o700))
             .map_err(|_| AgentError::provider_failure("MCP 任务授权目录权限无法设置"))?;
     }
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 

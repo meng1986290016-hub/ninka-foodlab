@@ -38,7 +38,7 @@ pub struct CodexAppServerHost {
 
 enum HostState {
     Stopped,
-    Running(RunningHost),
+    Running(Box<RunningHost>),
     Failed,
 }
 
@@ -455,13 +455,13 @@ impl CodexAppServerHost {
                 let _ = sender.send(Err("ChatGPT 服务连接已中断，请重试".into()));
             }
         });
-        *state = HostState::Running(RunningHost {
+        *state = HostState::Running(Box::new(RunningHost {
             child,
             stdin,
             pending,
             notifications,
             reader,
-        });
+        }));
         drop(state);
         if let Err(error) = self
             .request_started(

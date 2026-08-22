@@ -50,7 +50,7 @@ enum HostState {
     Stopped,
     Starting,
     Running {
-        child: Child,
+        child: Box<Child>,
         proxy_port: u16,
         token: String,
         proxy_task: JoinHandle<()>,
@@ -242,7 +242,7 @@ impl HarnessHost {
                 };
                 let mut state = self.state.lock().await;
                 *state = HostState::Running {
-                    child,
+                    child: Box::new(child),
                     proxy_port,
                     token,
                     proxy_task,

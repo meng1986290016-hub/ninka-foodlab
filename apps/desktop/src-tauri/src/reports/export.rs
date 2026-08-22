@@ -1,9 +1,12 @@
 use std::{
     collections::HashSet,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
 };
+
+#[cfg(unix)]
+use std::fs::File;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{GenericImageView, ImageFormat};

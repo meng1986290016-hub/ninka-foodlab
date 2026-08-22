@@ -418,6 +418,7 @@ fn all_export_formats_are_atomically_written_and_readable() {
         ]
     );
 
+    drop(workbook);
     drop(repository);
     fs::remove_dir_all(export_root).unwrap();
     fs::remove_file(path).unwrap();
@@ -477,6 +478,7 @@ fn sample_sheet_export_accepts_a_safe_single_sheet_xlsx() {
 
     let workbook = open_workbook_auto(&destination).unwrap();
     assert_eq!(workbook.sheet_names(), ["打样配料单"]);
+    drop(workbook);
     fs::remove_dir_all(export_root).unwrap();
 }
 

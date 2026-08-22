@@ -202,6 +202,7 @@ fn native_publish_blocks_missing_required_values_without_consuming_version_one()
         )
         .unwrap();
     assert!(snapshot_json.contains("\"labelVersionNumber\":1"));
+    drop(connection);
     fs::remove_file(path).unwrap();
 }
 

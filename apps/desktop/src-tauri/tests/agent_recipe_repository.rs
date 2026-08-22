@@ -170,6 +170,7 @@ fn acceptance_atomically_creates_an_agent_draft_and_material_need() {
         AgentRecipeProposalStatus::Accepted
     );
 
+    drop(recipes);
     let mut recipes = RecipeRepository::open(&path).unwrap();
     let formal_error = recipes
         .create_version(RecipeVersionInput {
@@ -184,6 +185,8 @@ fn acceptance_atomically_creates_an_agent_draft_and_material_need() {
     assert_eq!(formal_error.code(), "invalid_state");
     assert!(recipes.list_versions(&recipe.id).unwrap().is_empty());
 
+    drop(recipes);
+    drop(proposals);
     fs::remove_file(path).unwrap();
 }
 
@@ -224,5 +227,6 @@ fn changed_ingredient_data_marks_a_proposal_stale_without_partial_writes() {
         AgentRecipeProposalStatus::PendingReview
     );
 
+    drop(proposals);
     fs::remove_file(path).unwrap();
 }

@@ -331,6 +331,7 @@ fn formal_version_rows_are_immutable_even_through_direct_sql() {
             .execute("DELETE FROM recipe_versions WHERE id = ?1", [&version_id])
             .is_err()
     );
+    drop(connection);
     fs::remove_file(path).unwrap();
 }
 

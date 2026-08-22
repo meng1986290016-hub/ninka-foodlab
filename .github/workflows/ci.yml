@@ -28,6 +28,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Prepare CI sidecar placeholder
+        shell: bash
+        run: |
+          target="$(rustc --version --verbose | sed -n 's/^host: //p')"
+          if [ -z "$target" ]; then
+            echo "Unable to determine the Rust host target" >&2
+            exit 1
+          fi
+          suffix=""
+          case "$target" in
+            *-windows-*) suffix=".exe" ;;
+          esac
+          mkdir -p apps/desktop/src-tauri/binaries
+          touch "apps/desktop/src-tauri/binaries/foodlab-agent-node-${target}${suffix}"
       - run: pnpm install --frozen-lockfile
       - run: pnpm open-source:verify
       - run: pnpm --filter @food-rd/core build

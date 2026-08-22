@@ -65,7 +65,12 @@ const license = await readFile(resolve(root, "LICENSE"), "utf8");
 if (!license.includes("Apache License") || !license.includes("Version 2.0")) {
   throw new Error("LICENSE 不是 Apache License 2.0 文本");
 }
-const licenseHash = createHash("sha256").update(license).digest("hex");
+// Git may materialize text files with CRLF on Windows. Verify the license
+// content independently of the checkout platform's line-ending convention.
+const normalizedLicense = license.replace(/\r\n?/g, "\n");
+const licenseHash = createHash("sha256")
+  .update(normalizedLicense)
+  .digest("hex");
 if (
   licenseHash !==
   "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"

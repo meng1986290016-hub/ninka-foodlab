@@ -84,7 +84,7 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 114);
+    assert_eq!(REGISTERED_COMMANDS.len(), 130);
     for command in [
         "list_categories",
         "create_supplier",

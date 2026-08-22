@@ -71,6 +71,7 @@ jobs:
         run: |
           pnpm licenses:generate
           pnpm open-source:verify
+          pnpm --filter @food-rd/core build
           pnpm typecheck
           python scripts/branding/verify_assets.py
 

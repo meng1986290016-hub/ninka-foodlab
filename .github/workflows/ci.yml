@@ -30,6 +30,7 @@ jobs:
           components: rustfmt, clippy
       - run: pnpm install --frozen-lockfile
       - run: pnpm open-source:verify
+      - run: pnpm --filter @food-rd/core build
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

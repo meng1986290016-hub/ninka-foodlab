@@ -39,7 +39,7 @@ macOS 先由 Tauri 生成并 ad-hoc 签名 `.app`，再用不调用 Finder Apple
 
 ## GitHub 手动构建
 
-仓库包含 `.github/workflows/build-installers.yml`，在 GitHub 的 **Actions → Build unsigned desktop installers → Run workflow** 中人工运行。它分别使用：
+仓库包含 `.github/workflows/build-installers.yml`，在 GitHub 的 **Actions → Build unsigned desktop installers → Run workflow** 中人工运行。默认的 `windows-x64` 只构建 Windows 安装包，适合 Windows 修复验证；只有需要同时发布三个平台时才选择 `all-platforms`。完整矩阵分别使用：
 
 - `macos-15`：Apple Silicon DMG。
 - `macos-15-intel`：Intel DMG。

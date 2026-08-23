@@ -2,6 +2,15 @@ name: Build unsigned desktop installers
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Build target
+        required: true
+        default: windows-x64
+        type: choice
+        options:
+          - windows-x64
+          - all-platforms
 
 permissions:
   contents: read
@@ -14,19 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - label: macOS Apple Silicon
-            os: macos-15
-            command: desktop:bundle:macos
-            artifact: macos-arm64
-          - label: macOS Intel
-            os: macos-15-intel
-            command: desktop:bundle:macos
-            artifact: macos-x64
-          - label: Windows x64
-            os: windows-2025
-            command: desktop:bundle:windows
-            artifact: windows-x64
+        include: ${{ fromJSON(inputs.target == 'all-platforms' && '[{"label":"macOS Apple Silicon","os":"macos-15","command":"desktop:bundle:macos","artifact":"macos-arm64"},{"label":"macOS Intel","os":"macos-15-intel","command":"desktop:bundle:macos","artifact":"macos-x64"},{"label":"Windows x64","os":"windows-2025","command":"desktop:bundle:windows","artifact":"windows-x64"}]' || '[{"label":"Windows x64","os":"windows-2025","command":"desktop:bundle:windows","artifact":"windows-x64"}]') }}
 
     steps:
       - name: Checkout

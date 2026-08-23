@@ -4,6 +4,7 @@ use std::{
     net::{IpAddr, SocketAddr, TcpStream as StdTcpStream},
     path::{Path, PathBuf},
     process::Stdio,
+    sync::{Arc, Mutex as StdMutex},
     time::Duration,
 };
 
@@ -15,7 +16,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
     sync::Mutex,
@@ -30,6 +31,7 @@ use super::model::{
 
 const PROFILE_NAME: &str = "foodlab";
 const START_TIMEOUT_ATTEMPTS: usize = 300;
+const MAX_STARTUP_DIAGNOSTIC_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, Default)]
 pub struct HarnessLaunchEnvironment {
@@ -54,6 +56,8 @@ enum HostState {
         proxy_port: u16,
         token: String,
         proxy_task: JoinHandle<()>,
+        diagnostic_task: JoinHandle<()>,
+        diagnostics: Arc<StdMutex<StartupDiagnostics>>,
     },
     Failed(String),
 }
@@ -78,22 +82,32 @@ impl HarnessHost {
         let mut state = self.state.lock().await;
         let failure = match &mut *state {
             HostState::Running {
-                child, proxy_task, ..
-            } => child
-                .try_wait()
-                .ok()
-                .flatten()
-                .map(|_| "Agent 服务意外退出，请重试".to_string())
-                .or_else(|| {
+                child,
+                proxy_task,
+                diagnostics,
+                ..
+            } => {
+                let child_failure = child.try_wait().ok().flatten().map(|_| {
+                    classified_startup_failure(&diagnostic_snapshot(diagnostics))
+                        .unwrap_or_else(|| "Agent 服务意外退出，请重试".to_string())
+                });
+                child_failure.or_else(|| {
                     proxy_task
                         .is_finished()
                         .then(|| "Agent 本地连接已中断，请重试".to_string())
-                }),
+                })
+            }
             _ => None,
         };
         if let Some(message) = failure {
-            if let HostState::Running { proxy_task, .. } = &*state {
+            if let HostState::Running {
+                proxy_task,
+                diagnostic_task,
+                ..
+            } = &*state
+            {
                 proxy_task.abort();
+                diagnostic_task.abort();
             }
             *state = HostState::Failed(message);
         }
@@ -154,15 +168,34 @@ impl HarnessHost {
             return Err(message);
         }
 
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .map_err(|_| "Agent 服务无法启动，请重试".to_string())?;
-        let port = listener
-            .local_addr()
-            .map_err(|_| "Agent 服务无法启动，请重试".to_string())?
-            .port();
+        let listener = match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(_) => {
+                let message = local_network_failure();
+                let mut state = self.state.lock().await;
+                *state = HostState::Failed(message.clone());
+                return Err(message);
+            }
+        };
+        let port = match listener.local_addr() {
+            Ok(address) => address.port(),
+            Err(_) => {
+                let message = local_network_failure();
+                let mut state = self.state.lock().await;
+                *state = HostState::Failed(message.clone());
+                return Err(message);
+            }
+        };
         drop(listener);
 
-        let token = random_token()?;
+        let token = match random_token() {
+            Ok(token) => token,
+            Err(message) => {
+                let mut state = self.state.lock().await;
+                *state = HostState::Failed(message.clone());
+                return Err(message);
+            }
+        };
         let mut command = Command::new(&self.node_binary);
         let port_string = port.to_string();
         command
@@ -186,11 +219,10 @@ impl HarnessHost {
             .current_dir(&self.runtime)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            // Upstream diagnostics are deliberately not exposed in product
-            // UI. Leaving stderr piped without continuously draining it can
-            // fill the OS pipe and deadlock startup before the health port is
-            // bound, so discard it at the process boundary.
-            .stderr(Stdio::null())
+            // Continuously drain a bounded tail so upstream output cannot
+            // deadlock startup. Raw diagnostics are never exposed in product
+            // UI; only allow-listed, actionable categories are returned.
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         if let Some(path) = &launch.mcp_command {
             command.env("FOOD_RD_MCP_COMMAND", path);
@@ -203,17 +235,29 @@ impl HarnessHost {
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
-                let _ = error;
-                let message = "Agent 服务无法启动，请重新安装 FoodLab".to_string();
+                let message = process_spawn_failure(&error);
                 let mut state = self.state.lock().await;
                 *state = HostState::Failed(message.clone());
                 return Err(message);
             }
         };
+        let diagnostics = Arc::new(StdMutex::new(StartupDiagnostics::default()));
+        let Some(stderr) = child.stderr.take() else {
+            let _ = child.kill().await;
+            let message = "Agent 服务无法启动，请重新安装 FoodLab".to_string();
+            let mut state = self.state.lock().await;
+            *state = HostState::Failed(message.clone());
+            return Err(message);
+        };
+        let mut diagnostic_task =
+            tokio::spawn(drain_startup_diagnostics(stderr, Arc::clone(&diagnostics)));
         for _ in 0..START_TIMEOUT_ATTEMPTS {
             if let Ok(Some(status)) = child.try_wait() {
                 let _ = status;
-                let message = "Agent 服务启动失败，请重试".to_string();
+                let _ = timeout(Duration::from_millis(250), &mut diagnostic_task).await;
+                diagnostic_task.abort();
+                let message = classified_startup_failure(&diagnostic_snapshot(&diagnostics))
+                    .unwrap_or_else(|| "Agent 服务启动失败，请检查安全软件后重试".to_string());
                 let mut state = self.state.lock().await;
                 *state = HostState::Failed(message.clone());
                 return Err(message);
@@ -235,6 +279,7 @@ impl HarnessHost {
                     Ok(proxy) => proxy,
                     Err(message) => {
                         let _ = child.kill().await;
+                        diagnostic_task.abort();
                         let mut state = self.state.lock().await;
                         *state = HostState::Failed(message.clone());
                         return Err(message);
@@ -246,6 +291,8 @@ impl HarnessHost {
                     proxy_port,
                     token,
                     proxy_task,
+                    diagnostic_task,
+                    diagnostics,
                 };
                 drop(state);
                 return Ok(self.health().await);
@@ -254,7 +301,10 @@ impl HarnessHost {
         }
 
         let _ = child.kill().await;
-        let message = "Agent 服务启动超时，请重试".to_string();
+        let _ = timeout(Duration::from_millis(250), &mut diagnostic_task).await;
+        diagnostic_task.abort();
+        let message = classified_startup_failure(&diagnostic_snapshot(&diagnostics))
+            .unwrap_or_else(|| "Agent 服务启动超时，请重试".to_string());
         let mut state = self.state.lock().await;
         *state = HostState::Failed(message.clone());
         Err(message)
@@ -266,10 +316,12 @@ impl HarnessHost {
         if let HostState::Running {
             mut child,
             proxy_task,
+            diagnostic_task,
             ..
         } = previous
         {
             proxy_task.abort();
+            diagnostic_task.abort();
             child
                 .kill()
                 .await
@@ -531,12 +583,131 @@ impl Drop for HarnessHost {
             return;
         };
         if let HostState::Running {
-            child, proxy_task, ..
+            child,
+            proxy_task,
+            diagnostic_task,
+            ..
         } = &mut *state
         {
             proxy_task.abort();
+            diagnostic_task.abort();
             let _ = child.start_kill();
         }
+    }
+}
+
+#[derive(Default)]
+struct StartupDiagnostics {
+    bytes: Vec<u8>,
+}
+
+impl StartupDiagnostics {
+    fn push(&mut self, chunk: &[u8]) {
+        if chunk.len() >= MAX_STARTUP_DIAGNOSTIC_BYTES {
+            self.bytes.clear();
+            self.bytes
+                .extend_from_slice(&chunk[chunk.len() - MAX_STARTUP_DIAGNOSTIC_BYTES..]);
+            return;
+        }
+        self.bytes.extend_from_slice(chunk);
+        let excess = self
+            .bytes
+            .len()
+            .saturating_sub(MAX_STARTUP_DIAGNOSTIC_BYTES);
+        if excess > 0 {
+            self.bytes.drain(..excess);
+        }
+    }
+
+    fn snapshot(&self) -> String {
+        String::from_utf8_lossy(&self.bytes).into_owned()
+    }
+}
+
+async fn drain_startup_diagnostics<R>(mut reader: R, diagnostics: Arc<StdMutex<StartupDiagnostics>>)
+where
+    R: AsyncRead + Unpin,
+{
+    let mut buffer = [0_u8; 2048];
+    loop {
+        let size = match reader.read(&mut buffer).await {
+            Ok(0) | Err(_) => return,
+            Ok(size) => size,
+        };
+        diagnostics
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(&buffer[..size]);
+    }
+}
+
+fn diagnostic_snapshot(diagnostics: &Arc<StdMutex<StartupDiagnostics>>) -> String {
+    diagnostics
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .snapshot()
+}
+
+fn classified_startup_failure(diagnostics: &str) -> Option<String> {
+    let normalized = diagnostics.to_ascii_lowercase();
+    if [
+        "listen eperm",
+        "listen eacces",
+        "wsaeacces",
+        "error 10013",
+        "forbidden by its access permissions",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        return Some(local_network_failure());
+    }
+    if ["eaddrinuse", "error 10048", "address already in use"]
+        .iter()
+        .any(|marker| normalized.contains(marker))
+    {
+        return Some("Agent 本机连接端口被占用，请重试".into());
+    }
+    if [
+        "cannot find module",
+        "err_module_not_found",
+        "module_not_found",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        return Some("Agent 运行组件缺失，请重新安装 FoodLab".into());
+    }
+    if [
+        "mcp-client(food_rd)",
+        "food_rd_mcp",
+        "initial connection or tool synchronization failed",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        return Some("Agent 食研工具服务启动失败，请检查安全软件是否拦截 FoodLab".into());
+    }
+    if ["plugin tree failed to load", "failed to apply loader entry"]
+        .iter()
+        .any(|marker| normalized.contains(marker))
+    {
+        return Some("Agent 组件加载失败，请重新安装 FoodLab；若仍失败请检查安全软件".into());
+    }
+    None
+}
+
+fn local_network_failure() -> String {
+    "Agent 无法监听本机连接，请允许 FoodLab 访问本机网络后重试".into()
+}
+
+fn process_spawn_failure(error: &std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => "Agent 运行组件缺失，请重新安装 FoodLab".into(),
+        std::io::ErrorKind::PermissionDenied => {
+            "Agent 程序被系统阻止，请在安全软件中允许 FoodLab 后重试".into()
+        }
+        _ => "Agent 服务无法启动，请重新安装 FoodLab".into(),
     }
 }
 
@@ -957,6 +1128,16 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use crate::{
+        agent::{
+            mcp::McpTaskLaunchConfig, model::AgentProviderKind, repository::AgentRepository,
+            tools::AgentToolContext,
+        },
+        ingest::coordinator::IngredientIngestCoordinator,
+    };
+
     use super::*;
 
     #[test]
@@ -977,6 +1158,27 @@ mod tests {
         assert!(preset.contains("fetch: false"));
         assert!(preset.contains("foodlab-private-mcp"));
         assert!(!preset.contains("web-fetch-http"));
+    }
+
+    #[test]
+    fn startup_diagnostics_are_bounded_and_classified_without_raw_output() {
+        let mut diagnostics = StartupDiagnostics::default();
+        diagnostics.push(&vec![b'x'; MAX_STARTUP_DIAGNOSTIC_BYTES + 32]);
+        assert_eq!(diagnostics.bytes.len(), MAX_STARTUP_DIAGNOSTIC_BYTES);
+
+        assert_eq!(
+            classified_startup_failure("Error: listen EACCES: permission denied 127.0.0.1:18327"),
+            Some(local_network_failure())
+        );
+        assert_eq!(
+            classified_startup_failure("Error: listen EADDRINUSE 127.0.0.1:18327"),
+            Some("Agent 本机连接端口被占用，请重试".into())
+        );
+        assert_eq!(
+            classified_startup_failure("Error [ERR_MODULE_NOT_FOUND]: secret-path"),
+            Some("Agent 运行组件缺失，请重新安装 FoodLab".into())
+        );
+        assert_eq!(classified_startup_failure("unrecognized secret-path"), None);
     }
 
     #[test]
@@ -1024,6 +1226,71 @@ mod tests {
             PathBuf::from(node_binary),
         );
         assert_eq!(host.verify_runtime(), Ok(()));
+    }
+
+    #[tokio::test]
+    async fn installed_agent_service_starts_when_requested() {
+        let (Ok(runtime), Ok(node_binary), Ok(mcp_binary)) = (
+            std::env::var("FOODLAB_INSTALLED_RUNTIME_ROOT"),
+            std::env::var("FOODLAB_INSTALLED_NODE_BINARY"),
+            std::env::var("FOODLAB_INSTALLED_MCP_BINARY"),
+        ) else {
+            return;
+        };
+        let root = std::env::temp_dir().join(format!(
+            "foodlab-installed-agent-smoke-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let database_path = root.join("food-rd.sqlite3");
+        let attachment_root = root.join("attachments");
+        let home = root.join("foodlab-agent");
+
+        let result: Result<(), String> = async {
+            let coordinator = IngredientIngestCoordinator::open(&database_path, &attachment_root)
+                .map_err(|error| error.to_string())?;
+            drop(coordinator);
+            let repository =
+                AgentRepository::open(&database_path).map_err(|error| error.to_string())?;
+            drop(repository);
+
+            let context = AgentToolContext {
+                run_id: "installed-agent-smoke".into(),
+                import_job_id: "installed-agent-smoke".into(),
+                allowed_attachment_ids: BTreeSet::new(),
+                provider_kind: AgentProviderKind::DeepSeek,
+                model: "foodlab-agent".into(),
+                active_recipe_id: None,
+                active_recipe_name: None,
+                active_draft_fingerprint: None,
+            };
+            let prepared = McpTaskLaunchConfig::new(
+                PathBuf::from(mcp_binary),
+                &database_path,
+                &attachment_root,
+                context,
+                Duration::from_secs(5 * 60),
+            )
+            .prepare(&home.join("capabilities"))
+            .map_err(|error| error.message().to_string())?;
+            let host = HarnessHost::new(home, PathBuf::from(runtime), PathBuf::from(node_binary));
+            let health = host
+                .start(HarnessLaunchEnvironment {
+                    mcp_command: Some(prepared.server_binary),
+                    mcp_environment: prepared.environment,
+                })
+                .await?;
+            if health.status != HarnessHealthStatus::Ready {
+                return Err(health
+                    .last_error
+                    .unwrap_or_else(|| "Agent did not reach the ready state".into()));
+            }
+            host.stop().await?;
+            Ok(())
+        }
+        .await;
+
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(result, Ok(()));
     }
 
     #[tokio::test]

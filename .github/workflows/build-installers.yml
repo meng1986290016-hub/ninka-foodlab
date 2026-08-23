@@ -114,7 +114,9 @@ jobs:
           pnpm agent-runtime:verify -- "$installRoot"
           $env:FOODLAB_INSTALLED_RUNTIME_ROOT = Join-Path $installRoot "agent-runtime"
           $env:FOODLAB_INSTALLED_NODE_BINARY = Join-Path $installRoot "foodlab-agent-node.exe"
-          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml installed_runtime_matches_the_rust_host_contract_when_requested
+          $env:FOODLAB_INSTALLED_MCP_BINARY = Join-Path $installRoot "food_rd_mcp.exe"
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_runtime_matches_the_rust_host_contract_when_requested
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_agent_service_starts_when_requested
 
       - name: Create non-interactive DMG
         if: runner.os == 'macOS'

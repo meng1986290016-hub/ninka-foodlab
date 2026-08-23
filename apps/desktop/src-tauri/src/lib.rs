@@ -2,6 +2,7 @@ pub mod agent;
 pub mod agent_harness;
 pub mod agent_recipe;
 pub mod backup;
+mod child_process_path;
 pub mod commands;
 pub mod database;
 pub mod ingest;

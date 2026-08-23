@@ -20,6 +20,7 @@ use super::{
 use crate::{
     agent_harness::{model::TaskOutcome, repository::HarnessRepository},
     agent_recipe::repository::AgentRecipeRepository,
+    child_process_path,
     ingest::coordinator::IngredientIngestCoordinator,
     rnd_reference::repository::RndReferenceRepository,
 };
@@ -123,7 +124,9 @@ impl McpTaskLaunchConfig {
         environment.insert(MCP_TOKEN_ENV.into(), capability.token);
         environment.insert(
             MCP_CAPABILITY_ENV.into(),
-            capability.record_path.to_string_lossy().into_owned(),
+            child_process_path::simplified(&capability.record_path)
+                .to_string_lossy()
+                .into_owned(),
         );
         environment.insert(
             MCP_DATABASE_ENV.into(),
@@ -798,7 +801,7 @@ fn restrict_directory_permissions(path: &Path) -> Result<(), AgentError> {
 }
 
 fn absolute_path(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    child_process_path::canonicalized(path)
 }
 
 #[cfg(test)]

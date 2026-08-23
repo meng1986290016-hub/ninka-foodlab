@@ -22,6 +22,8 @@ use tokio::{
     time::timeout,
 };
 
+use crate::child_process_path;
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const TURN_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
@@ -61,9 +63,9 @@ pub struct CodexTurnResult {
 impl CodexAppServerHost {
     pub fn new(home: PathBuf, runtime: PathBuf, node_binary: PathBuf) -> Self {
         Self {
-            home,
-            runtime,
-            node_binary,
+            home: child_process_path::simplified(&home),
+            runtime: child_process_path::simplified(&runtime),
+            node_binary: child_process_path::simplified(&node_binary),
             state: Mutex::new(HostState::Stopped),
             active_login_id: Mutex::new(None),
             next_id: AtomicU64::new(1),

@@ -28,6 +28,7 @@ use url::Url;
 use super::model::{
     EXPECTED_HARNESS_VERSION, EXPECTED_NODE_VERSION, HarnessHealth, HarnessHealthStatus,
 };
+use crate::child_process_path;
 
 const PROFILE_NAME: &str = "foodlab";
 const START_TIMEOUT_ATTEMPTS: usize = 300;
@@ -65,9 +66,9 @@ enum HostState {
 impl HarnessHost {
     pub fn new(home: PathBuf, runtime: PathBuf, node_binary: PathBuf) -> Self {
         Self {
-            home,
-            runtime,
-            node_binary,
+            home: child_process_path::simplified(&home),
+            runtime: child_process_path::simplified(&runtime),
+            node_binary: child_process_path::simplified(&node_binary),
             start_guard: Mutex::new(()),
             state: Mutex::new(HostState::Stopped),
             verification: Mutex::new(None),
@@ -225,7 +226,7 @@ impl HarnessHost {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         if let Some(path) = &launch.mcp_command {
-            command.env("FOOD_RD_MCP_COMMAND", path);
+            command.env("FOOD_RD_MCP_COMMAND", child_process_path::simplified(path));
         }
         for (name, value) in &launch.mcp_environment {
             command.env(name, value);
@@ -1229,7 +1230,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn installed_agent_service_starts_when_requested() {
+    async fn installed_agent_service_starts_from_extended_paths_when_requested() {
         let (Ok(runtime), Ok(node_binary), Ok(mcp_binary)) = (
             std::env::var("FOODLAB_INSTALLED_RUNTIME_ROOT"),
             std::env::var("FOODLAB_INSTALLED_NODE_BINARY"),
@@ -1237,10 +1238,15 @@ mod tests {
         ) else {
             return;
         };
-        let root = std::env::temp_dir().join(format!(
+        let ordinary_root = std::env::temp_dir().join(format!(
             "foodlab-installed-agent-smoke-{}",
             uuid::Uuid::new_v4()
         ));
+        fs::create_dir_all(&ordinary_root).unwrap();
+        let root = child_process_test_path(&ordinary_root);
+        let runtime = child_process_test_path(Path::new(&runtime));
+        let node_binary = child_process_test_path(Path::new(&node_binary));
+        let mcp_binary = child_process_test_path(Path::new(&mcp_binary));
         let database_path = root.join("food-rd.sqlite3");
         let attachment_root = root.join("attachments");
         let home = root.join("foodlab-agent");
@@ -1264,7 +1270,7 @@ mod tests {
                 active_draft_fingerprint: None,
             };
             let prepared = McpTaskLaunchConfig::new(
-                PathBuf::from(mcp_binary),
+                mcp_binary,
                 &database_path,
                 &attachment_root,
                 context,
@@ -1272,7 +1278,17 @@ mod tests {
             )
             .prepare(&home.join("capabilities"))
             .map_err(|error| error.message().to_string())?;
-            let host = HarnessHost::new(home, PathBuf::from(runtime), PathBuf::from(node_binary));
+            #[cfg(windows)]
+            assert!(prepared.environment.iter().all(|(name, value)| {
+                name == crate::agent::mcp::MCP_TOKEN_ENV || !value.starts_with(r"\\?\")
+            }));
+            let host = HarnessHost::new(home, runtime, node_binary);
+            #[cfg(windows)]
+            {
+                assert!(!host.home.to_string_lossy().starts_with(r"\\?\"));
+                assert!(!host.runtime.to_string_lossy().starts_with(r"\\?\"));
+                assert!(!host.node_binary.to_string_lossy().starts_with(r"\\?\"));
+            }
             let health = host
                 .start(HarnessLaunchEnvironment {
                     mcp_command: Some(prepared.server_binary),
@@ -1289,8 +1305,24 @@ mod tests {
         }
         .await;
 
-        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&ordinary_root);
         assert_eq!(result, Ok(()));
+    }
+
+    #[cfg(windows)]
+    fn child_process_test_path(path: &Path) -> PathBuf {
+        let path = child_process_path::canonicalized(path);
+        let value = path.to_string_lossy();
+        assert!(
+            value.as_bytes().get(1) == Some(&b':'),
+            "Windows smoke paths must resolve to a drive path"
+        );
+        PathBuf::from(format!(r"\\?\{value}"))
+    }
+
+    #[cfg(not(windows))]
+    fn child_process_test_path(path: &Path) -> PathBuf {
+        path.to_path_buf()
     }
 
     #[tokio::test]

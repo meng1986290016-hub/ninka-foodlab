@@ -47,7 +47,7 @@ macOS 先由 Tauri 生成并 ad-hoc 签名 `.app`，再用不调用 Finder Apple
 
 每个平台上传独立 Artifact，保留 14 天，并包含安装包、许可证文件、平台依赖清单和 `SHA256SUMS.txt`。工作流不会创建 GitHub Release；正式公开前仍需人工下载、试装、核对版本与校验和，再单独决定是否发布。
 
-Windows job 会在构建后将 NSIS 安装包静默安装到 runner 的临时目录，然后从安装结果中校验内置 Agent 运行时。这可以发现缺少文件、架构错误和安装器未包入资源等问题，但不能代替真实 Windows 电脑上的界面、WebView2、SmartScreen 和数据持久化验收。
+Windows job 会在构建后将 NSIS 安装包静默安装到 runner 的临时目录，然后校验内置 Agent 运行时、开始菜单与桌面快捷方式目标，并用 `\\?\C:\...` 扩展路径实际启动和停止 Agent。这可以发现缺少文件、架构错误、错误快捷方式和 Node 不兼容扩展路径等问题，但不能代替真实 Windows 电脑上的界面、WebView2、SmartScreen、覆盖升级和数据持久化验收。
 
 ## macOS 安装
 

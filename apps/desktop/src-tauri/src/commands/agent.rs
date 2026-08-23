@@ -370,10 +370,12 @@ pub(crate) fn mcp_server_binary() -> Result<PathBuf, AgentError> {
     } else {
         "food_rd_mcp"
     };
-    Ok(current
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(name))
+    Ok(crate::child_process_path::simplified(
+        &current
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(name),
+    ))
 }
 
 #[cfg(test)]

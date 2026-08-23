@@ -1,6 +1,6 @@
 [package]
 name = "food-rd-desktop"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "Apache-2.0"
 default-run = "food-rd-desktop"
@@ -27,6 +27,7 @@ base64 = "0.22"
 calamine = "0.31"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 csv = "1"
+dunce = "1"
 futures-util = "0.3"
 getrandom = "0.3"
 hex = "0.4"

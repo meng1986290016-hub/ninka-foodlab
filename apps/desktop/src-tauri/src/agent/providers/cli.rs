@@ -417,7 +417,7 @@ fn resolve_executable(manual_path: Option<&str>, name: &str) -> Option<PathBuf> 
 }
 
 fn absolute_path(path: PathBuf) -> PathBuf {
-    path.canonicalize().unwrap_or(path)
+    crate::child_process_path::canonicalized(&path)
 }
 
 fn executable_candidates(directory: &Path, name: &str) -> Vec<PathBuf> {

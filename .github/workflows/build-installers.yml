@@ -111,12 +111,30 @@ jobs:
             }
           }
 
+          $startMenuRoot = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
+          $shortcuts = @(Get-ChildItem -Path $startMenuRoot -Filter "Ninka FoodLab.lnk" -File -Recurse)
+          if ($shortcuts.Count -ne 1) {
+            throw "Expected exactly one Ninka FoodLab Start Menu shortcut, found $($shortcuts.Count)."
+          }
+          $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Ninka FoodLab.lnk"
+          if (-not (Test-Path $desktopShortcut)) {
+            throw "Windows installation did not create the Ninka FoodLab desktop shortcut."
+          }
+          $shell = New-Object -ComObject WScript.Shell
+          $expectedTarget = [System.IO.Path]::GetFullPath((Join-Path $installRoot "food-rd-desktop.exe"))
+          foreach ($shortcutPath in @($shortcuts[0].FullName, $desktopShortcut)) {
+            $shortcutTarget = [System.IO.Path]::GetFullPath($shell.CreateShortcut($shortcutPath).TargetPath)
+            if (-not [string]::Equals($shortcutTarget, $expectedTarget, [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "Ninka FoodLab shortcut '$shortcutPath' targets '$shortcutTarget' instead of '$expectedTarget'."
+            }
+          }
+
           pnpm agent-runtime:verify -- "$installRoot"
           $env:FOODLAB_INSTALLED_RUNTIME_ROOT = Join-Path $installRoot "agent-runtime"
           $env:FOODLAB_INSTALLED_NODE_BINARY = Join-Path $installRoot "foodlab-agent-node.exe"
           $env:FOODLAB_INSTALLED_MCP_BINARY = Join-Path $installRoot "food_rd_mcp.exe"
           cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_runtime_matches_the_rust_host_contract_when_requested
-          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_agent_service_starts_when_requested
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_agent_service_starts_from_extended_paths_when_requested
 
       - name: Create non-interactive DMG
         if: runner.os == 'macOS'

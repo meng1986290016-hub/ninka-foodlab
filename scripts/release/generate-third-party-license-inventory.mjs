@@ -187,7 +187,7 @@ if (missing.length > 0) {
 
 const output = `# Third-party license inventory
 
-This file is generated from the desktop application's installed production dependency graph, embedded Agent runtime, and Cargo metadata locked by this checkout. Build-only workspaces such as the promotional video project are not bundled in the desktop installers and are documented separately. This inventory records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
+This file is generated from the desktop application's installed production dependency graph, embedded Agent runtime, and Cargo metadata locked by this checkout. This inventory records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
 
 Because JavaScript packages can be platform-specific, release workflows regenerate this file on each target platform. The inventory committed in the source tree represents the platform on which it was last generated.
 

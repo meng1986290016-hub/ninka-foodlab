@@ -6,7 +6,7 @@
 
 面向食品研发人员的开源、离线优先桌面应用。它把原料与供应商版本、配方设计、营养与成本试算、打样配料单、版本归档、标签预览、研发报告和受控 Agent 放在同一个本地工作台中。
 
-> 当前版本：`0.3.0` 正式版。提供 macOS 13.5+（Apple Silicon / Intel）和 Windows 10/11 x64 安装包。当前安装包尚未使用商业开发者证书签名，首次打开时系统可能显示安全提示。
+> 当前版本：`0.3.0` 正式版，发布于 2026-08-30。提供 macOS 13.5+（Apple Silicon / Intel）和 Windows 10/11 x64 安装包。当前安装包尚未使用商业开发者证书签名，首次打开时系统可能显示安全提示。
 
 ## 下载与安装
 
@@ -34,6 +34,12 @@
 3. 如果 SmartScreen 显示“未知发布者”，请先确认文件来自上面的正式发布页并核对 SHA-256，再选择“更多信息 → 仍要运行”。
 
 发布版已经内置运行组件，普通用户不需要安装 Node.js 或 pnpm。安装包校验值见 [`SHA256SUMS.txt`](https://github.com/meng1986290016-hub/ninka-foodlab/releases/download/v0.3.0/SHA256SUMS.txt)；macOS 可运行 `shasum -a 256 文件名`，Windows PowerShell 可运行 `Get-FileHash .\文件名 -Algorithm SHA256` 进行核对。
+
+| v0.3.0 安装包 | SHA-256 |
+| --- | --- |
+| macOS Apple Silicon | `5ae5d75fa0f7132bfabab54f735f3f174d22cfcbbbc2d5bd45cd06411dda1460` |
+| macOS Intel | `e9d97599a08fb510389814d6a2d64185f9732dd41ab03a9c2bec36dca3b6dfd7` |
+| Windows x64 | `b6fd1a273609c6821afbc00b4c531eb4e80614867f1f783e8dd0b8c675117976` |
 
 ## 为什么做这个项目
 

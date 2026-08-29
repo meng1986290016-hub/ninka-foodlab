@@ -11,7 +11,7 @@ Ninka FoodLab 是一款面向食品研发人员的本地桌面应用，目前提
 - macOS 13.5 或更高版本：Apple Silicon（M1 及更新芯片）选择 `arm64`，Intel 芯片选择 `x64`。
 - Windows 10/11 64 位：选择 `windows-x64` 安装包。
 
-> Windows x64 安装包已在 Windows 构建环境中完成构建、静默安装、快捷方式目标校验和 `\\?\C:\...` 扩展路径 Agent 启动测试；真实 Windows 10/11 设备上的界面、SmartScreen、覆盖升级与卸载仍待补充验证。
+> 本次 v0.3.0 Windows x64 安装包由 Windows 环境本地编译。发布前已核对为 NSIS 3 安装器，主程序、MCP、内置 Node 和 Agent 运行时均为 x86-64，版本与依赖清单一致；真实 Windows 10/11 设备上的界面、SmartScreen、快捷方式、覆盖升级与卸载仍待补充验证。
 
 ## 安装文件
 
@@ -19,6 +19,14 @@ Ninka FoodLab 是一款面向食品研发人员的本地桌面应用，目前提
 - Intel Mac：`food-rd-studio-0.3.0-macos-x64.dmg`
 - Windows x64：`food-rd-studio-0.3.0-windows-x64-setup.exe`
 - 每个平台文件的 SHA-256 均记录在与安装包一起提供的 `SHA256SUMS.txt`。
+
+本次发布的安装包校验值：
+
+```text
+5ae5d75fa0f7132bfabab54f735f3f174d22cfcbbbc2d5bd45cd06411dda1460  food-rd-studio-0.3.0-macos-arm64.dmg
+e9d97599a08fb510389814d6a2d64185f9732dd41ab03a9c2bec36dca3b6dfd7  food-rd-studio-0.3.0-macos-x64.dmg
+b6fd1a273609c6821afbc00b4c531eb4e80614867f1f783e8dd0b8c675117976  food-rd-studio-0.3.0-windows-x64-setup.exe
+```
 
 SHA-256 用于确认下载后的安装包没有损坏或被替换。由于当前安装包没有正式开发者签名，强烈建议在安装前校验，尤其是在需要绕过 Gatekeeper 或 SmartScreen 提示时。macOS 可在“终端”中运行：
 

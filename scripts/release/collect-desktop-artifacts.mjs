@@ -1,9 +1,17 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 
 const targetRoot = resolve("apps/desktop/src-tauri/target");
 const outputRoot = resolve("dist/installers");
+const tauriConfigPath = resolve("apps/desktop/src-tauri/tauri.conf.json");
 const supportedExtensions = new Set([".dmg", ".exe", ".msi"]);
 const distributionFiles = [
   resolve("LICENSE"),
@@ -49,18 +57,22 @@ async function sha256(path) {
 }
 
 const bundleMarker = `${sep}bundle${sep}`;
+const { version: currentVersion } = JSON.parse(
+  await readFile(tauriConfigPath, "utf8"),
+);
 const artifacts = (await walk(targetRoot))
   .filter(
     (path) =>
       path.includes(bundleMarker) &&
       !basename(path).startsWith("rw.") &&
+      basename(path).includes(currentVersion) &&
       supportedExtensions.has(extname(path).toLowerCase()),
   )
   .sort((left, right) => left.localeCompare(right));
 
 if (artifacts.length === 0) {
   throw new Error(
-    "没有找到桌面安装包。请先在对应系统运行 desktop:bundle:macos 或 desktop:bundle:windows。",
+    `没有找到 v${currentVersion} 桌面安装包。请先在对应系统运行 desktop:bundle:macos 或 desktop:bundle:windows。`,
   );
 }
 

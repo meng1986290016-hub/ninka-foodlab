@@ -1,6 +1,6 @@
 # Third-party license inventory
 
-This file is generated from the installed pnpm dependency store and Cargo metadata locked by this checkout. It records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
+This file is generated from the desktop application's installed production dependency graph, embedded Agent runtime, and Cargo metadata locked by this checkout. Build-only workspaces such as the promotional video project are not bundled in the desktop installers and are documented separately. This inventory records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
 
 Because JavaScript packages can be platform-specific, release workflows regenerate this file on each target platform. The inventory committed in the source tree represents the platform on which it was last generated.
 
@@ -10,99 +10,40 @@ Regenerate from the repository root with:
 pnpm licenses:generate
 ```
 
-## JavaScript dependencies (215)
+## JavaScript dependencies (109)
 
 | Package | Version | Declared license |
 | --- | --- | --- |
-| `@asamuzakjp/css-color` | `5.1.11` | MIT |
-| `@asamuzakjp/dom-selector` | `7.1.1` | MIT |
-| `@asamuzakjp/generational-cache` | `1.0.1` | MIT |
-| `@asamuzakjp/nwsapi` | `2.3.9` | MIT |
-| `@babel/code-frame` | `7.29.7` | MIT |
-| `@babel/helper-validator-identifier` | `7.29.7` | MIT |
-| `@babel/runtime` | `7.29.7` | MIT |
-| `@bramus/specificity` | `2.4.2` | MIT |
-| `@csstools/color-helpers` | `6.1.0` | MIT-0 |
-| `@csstools/css-calc` | `3.2.1` | MIT |
-| `@csstools/css-color-parser` | `4.1.9` | MIT |
-| `@csstools/css-parser-algorithms` | `4.0.0` | MIT |
-| `@csstools/css-syntax-patches-for-csstree` | `1.1.6` | MIT-0 |
-| `@csstools/css-tokenizer` | `4.0.0` | MIT |
-| `@exodus/bytes` | `1.15.1` | MIT |
-| `@jridgewell/sourcemap-codec` | `1.5.5` | MIT |
-| `@oxc-project/types` | `0.139.0` | MIT |
-| `@rolldown/binding-darwin-arm64` | `1.1.5` | MIT |
-| `@rolldown/pluginutils` | `1.0.1` | MIT |
-| `@standard-schema/spec` | `1.1.0` | MIT |
 | `@tabler/icons-react` | `3.46.0` | MIT |
 | `@tabler/icons` | `3.46.0` | MIT |
 | `@tauri-apps/api` | `2.11.1` | Apache-2.0 OR MIT |
-| `@tauri-apps/cli-darwin-arm64` | `2.11.4` | Apache-2.0 OR MIT |
-| `@tauri-apps/cli` | `2.11.4` | Apache-2.0 OR MIT |
-| `@tauri-apps/plugin-dialog` | `2.4.2` | MIT OR Apache-2.0 |
 | `@tauri-apps/plugin-dialog` | `2.7.2` | MIT OR Apache-2.0 |
-| `@testing-library/dom` | `10.4.1` | MIT |
-| `@testing-library/react` | `16.3.2` | MIT |
-| `@testing-library/user-event` | `14.6.1` | MIT |
-| `@types/aria-query` | `5.0.4` | MIT |
-| `@types/chai` | `5.2.3` | MIT |
 | `@types/debug` | `4.1.13` | MIT |
-| `@types/deep-eql` | `4.0.2` | MIT |
 | `@types/estree-jsx` | `1.0.5` | MIT |
 | `@types/estree` | `1.0.9` | MIT |
 | `@types/hast` | `3.0.5` | MIT |
 | `@types/mdast` | `4.0.4` | MIT |
 | `@types/ms` | `2.1.0` | MIT |
-| `@types/node` | `24.13.3` | MIT |
-| `@types/react-dom` | `19.2.3` | MIT |
-| `@types/react` | `19.2.17` | MIT |
 | `@types/unist` | `2.0.11` | MIT |
 | `@types/unist` | `3.0.3` | MIT |
 | `@ungap/structured-clone` | `1.3.3` | ISC |
-| `@vitejs/plugin-react` | `6.0.3` | MIT |
-| `@vitest/expect` | `4.1.10` | MIT |
-| `@vitest/mocker` | `4.1.10` | MIT |
-| `@vitest/pretty-format` | `4.1.10` | MIT |
-| `@vitest/runner` | `4.1.10` | MIT |
-| `@vitest/snapshot` | `4.1.10` | MIT |
-| `@vitest/spy` | `4.1.10` | MIT |
-| `@vitest/utils` | `4.1.10` | MIT |
-| `ansi-regex` | `5.0.1` | MIT |
-| `ansi-styles` | `5.2.0` | MIT |
-| `aria-query` | `5.3.0` | Apache-2.0 |
-| `assertion-error` | `2.0.1` | MIT |
 | `bail` | `2.0.2` | MIT |
-| `bidi-js` | `1.0.3` | MIT |
 | `ccount` | `2.0.1` | MIT |
-| `chai` | `6.2.2` | MIT |
 | `character-entities-html4` | `2.1.0` | MIT |
 | `character-entities-legacy` | `3.0.0` | MIT |
 | `character-entities` | `2.0.2` | MIT |
 | `character-reference-invalid` | `2.0.1` | MIT |
 | `comma-separated-tokens` | `2.0.3` | MIT |
-| `convert-source-map` | `2.0.0` | MIT |
-| `css-tree` | `3.2.1` | MIT |
-| `csstype` | `3.2.3` | MIT |
-| `data-urls` | `7.0.0` | MIT |
 | `debug` | `4.4.3` | MIT |
 | `decimal.js` | `10.6.0` | MIT |
 | `decode-named-character-reference` | `1.3.0` | MIT |
 | `dequal` | `2.0.3` | MIT |
-| `detect-libc` | `2.1.2` | Apache-2.0 |
 | `devlop` | `1.1.0` | MIT |
-| `dom-accessibility-api` | `0.5.16` | MIT |
-| `entities` | `8.0.0` | BSD-2-Clause |
-| `es-module-lexer` | `2.3.1` | MIT |
 | `escape-string-regexp` | `5.0.0` | MIT |
 | `estree-util-is-identifier-name` | `3.0.0` | MIT |
-| `estree-walker` | `3.0.3` | MIT |
-| `expect-type` | `1.4.0` | Apache-2.0 |
 | `extend` | `3.0.2` | MIT |
-| `fdir` | `6.5.0` | MIT |
-| `fsevents` | `2.3.3` | MIT |
 | `hast-util-to-jsx-runtime` | `2.3.6` | MIT |
 | `hast-util-whitespace` | `3.0.0` | MIT |
-| `html-encoding-sniffer` | `6.0.0` | MIT |
 | `html-url-attributes` | `3.0.1` | MIT |
 | `inline-style-parser` | `0.2.7` | MIT |
 | `is-alphabetical` | `2.0.1` | MIT |
@@ -110,15 +51,7 @@ pnpm licenses:generate
 | `is-decimal` | `2.0.1` | MIT |
 | `is-hexadecimal` | `2.0.1` | MIT |
 | `is-plain-obj` | `4.1.0` | MIT |
-| `is-potential-custom-element-name` | `1.0.1` | MIT |
-| `js-tokens` | `4.0.0` | MIT |
-| `jsdom` | `29.1.1` | MIT |
-| `lightningcss-darwin-arm64` | `1.32.0` | MPL-2.0 |
-| `lightningcss` | `1.32.0` | MPL-2.0 |
 | `longest-streak` | `3.1.0` | MIT |
-| `lru-cache` | `11.5.2` | BlueOak-1.0.0 |
-| `lz-string` | `1.5.0` | MIT |
-| `magic-string` | `0.30.21` | MIT |
 | `markdown-table` | `3.0.4` | MIT |
 | `mdast-util-find-and-replace` | `3.0.2` | MIT |
 | `mdast-util-from-markdown` | `2.0.3` | MIT |
@@ -135,7 +68,6 @@ pnpm licenses:generate
 | `mdast-util-to-hast` | `13.2.1` | MIT |
 | `mdast-util-to-markdown` | `2.1.2` | MIT |
 | `mdast-util-to-string` | `4.0.0` | MIT |
-| `mdn-data` | `2.27.1` | CC0-1.0 |
 | `micromark-core-commonmark` | `2.0.3` | MIT |
 | `micromark-extension-gfm-autolink-literal` | `2.1.0` | MIT |
 | `micromark-extension-gfm-footnote` | `2.1.0` | MIT |
@@ -165,52 +97,23 @@ pnpm licenses:generate
 | `micromark-util-types` | `2.0.2` | MIT |
 | `micromark` | `4.0.2` | MIT |
 | `ms` | `2.1.3` | MIT |
-| `nanoid` | `3.3.16` | MIT |
-| `obug` | `2.1.3` | MIT |
 | `parse-entities` | `4.0.2` | MIT |
-| `parse5` | `8.0.1` | MIT |
-| `pathe` | `2.0.3` | MIT |
-| `picocolors` | `1.1.1` | ISC |
-| `picomatch` | `4.0.5` | MIT |
-| `postcss` | `8.5.19` | MIT |
-| `pretty-format` | `27.5.1` | MIT |
 | `property-information` | `7.2.0` | MIT |
-| `punycode` | `2.3.1` | MIT |
 | `react-dom` | `19.2.7` | MIT |
-| `react-is` | `17.0.2` | MIT |
 | `react-markdown` | `10.1.0` | MIT |
 | `react` | `19.2.7` | MIT |
 | `remark-gfm` | `4.0.1` | MIT |
 | `remark-parse` | `11.0.0` | MIT |
 | `remark-rehype` | `11.1.2` | MIT |
 | `remark-stringify` | `11.0.0` | MIT |
-| `require-from-string` | `2.0.2` | MIT |
-| `rolldown` | `1.1.5` | MIT |
-| `saxes` | `6.0.0` | ISC |
 | `scheduler` | `0.27.0` | MIT |
-| `siginfo` | `2.0.0` | ISC |
-| `source-map-js` | `1.2.1` | BSD-3-Clause |
 | `space-separated-tokens` | `2.0.2` | MIT |
-| `stackback` | `0.0.2` | MIT |
-| `std-env` | `4.2.0` | MIT |
 | `stringify-entities` | `4.0.4` | MIT |
 | `style-to-js` | `1.1.21` | MIT |
 | `style-to-object` | `1.0.14` | MIT |
-| `symbol-tree` | `3.2.4` | MIT |
 | `thinking-orbs` | `0.2.0` | MIT |
-| `tinybench` | `2.9.0` | MIT |
-| `tinyexec` | `1.2.4` | MIT |
-| `tinyglobby` | `0.2.17` | MIT |
-| `tinyrainbow` | `3.1.0` | MIT |
-| `tldts-core` | `7.4.8` | MIT |
-| `tldts` | `7.4.8` | MIT |
-| `tough-cookie` | `6.0.2` | BSD-3-Clause |
-| `tr46` | `6.0.0` | MIT |
 | `trim-lines` | `3.0.1` | MIT |
 | `trough` | `2.2.0` | MIT |
-| `typescript` | `5.9.3` | Apache-2.0 |
-| `undici-types` | `7.18.2` | MIT |
-| `undici` | `7.28.0` | MIT |
 | `unified` | `11.0.5` | MIT |
 | `unist-util-is` | `6.0.1` | MIT |
 | `unist-util-position` | `5.0.0` | MIT |
@@ -219,15 +122,6 @@ pnpm licenses:generate
 | `unist-util-visit` | `5.1.0` | MIT |
 | `vfile-message` | `4.0.3` | MIT |
 | `vfile` | `6.0.3` | MIT |
-| `vite` | `8.1.4` | MIT |
-| `vitest` | `4.1.10` | MIT |
-| `w3c-xmlserializer` | `5.0.0` | MIT |
-| `webidl-conversions` | `8.0.1` | BSD-2-Clause |
-| `whatwg-mimetype` | `5.0.0` | MIT |
-| `whatwg-url` | `16.0.1` | MIT |
-| `why-is-node-running` | `2.3.0` | MIT |
-| `xml-name-validator` | `5.0.0` | Apache-2.0 |
-| `xmlchars` | `2.2.0` | MIT |
 | `zwitch` | `2.0.4` | MIT |
 
 ## Embedded FoodLab Agent runtime (449)
@@ -466,15 +360,15 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `@google/genai` | `1.52.0` | Apache-2.0 |
 | `@hono/node-server` | `2.1.1` | MIT |
 | `@img/colour` | `1.1.0` | MIT |
-| `@img/sharp-darwin-x64` | `0.35.3` | Apache-2.0 |
-| `@img/sharp-libvips-darwin-x64` | `1.3.2` | LGPL-3.0-or-later |
+| `@img/sharp-darwin-arm64` | `0.35.3` | Apache-2.0 |
+| `@img/sharp-libvips-darwin-arm64` | `1.3.2` | LGPL-3.0-or-later |
 | `@joplin/turndown-plugin-gfm` | `1.0.67` | MIT |
-| `@koromix/koffi-darwin-x64` | `3.1.6` | MIT |
+| `@koromix/koffi-darwin-arm64` | `3.1.6` | MIT |
 | `@mistralai/mistralai` | `2.2.6` | Apache-2.0 |
 | `@mixmark-io/domino` | `2.2.0` | BSD-2-Clause |
 | `@modelcontextprotocol/sdk` | `1.30.0` | MIT |
 | `@openai/codex` | `0.148.0` | Apache-2.0 |
-| `@openai/codex` | `0.148.0-darwin-x64` | Apache-2.0 |
+| `@openai/codex` | `0.148.0-darwin-arm64` | Apache-2.0 |
 | `@opentelemetry/api-logs` | `0.220.0` | Apache-2.0 |
 | `@opentelemetry/api` | `1.9.0` | Apache-2.0 |
 | `@opentelemetry/api` | `1.9.1` | Apache-2.0 |
@@ -513,7 +407,7 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `@tanstack/virtual-core` | `3.17.8` | MIT |
 | `@types/node` | `26.2.0` | MIT |
 | `@types/retry` | `0.12.0` | MIT |
-| `@vscode/ripgrep-darwin-x64` | `1.18.0` | MIT |
+| `@vscode/ripgrep-darwin-arm64` | `1.18.0` | MIT |
 | `@vscode/ripgrep` | `1.18.0` | MIT |
 | `accepts` | `2.0.0` | MIT |
 | `agent-base` | `7.1.4` | MIT |
@@ -616,7 +510,7 @@ application bundle and in the DMG folder named `Third-Party Licenses`.
 | `negotiator` | `1.0.0` | MIT |
 | `node-addon-api` | `7.1.1` | MIT |
 | `node-addon-native-custom-loader` | `0.1.5` | MIT |
-| `node-addon-require-builtin-darwin-x64` | `0.1.5` | MIT |
+| `node-addon-require-builtin-darwin-arm64` | `0.1.5` | MIT |
 | `node-addon-require-builtin` | `0.1.5` | MIT |
 | `node-domexception` | `1.0.0` | MIT |
 | `node-fetch` | `3.3.2` | MIT |

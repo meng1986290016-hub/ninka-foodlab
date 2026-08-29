@@ -1,4 +1,4 @@
-# Ninka FoodLab 0.2.1 安装与使用说明
+# Ninka FoodLab 0.3.0 安装与使用说明
 
 感谢你使用 Ninka FoodLab。
 
@@ -15,16 +15,16 @@ Ninka FoodLab 是一款面向食品研发人员的本地桌面应用，目前提
 
 ## 安装文件
 
-- Apple Silicon：`food-rd-studio-0.2.1-macos-arm64.dmg`
-- Intel Mac：`food-rd-studio-0.2.1-macos-x64.dmg`
-- Windows x64：`food-rd-studio-0.2.1-windows-x64-setup.exe`
+- Apple Silicon：`food-rd-studio-0.3.0-macos-arm64.dmg`
+- Intel Mac：`food-rd-studio-0.3.0-macos-x64.dmg`
+- Windows x64：`food-rd-studio-0.3.0-windows-x64-setup.exe`
 - 每个平台文件的 SHA-256 均记录在与安装包一起提供的 `SHA256SUMS.txt`。
 
 SHA-256 用于确认下载后的安装包没有损坏或被替换。由于当前安装包没有正式开发者签名，强烈建议在安装前校验，尤其是在需要绕过 Gatekeeper 或 SmartScreen 提示时。macOS 可在“终端”中运行：
 
 ```bash
-shasum -a 256 food-rd-studio-0.2.1-macos-arm64.dmg
-shasum -a 256 food-rd-studio-0.2.1-macos-x64.dmg
+shasum -a 256 food-rd-studio-0.3.0-macos-arm64.dmg
+shasum -a 256 food-rd-studio-0.3.0-macos-x64.dmg
 ```
 
 Windows 可在 PowerShell 中运行：

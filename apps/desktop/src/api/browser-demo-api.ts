@@ -828,14 +828,14 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
 
 export class BrowserDemoApi implements DesktopApi {
   async getAppVersion(): Promise<AppVersionInfo> {
-    return { currentVersion: "0.2.1" };
+    return { currentVersion: "0.3.0" };
   }
 
   async checkForUpdates(): Promise<UpdateCheckResult> {
     return {
       status: "latest",
-      currentVersion: "0.2.1",
-      latestVersion: "0.2.1",
+      currentVersion: "0.3.0",
+      latestVersion: "0.3.0",
       releaseUrl: "https://github.com/meng1986290016-hub/ninka-foodlab/releases",
       publishedAt: null,
     };

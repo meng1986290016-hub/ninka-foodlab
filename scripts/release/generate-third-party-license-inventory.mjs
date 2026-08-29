@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 function normalizeLicense(value) {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -18,33 +18,50 @@ function normalizeLicense(value) {
 }
 
 async function nodePackages() {
-  const storeRoot = "node_modules/.pnpm";
   const packages = new Map();
+  const visited = new Set();
 
-  for (const storeEntry of await readdir(storeRoot)) {
-    const modulesRoot = join(storeRoot, storeEntry, "node_modules");
-    if (!existsSync(modulesRoot)) continue;
+  async function scan(directory) {
+    if (!existsSync(directory)) return;
+    const canonical = await realpath(directory);
+    if (visited.has(canonical)) return;
+    visited.add(canonical);
 
-    for (const entry of await readdir(modulesRoot, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      const candidates = entry.name.startsWith("@")
-        ? (await readdir(join(modulesRoot, entry.name))).map((child) =>
-            join(modulesRoot, entry.name, child),
-          )
-        : [join(modulesRoot, entry.name)];
-
-      for (const directory of candidates) {
-        const manifestPath = join(directory, "package.json");
-        if (!existsSync(manifestPath)) continue;
-        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-        if (!manifest.name || !manifest.version) continue;
-        packages.set(`${manifest.name}@${manifest.version}`, {
-          name: manifest.name,
-          version: manifest.version,
-          license: normalizeLicense(manifest.license ?? manifest.licenses),
-        });
-      }
+    const manifestPath = join(canonical, "package.json");
+    if (!existsSync(manifestPath)) return;
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (
+      manifest.name &&
+      manifest.version &&
+      !manifest.name.startsWith("@food-rd/")
+    ) {
+      packages.set(`${manifest.name}@${manifest.version}`, {
+        name: manifest.name,
+        version: manifest.version,
+        license: normalizeLicense(manifest.license ?? manifest.licenses),
+      });
     }
+
+    const dependencyNames = Object.keys({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+    });
+    const modulesRoot = enclosingModulesRoot(canonical);
+    for (const name of dependencyNames) {
+      const candidates = [
+        join(canonical, "node_modules", name),
+        ...(modulesRoot ? [join(modulesRoot, name)] : []),
+      ];
+      const dependency = candidates.find(existsSync);
+      if (dependency) await scan(dependency);
+    }
+  }
+
+  const desktopManifest = JSON.parse(
+    await readFile("apps/desktop/package.json", "utf8"),
+  );
+  for (const name of Object.keys(desktopManifest.dependencies ?? {})) {
+    await scan(join("apps/desktop/node_modules", name));
   }
 
   return [...packages.values()].sort((left, right) =>
@@ -53,6 +70,15 @@ async function nodePackages() {
       "en",
     ),
   );
+}
+
+function enclosingModulesRoot(directory) {
+  let current = directory;
+  while (dirname(current) !== current) {
+    if (basename(current) === "node_modules") return current;
+    current = dirname(current);
+  }
+  return null;
 }
 
 async function embeddedRuntimePackages() {
@@ -161,7 +187,7 @@ if (missing.length > 0) {
 
 const output = `# Third-party license inventory
 
-This file is generated from the installed pnpm dependency store and Cargo metadata locked by this checkout. It records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
+This file is generated from the desktop application's installed production dependency graph, embedded Agent runtime, and Cargo metadata locked by this checkout. Build-only workspaces such as the promotional video project are not bundled in the desktop installers and are documented separately. This inventory records declared license expressions for review; it does not replace license texts or attribution notices that a dependency may require in a source or binary distribution.
 
 Because JavaScript packages can be platform-specific, release workflows regenerate this file on each target platform. The inventory committed in the source tree represents the platform on which it was last generated.
 

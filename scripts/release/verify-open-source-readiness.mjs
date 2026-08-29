@@ -13,7 +13,6 @@ const requiredFiles = [
   "docs/desktop-release.md",
   "docs/data-safety.md",
   "docs/upgrade-guide.md",
-  "docs/releases/v0.2.0.md",
   "docs/open-source-readiness.md",
   "docs/github-publishing.md",
   ".github/ISSUE_TEMPLATE/bug-report.yml",
@@ -52,6 +51,9 @@ packageVersions.add(tauriConfig.version);
 if (packageVersions.size !== 1) {
   throw new Error(`应用版本不一致：${[...packageVersions].join(", ")}`);
 }
+const [appVersion] = packageVersions;
+const currentReleaseDoc = `docs/releases/v${appVersion}.md`;
+await requireFile(currentReleaseDoc);
 
 const cargoManifest = await readFile(
   resolve(root, "apps/desktop/src-tauri/Cargo.toml"),
@@ -59,6 +61,10 @@ const cargoManifest = await readFile(
 );
 if (!/^license\s*=\s*"Apache-2\.0"\s*$/m.test(cargoManifest)) {
   throw new Error("Cargo.toml 必须声明 Apache-2.0");
+}
+const cargoVersion = cargoManifest.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1];
+if (cargoVersion !== appVersion) {
+  throw new Error(`Cargo.toml 版本 ${cargoVersion ?? "缺失"} 与应用版本 ${appVersion} 不一致`);
 }
 
 const license = await readFile(resolve(root, "LICENSE"), "utf8");
@@ -114,7 +120,7 @@ const markdownFiles = [
   "CONTRIBUTING.md",
   "SECURITY.md",
   "docs/desktop-release.md",
-  "docs/releases/v0.2.0.md",
+  currentReleaseDoc,
 ];
 
 function relativeTargets(markdown) {

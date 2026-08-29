@@ -2,6 +2,10 @@
 
 这是独立于桌面应用生产数据的 Remotion 工作区。界面素材从当前源码通过 `PromoDemoApi` 重新生成，只使用合成演示数据，不读取 SQLite、模型密钥或正式业务数据。
 
+## 依赖许可边界
+
+本工作区使用 Remotion 生成宣传视频，Remotion 依赖不适用本仓库自有源码的 Apache-2.0 许可。使用者需要根据自己的主体和用途核对 [Remotion 官方许可条款](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md)。该工作区只用于构建视频素材，不会被打包进 Ninka FoodLab 桌面安装包。
+
 ## 常用命令
 
 ```bash

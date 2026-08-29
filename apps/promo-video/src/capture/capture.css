@@ -1,0 +1,58 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: #101714;
+}
+
+.app-shell {
+  grid-template:
+    "sidebar topbar" 66px
+    "sidebar content" minmax(0, 1fr)
+    / var(--sidebar-current-width) minmax(0, 1fr);
+}
+
+.statusbar {
+  display: none !important;
+}
+
+.promo-capture-badge {
+  position: fixed;
+  z-index: 999;
+  top: 18px;
+  left: 50%;
+  padding: 7px 13px;
+  border: 1px solid rgb(239 189 80 / 45%);
+  border-radius: 999px;
+  background: rgb(16 23 20 / 88%);
+  color: #f4cf77;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  translate: -50% 0;
+  backdrop-filter: blur(10px);
+}
+
+.agent-window-root .promo-capture-badge {
+  pointer-events: none;
+}
+
+.recipe-workbench,
+.nutrition-label-workspace {
+  min-height: 100%;
+}
+
+[data-promo-surface="label"] .nutrition-facts-sheet {
+  background: #fffef9;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}

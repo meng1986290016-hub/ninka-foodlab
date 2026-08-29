@@ -61,6 +61,10 @@ pub struct CodexTurnResult {
 }
 
 impl CodexAppServerHost {
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
     pub fn new(home: PathBuf, runtime: PathBuf, node_binary: PathBuf) -> Self {
         Self {
             home: child_process_path::simplified(&home),

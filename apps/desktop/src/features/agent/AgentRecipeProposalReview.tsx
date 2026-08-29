@@ -137,7 +137,7 @@ export function AgentRecipeProposalReview({
       <section aria-labelledby="agent-proposal-review-title" aria-modal="true" className="agent-proposal-review" role="dialog">
         <header>
           <div>
-            <span>{payload.mode === "goal_design" ? "产品配方设计" : "产品标签逆向"}</span>
+            <span>{payload.mode === "goal_design" ? "产品配方设计" : payload.mode === "label_reverse" ? "产品标签逆向" : "附件配方导入"}</span>
             <h2 id="agent-proposal-review-title">复核配方提案</h2>
           </div>
           <button aria-label="关闭配方提案复核" disabled={busy} onClick={onClose} type="button">
@@ -150,6 +150,7 @@ export function AgentRecipeProposalReview({
           ) : null}
           <div className="agent-proposal-review__fields">
             <label><span>产品名称</span><input onChange={(event) => patch({ productName: event.target.value })} value={payload.productName} /></label>
+            <label><span>配方编号（可选）</span><input onChange={(event) => patch({ recipeCode: event.target.value || null })} placeholder="附件未提供时留空" value={payload.recipeCode ?? ""} /></label>
             <label><span>配方类型</span><select onChange={(event) => patch({ recipeKind: event.target.value as AgentRecipeProposalPayload["recipeKind"] })} value={payload.recipeKind}><option value="formula">成品配方</option><option value="semi_finished">半成品</option></select></label>
             <label><span>出成重量（g）</span><input inputMode="decimal" onChange={(event) => patch({ finishedMassGrams: event.target.value || null, yieldAssumption: event.target.value ? "provided" : "assumed_100_percent" })} placeholder="未知" value={payload.finishedMassGrams ?? ""} /></label>
           </div>

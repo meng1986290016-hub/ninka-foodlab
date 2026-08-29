@@ -52,7 +52,7 @@ impl AgentRecipeRepository {
                id, conversation_id, run_id, status, payload_version, payload_json,
                evaluation_json, source_attachment_ids_json, accepted_recipe_id,
                created_at, updated_at
-             ) VALUES (?1, ?2, ?3, 'pending_review', 1, ?4, ?5, ?6, NULL, ?7, ?7)",
+             ) VALUES (?1, ?2, ?3, 'pending_review', 2, ?4, ?5, ?6, NULL, ?7, ?7)",
             params![
                 id,
                 conversation_id,
@@ -174,7 +174,7 @@ impl AgentRecipeRepository {
         }
         self.connection.execute(
             "UPDATE agent_recipe_proposals
-             SET payload_json = ?1, evaluation_json = ?2, updated_at = ?3
+             SET payload_version = 2, payload_json = ?1, evaluation_json = ?2, updated_at = ?3
              WHERE id = ?4",
             params![
                 serde_json::to_string(&payload)?,
@@ -196,6 +196,22 @@ impl AgentRecipeRepository {
         ))?;
         statement
             .query_map([conversation_id], map_proposal_row)?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(proposal_from_row)
+            .collect()
+    }
+
+    pub fn list_proposals_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<AgentRecipeProposal>, RepositoryError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{} WHERE run_id = ?1 ORDER BY created_at, rowid",
+            PROPOSAL_SELECT
+        ))?;
+        statement
+            .query_map([run_id], map_proposal_row)?
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .map(proposal_from_row)
@@ -308,6 +324,7 @@ impl AgentRecipeRepository {
         let transaction = self.connection.transaction()?;
         let (
             recipe_name,
+            recipe_code,
             recipe_kind,
             product_id,
             tags_json,
@@ -317,6 +334,10 @@ impl AgentRecipeRepository {
         ) = match destination {
             AgentRecipeProposalDestination::NewProduct => (
                 proposal.payload.product_name.trim().to_string(),
+                proposal.payload.recipe_code.as_deref().and_then(|code| {
+                    let code = code.trim();
+                    (!code.is_empty()).then(|| code.to_string())
+                }),
                 recipe_kind_str(proposal.payload.recipe_kind).to_string(),
                 recipe_id.clone(),
                 "[]".to_string(),
@@ -347,6 +368,7 @@ impl AgentRecipeRepository {
                 }
                 (
                     source.0,
+                    None,
                     source.1,
                     source.2,
                     source.3,
@@ -359,10 +381,26 @@ impl AgentRecipeRepository {
         if recipe_name.is_empty() {
             return Err(domain("请填写产品名称"));
         }
+        if let Some(code) = recipe_code.as_deref() {
+            let duplicate = transaction.query_row(
+                "SELECT EXISTS(
+                   SELECT 1 FROM recipes
+                   WHERE archived_at IS NULL AND lower(code) = lower(?1)
+                 )",
+                [code],
+                |row| row.get::<_, bool>(0),
+            )?;
+            if duplicate {
+                return Err(RepositoryError::domain(
+                    "duplicate_code",
+                    "配方编号已存在，请修改提案中的编号后再创建工作草稿",
+                ));
+            }
+        }
         transaction.execute(
             "INSERT INTO recipes (id, name, code, tags_json, kind, created_at, updated_at, archived_at, product_id, scheme_name, scheme_status)
-             VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?5, NULL, ?6, ?7, ?8)",
-            params![recipe_id, recipe_name, tags_json, recipe_kind, timestamp, product_id, scheme_name, scheme_status],
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, NULL, ?7, ?8, ?9)",
+            params![recipe_id, recipe_name, recipe_code, tags_json, recipe_kind, timestamp, product_id, scheme_name, scheme_status],
         )?;
 
         let mut draft_items = Vec::new();

@@ -23,10 +23,16 @@ import type {
   HarnessTaskEvent,
   HarnessTurn,
 } from "../../api/agent-harness-types";
-import type { ImportFileReference } from "../../api/import-types";
+import type { AgentRecipeProposal } from "../../api/agent-recipe-types";
+import type {
+  ImportFileReference,
+  IngredientImportDraft,
+} from "../../api/import-types";
 import type { RecipeSummary } from "../../api/recipe-types";
 import { Icon } from "../../components/Icon";
+import { ImportedVariantReview } from "../ingredients/ImportedVariantReview";
 import type { AgentPanelProps } from "./AgentPanel";
+import { AgentRecipeProposalReview } from "./AgentRecipeProposalReview";
 
 const ACTIVE_CONVERSATION_KEY = "foodlab.agent.active-conversation.v1";
 const CONVERSATION_DRAFTS_KEY = "foodlab.agent.conversation-drafts.v1";
@@ -37,6 +43,8 @@ export function HarnessAgentPanel({
   open,
   onClose,
   onConfigure,
+  onOpenImported,
+  onOpenRecipeDraft,
   recipeContext = null,
 }: AgentPanelProps) {
   const [health, setHealth] = useState<HarnessHealth | null>(null);
@@ -67,6 +75,9 @@ export function HarnessAgentPanel({
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
   const [queueEditDraft, setQueueEditDraft] = useState("");
   const [editingTurn, setEditingTurn] = useState<HarnessTurn | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<IngredientImportDraft | null>(null);
+  const [reviewProposal, setReviewProposal] = useState<AgentRecipeProposal | null>(null);
+  const [artifactPreview, setArtifactPreview] = useState<ArtifactManifest | null>(null);
   const [turnEditDraft, setTurnEditDraft] = useState("");
   const [following, setFollowing] = useState(true);
   const [hasNewContent, setHasNewContent] = useState(false);
@@ -268,6 +279,15 @@ export function HarnessAgentPanel({
       onConfigure("models");
       return;
     }
+    const selectedModel = findSelectedModel(modelDirectory);
+    if (
+      pendingFiles.some((file) => isImageFile(file.value))
+      && selectedModel?.capabilityStatus !== "unknown"
+      && !selectedModel?.inputModalities?.includes("image")
+    ) {
+      setError("当前模型仅支持文本，不能读取图片。请在上方切换到标注为“支持图片”的模型后重试。");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -372,6 +392,35 @@ export function HarnessAgentPanel({
     }
     const files = await filePicker.pickSources();
     if (files.length) setPendingFiles(files);
+  }
+
+  async function openArtifact(artifact: ArtifactManifest) {
+    setError("");
+    const domainId = artifactDomainId(artifact);
+    try {
+      if (artifact.status === "stale") {
+        throw new Error(
+          artifact.kind === "recipe_proposal"
+            ? "未生成有效配方提案，该成果已过期"
+            : "该成果已过期",
+        );
+      }
+      if (artifact.kind === "ingredient_import_draft") {
+        if (!domainId) throw new Error("该成果没有关联到真实原料草稿");
+        const draft = await api.getIngredientImportDraft(domainId);
+        if (draft.status === "imported") onOpenImported(draft);
+        else setReviewDraft(draft);
+        return;
+      }
+      if (artifact.kind === "recipe_proposal") {
+        if (!domainId) throw new Error("该成果没有关联到真实配方提案");
+        setReviewProposal(await api.getAgentRecipeProposal(domainId));
+        return;
+      }
+      setArtifactPreview(artifact);
+    } catch (cause) {
+      setError(`关联数据已不存在或无法读取：${errorMessage(cause, "请重新生成该成果")}`);
+    }
   }
 
   function beginRename(task: HarnessTask) {
@@ -660,6 +709,7 @@ export function HarnessAgentPanel({
               onBranch={(turnId) => void chooseBranch(turnId)}
               onChoice={setDraft}
               onEdit={beginTurnEdit}
+              onOpenArtifact={(artifact) => void openArtifact(artifact)}
               readOnly={archived}
               turn={turn}
             />
@@ -741,17 +791,47 @@ export function HarnessAgentPanel({
 
       {renamingTaskId ? <div aria-modal="true" className="agent-dialog-backdrop" role="dialog"><form className="agent-dialog" onSubmit={(event) => { event.preventDefault(); const task = tasks.find((item) => item.id === renamingTaskId); if (task) void commitRename(task); }}><strong>重命名会话</strong><input aria-label="会话名称" autoFocus disabled={renameSaving} maxLength={120} onChange={(event) => setRenameDraft(event.target.value)} value={renameDraft} /><div><button className="button button--secondary" onClick={cancelRename} type="button">取消</button><button className="button button--primary" disabled={renameSaving} type="submit">保存</button></div></form></div> : null}
       {editingTurn ? <div aria-modal="true" className="agent-dialog-backdrop" role="dialog"><form className="agent-dialog" onSubmit={(event) => { event.preventDefault(); void commitTurnEdit(); }}><strong>编辑消息并创建新分支</strong><textarea autoFocus onChange={(event) => setTurnEditDraft(event.target.value)} rows={6} value={turnEditDraft} /><small>原消息和回答会保留，可在消息下方切换分支。</small><div><button className="button button--secondary" onClick={() => setEditingTurn(null)} type="button">取消</button><button className="button button--primary" disabled={busy || !turnEditDraft.trim()} type="submit">发送修改</button></div></form></div> : null}
+      {reviewDraft ? (
+        <ImportedVariantReview
+          api={api}
+          draft={reviewDraft}
+          onCancel={() => setReviewDraft(null)}
+          onSaved={() => {
+            setReviewDraft(null);
+            if (activeTask) void refreshActive(activeTask.id, true);
+          }}
+        />
+      ) : null}
+      {reviewProposal ? (
+        <AgentRecipeProposalReview
+          api={api}
+          proposal={reviewProposal}
+          onAccepted={(recipeId) => {
+            setReviewProposal(null);
+            onOpenRecipeDraft?.(recipeId);
+          }}
+          onClose={() => setReviewProposal(null)}
+          onUpdated={setReviewProposal}
+        />
+      ) : null}
+      {artifactPreview ? (
+        <ArtifactReviewDrawer
+          artifact={artifactPreview}
+          onClose={() => setArtifactPreview(null)}
+        />
+      ) : null}
     </aside>
   );
 }
 
-function ConversationTurn({ artifacts, branchSiblings, events, onBranch, onChoice, onEdit, readOnly, turn }: {
+function ConversationTurn({ artifacts, branchSiblings, events, onBranch, onChoice, onEdit, onOpenArtifact, readOnly, turn }: {
   artifacts: ArtifactManifest[];
   branchSiblings: HarnessTurn[];
   events: HarnessTaskEvent[];
   onBranch(turnId: string): void;
   onChoice(value: string): void;
   onEdit(turn: HarnessTurn): void;
+  onOpenArtifact(artifact: ArtifactManifest): void;
   readOnly: boolean;
   turn: HarnessTurn;
 }) {
@@ -764,9 +844,9 @@ function ConversationTurn({ artifacts, branchSiblings, events, onBranch, onChoic
         <div className="agent-chat-message__mark"><Icon name="ai-assistant" size={24} /></div>
         <div className="agent-chat-message__body">
           <ToolProgress events={events} running={turn.status === "running"} />
-          {turn.contentBlocks.filter((block) => block.type !== "question" && block.type !== "action").map((block, index) => <ContentBlock artifacts={artifacts} block={block} key={`${turn.id}-${index}`} onChoice={onChoice} />)}
+          {turn.contentBlocks.filter((block) => block.type !== "question" && block.type !== "action").map((block, index) => <ContentBlock artifacts={artifacts} block={block} key={`${turn.id}-${index}`} onChoice={onChoice} onOpenArtifact={onOpenArtifact} />)}
           {turn.status === "running" && turn.contentBlocks.length === 0 ? <p className="agent-answering">正在处理…</p> : null}
-          {artifacts.filter((artifact) => !referenced.has(artifact.id)).map((artifact) => <ArtifactCard artifact={artifact} key={artifact.id} />)}
+          {artifacts.filter((artifact) => !referenced.has(artifact.id)).map((artifact) => <ArtifactCard artifact={artifact} key={artifact.id} onOpen={onOpenArtifact} />)}
           {turn.status === "needs_input" ? <InlineOutcome kind="question" text="需要你补充条件后才能继续。" /> : null}
           {turn.status === "needs_review" ? <InlineOutcome kind="review" text="已形成待复核成果，确认后才会正式保存或采纳。" /> : null}
           {turn.status === "failed" ? <InlineOutcome kind="error" text="本轮没有完成，已保留对话和上下文，可以直接重试。" /> : null}
@@ -799,7 +879,7 @@ function ModelPicker({ directory, disabled, onChange, route }: {
         {route && !options.some((option) => encodeRoute(option) === selected) ? <option value={selected}>{route.provider} · {route.model}</option> : null}
         {groups.map((group) => (
           <optgroup key={`${group.engine ?? "foodlab_runtime"}-${group.provider}`} label={group.displayName || group.provider}>
-            {group.models.map((model) => <option key={model.id} value={encodeRoute({ engine: group.engine ?? "foodlab_runtime", provider: group.provider, model: model.id })}>{model.name || model.id}</option>)}
+            {group.models.map((model) => <option key={model.id} value={encodeRoute({ engine: group.engine ?? "foodlab_runtime", provider: group.provider, model: model.id })}>{model.name || model.id} · {modelCapabilityLabel(model)}</option>)}
           </optgroup>
         ))}
       </select>
@@ -819,10 +899,11 @@ function ToolProgress({ events, running }: { events: HarnessTaskEvent[]; running
   );
 }
 
-function ContentBlock({ artifacts, block, onChoice }: {
+function ContentBlock({ artifacts, block, onChoice, onOpenArtifact }: {
   artifacts: ArtifactManifest[];
   block: HarnessTurn["contentBlocks"][number];
   onChoice(label: string): void;
+  onOpenArtifact(artifact: ArtifactManifest): void;
 }) {
   if (block.type === "markdown") return <div className="harness-markdown"><ReactMarkdown components={{ a: ({ children, ...props }) => <a {...props} rel="noreferrer" target="_blank">{children}</a> }} remarkPlugins={[remarkGfm]} skipHtml>{block.text}</ReactMarkdown></div>;
   if (block.type === "table") return <div className="harness-table-wrap"><table><thead><tr>{block.columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((value, index) => <td key={block.columns[index]?.key ?? index}>{String(value ?? "")}</td>)}</tr>)}</tbody></table></div>;
@@ -830,11 +911,63 @@ function ContentBlock({ artifacts, block, onChoice }: {
   if (block.type === "question") return <section className="harness-question"><strong>{block.prompt}</strong><div>{block.choices.map((choice) => <button key={choice.id} onClick={() => onChoice(choice.label)} type="button">{choice.label}</button>)}</div></section>;
   if (block.type === "action") return <section className="harness-action"><Icon name={block.requiresApproval ? "lock" : "check"} size={17} /><span>{block.action}</span>{block.requiresApproval ? <b>需要确认</b> : null}</section>;
   const artifact = artifacts.find((item) => item.id === block.artifactId);
-  return artifact ? <ArtifactCard artifact={artifact} /> : null;
+  return artifact ? <ArtifactCard artifact={artifact} onOpen={onOpenArtifact} /> : null;
 }
 
-function ArtifactCard({ artifact }: { artifact: ArtifactManifest }) {
-  return <article className="agent-artifact-card"><Icon name={artifactIcon(artifact.kind)} size={22} /><div><strong>{artifact.title}</strong><small>{artifactKind(artifact.kind)} · {artifactStatus(artifact.status)}</small></div><Icon name="arrow-right" size={16} /></article>;
+function ArtifactCard({ artifact, onOpen }: { artifact: ArtifactManifest; onOpen(artifact: ArtifactManifest): void }) {
+  return <button aria-label={`打开${artifact.title}`} className="agent-artifact-card" onClick={() => onOpen(artifact)} type="button"><Icon name={artifactIcon(artifact.kind)} size={22} /><span><strong>{artifact.title}</strong><small>{artifactKind(artifact.kind)} · {artifactStatus(artifact.status)}</small></span><Icon name="arrow-right" size={16} /></button>;
+}
+
+function ArtifactReviewDrawer({ artifact, onClose }: { artifact: ArtifactManifest; onClose(): void }) {
+  return (
+    <div className="agent-dialog-backdrop agent-artifact-review-backdrop">
+      <section aria-labelledby="agent-artifact-review-title" aria-modal="true" className="agent-artifact-review" role="dialog">
+        <header>
+          <div><span>{artifactKind(artifact.kind)}</span><h2 id="agent-artifact-review-title">{artifact.title}</h2></div>
+          <button aria-label="关闭成果复核" onClick={onClose} type="button"><Icon name="close" size={18} /></button>
+        </header>
+        <dl>
+          <div><dt>状态</dt><dd>{artifactStatus(artifact.status)}</dd></div>
+          <div><dt>成果类型</dt><dd>{artifact.kind}</dd></div>
+          <div><dt>关联数据</dt><dd>{artifact.domainRef ?? "无独立业务对象"}</dd></div>
+          <div><dt>生成时间</dt><dd>{formatArtifactTime(artifact.createdAt)}</dd></div>
+        </dl>
+        <p>该成果当前没有可编辑的专用界面，此处仅供复核状态与来源关联。</p>
+        <footer><button className="button button--secondary" onClick={onClose} type="button">关闭</button></footer>
+      </section>
+    </div>
+  );
+}
+
+function artifactDomainId(artifact: ArtifactManifest) {
+  const prefix = `${artifact.kind}:`;
+  return artifact.domainRef?.startsWith(prefix)
+    ? artifact.domainRef.slice(prefix.length).trim() || null
+    : null;
+}
+
+function formatArtifactTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function findSelectedModel(directory: AgentModelDirectory) {
+  return directory.groups
+    .find((group) =>
+      (group.engine ?? "foodlab_runtime") === (directory.current.engine ?? "foodlab_runtime")
+      && group.provider === directory.current.provider
+    )
+    ?.models.find((model) => model.id === directory.current.model);
+}
+
+function modelCapabilityLabel(model: AgentModelDirectory["groups"][number]["models"][number]) {
+  if (model.inputModalities?.includes("image")) return "支持图片";
+  if (model.capabilityStatus === "known" || model.capabilityStatus === "probed") return "仅文本";
+  return "首次使用时确认";
+}
+
+function isImageFile(value: string) {
+  return /\.(?:jpe?g|png|webp)$/i.test(value.trim());
 }
 
 function InlineOutcome({ kind, text }: { kind: "question" | "review" | "error" | "muted"; text: string }) {

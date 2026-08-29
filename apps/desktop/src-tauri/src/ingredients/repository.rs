@@ -111,6 +111,14 @@ impl IngredientRepository {
         )
     }
 
+    pub(crate) fn open_for_maintenance(path: &Path) -> Result<Self, RepositoryError> {
+        Self::from_connection(
+            database::open_for_maintenance(path)?,
+            Arc::new(|| Utc::now().to_rfc3339()),
+            Arc::new(|| Uuid::new_v4().to_string()),
+        )
+    }
+
     pub fn open_in_memory_with<C, I>(clock: C, create_id: I) -> Result<Self, RepositoryError>
     where
         C: Fn() -> String + Send + Sync + 'static,

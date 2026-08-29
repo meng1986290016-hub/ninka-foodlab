@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import type { DesktopApi } from "../../api/desktop-api";
 import type { BackupFilePicker } from "../../api/backup-file-picker";
 import { Icon, type IconName } from "../../components/Icon";
+import { AboutSettings } from "./AboutSettings";
 import { DataManagementSettings } from "./DataManagementSettings";
 import { HarnessSettings } from "./HarnessSettings";
 
@@ -16,7 +17,7 @@ interface SettingsPageProps {
   onDataRestored?(): void | Promise<void>;
 }
 
-type SettingsSection = "general" | "models" | "data" | "licenses";
+export type SettingsSection = "general" | "models" | "data" | "about" | "licenses";
 
 const settingsSections: Array<{
   id: SettingsSection;
@@ -26,6 +27,7 @@ const settingsSections: Array<{
   { id: "general", icon: "settings", label: "通用" },
   { id: "models", icon: "ai-assistant", label: "LLM 模型" },
   { id: "data", icon: "database", label: "数据管理" },
+  { id: "about", icon: "info", label: "关于 Ninka FoodLab" },
   { id: "licenses", icon: "info", label: "第三方开源许可" },
 ];
 
@@ -69,6 +71,8 @@ export function SettingsPage({
             nativeAvailable={nativeBackupAvailable}
             onRestored={onDataRestored}
           />
+        ) : section === "about" ? (
+          <AboutSettings api={api} />
         ) : (
           <OpenSourceLicenses api={api} />
         )}

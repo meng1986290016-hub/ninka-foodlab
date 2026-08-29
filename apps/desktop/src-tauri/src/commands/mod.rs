@@ -1,7 +1,9 @@
 pub mod agent;
 pub mod agent_harness;
 pub mod agent_recipes;
+pub mod app_info;
 pub mod backup;
+pub mod data_reset;
 pub mod ingest;
 pub mod ingredients;
 pub mod labels;
@@ -28,7 +30,15 @@ use crate::{
     ingredients::repository::RepositoryError,
 };
 
-pub const REGISTERED_COMMANDS: [&str; 130] = [
+pub const REGISTERED_COMMANDS: [&str; 139] = [
+    "get_app_version",
+    "check_for_updates",
+    "open_release_page",
+    "preview_data_reset",
+    "execute_data_reset",
+    "get_latest_data_reset_recovery",
+    "restore_latest_data_reset_recovery",
+    "restart_application",
     "list_categories",
     "create_category",
     "rename_category",
@@ -57,6 +67,7 @@ pub const REGISTERED_COMMANDS: [&str; 130] = [
     "database_status",
     "create_ingredient_import_job",
     "get_ingredient_import_job",
+    "get_ingredient_import_draft",
     "list_ingredient_import_drafts",
     "update_ingredient_import_draft",
     "discard_ingredient_import_draft",
@@ -169,6 +180,8 @@ pub struct AppState {
     pub(crate) provider_secrets: SessionSecretStore<KeyringSecretStore>,
     pub(crate) harness: HarnessHost,
     pub(crate) codex: Arc<CodexAppServerHost>,
+    pub(crate) data_reset_preview: Mutex<Option<(String, String)>>,
+    pub(crate) data_reset_backup_failure: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -217,6 +230,8 @@ impl AppState {
                 agent_runtime_root,
                 agent_node_binary,
             )),
+            data_reset_preview: Mutex::new(None),
+            data_reset_backup_failure: Mutex::new(None),
         }
     }
 }

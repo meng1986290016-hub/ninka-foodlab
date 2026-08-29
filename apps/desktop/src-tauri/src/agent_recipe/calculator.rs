@@ -19,6 +19,10 @@ pub fn normalize_and_evaluate(
     ingredients: &IngredientRepository,
     mut payload: AgentRecipeProposalPayload,
 ) -> Result<(AgentRecipeProposalPayload, Value), RepositoryError> {
+    payload.recipe_code = payload.recipe_code.take().and_then(|code| {
+        let code = code.trim();
+        (!code.is_empty()).then(|| code.to_string())
+    });
     validate_payload(&payload)?;
     for item in &mut payload.items {
         let AgentRecipeProposalItem::Ingredient {
@@ -33,13 +37,28 @@ pub fn normalize_and_evaluate(
             continue;
         };
         let variant = ingredients.get_variant(ingredient_variant_id)?;
+        let canonical_material_name =
+            ingredients.get_material_name_for_variant(ingredient_variant_id)?;
+        if material_identity_key(material_name) != material_identity_key(&canonical_material_name) {
+            return Err(domain(
+                "提案原料名称与所选通用原料不一致；相似名称不能自动替换，请保留附件原名称并改为待补充原料需求",
+            ));
+        }
         *ingredient_updated_at = variant.updated_at.clone();
-        *material_name = ingredients.get_material_name_for_variant(ingredient_variant_id)?;
+        *material_name = canonical_material_name;
         *supplier_name = variant.supplier_name.clone();
         *model_or_specification = variant.model_or_specification.clone();
     }
     let evaluation = evaluate(ingredients, &payload)?;
     Ok((payload, evaluation))
+}
+
+fn material_identity_key(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 pub fn evaluate(

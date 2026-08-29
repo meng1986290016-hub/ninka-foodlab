@@ -1437,6 +1437,7 @@ dependencies = [
  "rusqlite",
  "rust_decimal",
  "rust_xlsxwriter",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

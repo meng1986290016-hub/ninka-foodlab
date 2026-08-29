@@ -30,6 +30,14 @@ import type {
   LegacyResetPreview,
   LegacyResetResult,
 } from "./agent-harness-types";
+import type { AppVersionInfo, UpdateCheckResult } from "./app-info-types";
+import type {
+  DataResetExecuteRequest,
+  DataResetPreview,
+  DataResetRecoveryInfo,
+  DataResetRestoreResult,
+  DataResetResult,
+} from "./data-reset-types";
 import type { BrowserAgentEventSource } from "./agent-event-source";
 import type {
   AcceptedAgentRecipeProposal,
@@ -819,6 +827,46 @@ function importIssues(review: ReviewedIngredientImportDraft): ImportIssue[] {
 }
 
 export class BrowserDemoApi implements DesktopApi {
+  async getAppVersion(): Promise<AppVersionInfo> {
+    return { currentVersion: "0.2.1" };
+  }
+
+  async checkForUpdates(): Promise<UpdateCheckResult> {
+    return {
+      status: "latest",
+      currentVersion: "0.2.1",
+      latestVersion: "0.2.1",
+      releaseUrl: "https://github.com/meng1986290016-hub/ninka-foodlab/releases",
+      publishedAt: null,
+    };
+  }
+
+  async openReleasePage(url: string): Promise<void> {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async previewDataReset(): Promise<DataResetPreview> {
+    throw browserDataResetUnavailable();
+  }
+
+  async executeDataReset(_request: DataResetExecuteRequest): Promise<DataResetResult> {
+    throw browserDataResetUnavailable();
+  }
+
+  async getLatestDataResetRecovery(): Promise<DataResetRecoveryInfo | null> {
+    return null;
+  }
+
+  async restoreLatestDataResetRecovery(
+    _confirmed: boolean,
+  ): Promise<DataResetRestoreResult> {
+    throw browserDataResetUnavailable();
+  }
+
+  async restartApplication(): Promise<void> {
+    throw browserDataResetUnavailable();
+  }
+
   async createDataBackup(_destinationPath: string): Promise<BackupManifest> {
     throw browserBackupUnavailable();
   }
@@ -2450,7 +2498,7 @@ export class BrowserDemoApi implements DesktopApi {
         conversationId: request.conversationId,
         runId,
         status: "pending_review",
-        payloadVersion: 1,
+        payloadVersion: 2,
         payload: evaluated.payload,
         evaluation: evaluated.evaluation,
         sourceAttachmentIds: attachmentIds,
@@ -2833,6 +2881,7 @@ export class BrowserDemoApi implements DesktopApi {
     const recipeId = this.createId();
     const draftId = this.createId();
     let name = evaluated.payload.productName.trim();
+    let code = evaluated.payload.recipeCode?.trim() || null;
     let kind = evaluated.payload.recipeKind;
     let productId = recipeId;
     let schemeName = "主配方";
@@ -2863,6 +2912,7 @@ export class BrowserDemoApi implements DesktopApi {
         schemeName,
       );
       name = sourceRecipe.name;
+      code = null;
       kind = sourceRecipe.kind;
       productId = recipeProductId(sourceRecipe);
       schemeStatus = "researching";
@@ -2871,6 +2921,7 @@ export class BrowserDemoApi implements DesktopApi {
     if (!name) {
       throw new DesktopApiError("invalid_input", "请填写产品名称");
     }
+    this.assertUniqueRecipeCode(state, code);
 
     const materialNeeds: MaterialNeed[] = [];
     const items: RecipeDraftItemInput[] = [...evaluated.payload.items]
@@ -2921,7 +2972,7 @@ export class BrowserDemoApi implements DesktopApi {
     const recipe: Recipe = {
       id: recipeId,
       name,
-      code: null,
+      code,
       tags: [],
       kind,
       currentDraftId: draftId,
@@ -3105,6 +3156,12 @@ export class BrowserDemoApi implements DesktopApi {
     const job = this.read().importJobs[id];
     if (!job) throw new DesktopApiError("not_found", "找不到该导入任务");
     return job;
+  }
+
+  async getIngredientImportDraft(id: string) {
+    const draft = this.read().importDrafts[id];
+    if (!draft) throw new DesktopApiError("not_found", "找不到该导入草稿");
+    return structuredClone(draft);
   }
 
   async listIngredientImportDrafts(jobId: string) {
@@ -4187,6 +4244,7 @@ export class BrowserDemoApi implements DesktopApi {
     });
     return {
       productName: reverse ? "巧克力冰淇淋（逆向估算）" : "低糖乳味冷冻甜品",
+      recipeCode: null,
       recipeKind: "formula",
       mode: reverse ? "label_reverse" : "goal_design",
       finishedMassGrams: null,
@@ -4948,5 +5006,12 @@ function browserBackupUnavailable() {
   return new DesktopApiError(
     "unsupported_operation",
     "浏览器演示模式不执行真实本机备份或恢复，请使用桌面版",
+  );
+}
+
+function browserDataResetUnavailable() {
+  return new DesktopApiError(
+    "unsupported_operation",
+    "浏览器演示模式不清空或恢复真实本机研发数据，请使用桌面版",
   );
 }

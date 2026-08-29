@@ -1,3 +1,115 @@
+# Ninka FoodLab 关于页紧凑版本信息 QA
+
+- source visual truth path: `/Users/andrew/.codex/generated_images/01a04c6a-59dc-7b12-8cb9-ca6c1df6bd0b/exec-05d702d6-dd57-447a-a45e-9771edf07b4d.png`
+- original About screenshot path: `/private/tmp/ninka-about-result-before.jpg`
+- implementation screenshot paths:
+  - desktop initial: `/private/tmp/ninka-about-after-desktop-initial.jpg`
+  - desktop latest result: `/private/tmp/ninka-about-after-desktop-result.jpg`
+  - narrow latest result: `/private/tmp/ninka-about-after-narrow.jpg`
+- combined comparison paths:
+  - exact narrow before/after: `/private/tmp/ninka-about-before-after-comparison.png`
+  - selected style reference/desktop implementation: `/private/tmp/ninka-about-style-comparison.png`
+- source dimensions: selected style reference `1672 × 941` px；original About and narrow implementation `801 × 950` px
+- implementation dimensions: desktop `1600 × 900` px、narrow `801 × 950` px；对应 CSS viewport 尺寸相同，device pixel ratio 均为 `1.6`
+- density normalization: 窄窗口前后图按原始 `801 × 950` 并列，未缩放；样式对照把桌面实现归一到 `1672 × 941` 后与选中稿并列，只判断布局节奏和表面密度，不以缩放后的字体锐度判断缺陷
+- state: 深色系统主题、设置 > 关于 Ninka FoodLab、浏览器演示模式、检查结果为“已是最新稳定版”
+
+## Full-view comparison evidence
+
+- 原页面把“当前版本”和“已是最新稳定版”分别放入圆角边框框，形成明显的卡片套卡片；改造后两者均成为带细分隔线的行式信息。
+- 桌面实现沿用通用页 `1056 px` 主内容宽度；版本行实测 `1056 × 104 px`，版本号与检查按钮使用同一 `336 px` 控制列。
+- 最新结果为 `1056 × 80 px` 的轻量状态行，联网说明为 `1056 × 60 px` 的底部弱化说明；无背景块、圆角框或阴影。
+- `801 × 950` 窄窗口中版本号与检查按钮换到正文下方，结果和联网说明保持完整，无重叠、裁切或水平溢出。
+
+## Focused region comparison evidence
+
+- 窄窗口前后图使用完全相同的 `801 × 950` 画面并列，版本行、结果行、按钮和说明文字在原始尺寸下均可读，因此不再额外裁切局部区域，避免重复缩放造成误判。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 继续使用现有系统 UI 字体；页面标题保持 24 px，行标题 14 px，版本号收敛为 20 px，说明和状态正文为 12 px，层级不再互相争抢。
+- Spacing and layout rhythm: 复用通用页的 24/正文/336 三列节奏；桌面行右侧保留呼吸空间，`≤1100 px` 时控制区与结果操作自动换行。
+- Colors and visual tokens: 沿用现有 Forest、accent、danger、ink-muted 和 border-subtle token；检查按钮使用轻量绿色描边，成功只通过图标与文字表达。
+- Image quality and asset fidelity: 品牌 SVG 保持不变；版本、刷新、成功、警告和锁图标全部来自现有图标库，没有新增位图、CSS 图形或近似绘制。
+- Copy and content: 保留版本来源、按需检查、最新版本、下载入口和联网边界文案；错误标题改为中性“操作未完成”，可同时覆盖读取版本、检查更新和打开下载页失败。
+
+## Findings and comparison history
+
+### Pass 1
+
+- [P2] 当前版本卡和检查结果卡连续堆叠，边框、圆角和大版本号造成视觉重量重复，与刚确认的紧凑设置风格不一致。
+  - fix: 版本改为共享偏好行；latest、update available 和 error 改成无背景的状态行；联网说明改为锁图标加弱化文字。
+- [P2] `update_available` 的 `role="status"` 包含可点击下载按钮，且错误区固定写“检查更新失败”，不能准确覆盖读取版本或打开下载页失败。
+  - fix: 把 status 语义移到纯文本区域，下载按钮保持独立操作；错误标题改为“操作未完成”。
+
+### Pass 2
+
+- post-fix visual evidence: `/private/tmp/ninka-about-after-desktop-result.jpg`、`/private/tmp/ninka-about-after-narrow.jpg`
+- post-fix comparison evidence: `/private/tmp/ninka-about-before-after-comparison.png`、`/private/tmp/ninka-about-style-comparison.png`
+- 同屏复核后，无剩余 P0/P1/P2 视觉、响应式或交互问题。
+
+## Interaction and verification
+
+- 内置浏览器实测“检查更新”可点击并显示“已是最新稳定版”；初始页、latest 结果页和当前窄窗口均已截图检查。
+- `AboutSettings.test.tsx` 覆盖发现新版本、打开下载页面和检查失败；与 `App.test.tsx` 合计 `4` 项通过。
+- 内置浏览器标题为 `Ninka FoodLab`，最终控制台无 error 或 warning。
+- TypeScript 类型检查、Vite 生产构建和 `git diff --check` 通过；构建仅保留项目既有的大分块提示。
+
+final result: passed
+
+---
+
+# Ninka FoodLab 通用设置紧凑偏好面板 QA
+
+- source visual truth path: `/Users/andrew/.codex/generated_images/01a04c6a-59dc-7b12-8cb9-ca6c1df6bd0b/exec-05d702d6-dd57-447a-a45e-9771edf07b4d.png`
+- implementation screenshot path: `/private/tmp/ninka-settings-option-2-implementation.png`
+- combined comparison path: `/private/tmp/ninka-settings-option-2-comparison.png`
+- source dimensions: `1672 × 941` px
+- implementation dimensions: `1600 × 900` px；浏览器 viewport `1600 × 900` CSS px，device pixel ratio `1.6`
+- density normalization: 组合图把源稿与实现分别归一到 `1672 × 941` 后并排；只比较布局比例、层级、边框密度和控件位置，不以缩放后的字体锐度判断缺陷
+- state: 深色系统主题、设置 > 通用、浏览器演示模式、Agent 服务启动失败
+
+## Full-view comparison evidence
+
+- 保留现有主导航、设置分类导航、品牌资产和深色主题；只重构通用设置主内容，没有扩大到 LLM、数据管理、关于或许可页面。
+- 外观与 Agent 服务由两个大卡片改成 `104 px` 高的偏好行，只保留细分隔线；奶油色安全提示卡改成锁图标加弱化说明文字。
+- 最终主内容实测为 `1056 × 474 px`，位于 `x = 444`；两行均为 `1056 × 104 px`，右侧控制列固定 `336 px`，与源稿的左右分区关系一致。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 沿用现有系统 UI 字体、24 px 页面标题、14 px 偏好标题和 12 px 说明文字，没有引入新字族或改变全局层级。
+- Spacing and layout rhythm: 主内容宽度扩大到 1056 px；外观与服务行使用相同的 24/正文/336 三列节奏，`≤1100 px` 时控制区换行，`≤620 px` 时改为整行控件。
+- Colors and visual tokens: 继续使用现有 Forest、surface、border、danger 和 accent token；失败状态保持红色，重试按钮使用轻量绿色描边。
+- Image quality and asset fidelity: 继续复用现有 Ninka 品牌 SVG、Tabler `settings` / `database` / `lock` 图标，没有新增位图、近似绘图或替代 Logo。
+- Copy and content: 保留原有外观选项、Agent 状态详情、重试行为和安全边界文案；只把状态标题收敛为“Agent 服务 / 启动失败”。
+
+## Findings and comparison history
+
+### Pass 1
+
+- [P2] 初版控制列只有 `168 px`，主内容为 `960 px`，与选中稿相比右侧空白仍偏重，状态与重试按钮挤在一起。
+  - fix: 主内容扩至 `1056 px`；外观选择和运行操作统一为 `336 px`，状态与按钮两端对齐，并保留响应式换行规则。
+- [P2] 初版重试按钮使用普通灰色次级样式，低于选中稿中的可操作层级。
+  - fix: 继续使用次级按钮结构，只把描边与文字切换到现有 accent token，避免重新变成厚重主按钮。
+
+### Pass 2
+
+- post-fix evidence: `/private/tmp/ninka-settings-option-2-implementation.png`
+- post-fix combined evidence: `/private/tmp/ninka-settings-option-2-comparison.png`
+- 源稿与实现同屏对照后，无剩余 P0/P1/P2 视觉问题；现有主侧栏比概念稿更窄属于产品当前设计系统，本轮按范围要求保留。
+
+## Interaction and verification
+
+- “界面外观”实测可切到浅色，`documentElement.dataset.theme` 变为 `light`；随后恢复“跟随系统”，主题标记恢复为空。
+- “重试启动”实测可点击；浏览器演示模式仍显示“启动失败”并保留重试入口，功能语义未因重排改变。
+- 内置浏览器标题为 `Ninka FoodLab`，设置 DOM 内容完整；最终控制台无 error 或 warning。
+- Vitest：`HarnessSettings.test.tsx` 与 `App.test.tsx` 共 `5` 项通过。
+- TypeScript 类型检查、Vite 生产构建和 `git diff --check` 通过；构建仅保留项目既有的大分块提示。
+
+final result: passed
+
+---
+
 # Ninka FoodLab 顶部操作区与 Agent 覆盖层响应式 QA
 
 - reported issue paths:

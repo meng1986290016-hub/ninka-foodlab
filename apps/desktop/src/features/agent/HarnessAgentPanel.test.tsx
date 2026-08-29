@@ -1,14 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BrowserAgentEventSource } from "../../api/agent-event-source";
 import type {
+  ArtifactManifest,
   HarnessHealth,
   HarnessTask,
   HarnessTaskEvent,
   HarnessTurn,
 } from "../../api/agent-harness-types";
+import type { IngredientImportDraft } from "../../api/import-types";
 import { BrowserDemoApi } from "../../api/browser-demo-api";
 import type { ImportFilePicker } from "../../api/import-file-picker";
 import { HarnessAgentPanel } from "./HarnessAgentPanel";
@@ -100,7 +102,7 @@ class HarnessPanelApi extends BrowserDemoApi {
     return [...this.turns];
   }
 
-  override async listHarnessArtifacts() {
+  override async listHarnessArtifacts(): Promise<ArtifactManifest[]> {
     return [];
   }
 
@@ -214,12 +216,195 @@ class FailingRuntimeApi extends HarnessPanelApi {
   }
 }
 
+class ArtifactPanelApi extends HarnessPanelApi {
+  requestedDraftIds: string[] = [];
+
+  override async listHarnessTurns() {
+    return [{
+      ...firstTurn,
+      contentBlocks: [{ type: "artifact_ref" as const, artifactId: "artifact-1" }],
+    }];
+  }
+
+  override async listHarnessArtifacts(): Promise<ArtifactManifest[]> {
+    return [{
+      id: "artifact-1",
+      taskId: task.id,
+      turnId: firstTurn.id,
+      toolCallId: "call-draft",
+      kind: "ingredient_import_draft",
+      title: "待复核：复配乳化剂",
+      domainRef: "ingredient_import_draft:real-draft-id",
+      logicalPath: null,
+      mimeType: null,
+      sha256: null,
+      byteSize: null,
+      status: "needs_review",
+      provenance: {},
+      createdAt: "2026-08-20T00:00:00Z",
+      updatedAt: "2026-08-20T00:00:00Z",
+    }];
+  }
+
+  override async getIngredientImportDraft(id: string): Promise<IngredientImportDraft> {
+    this.requestedDraftIds.push(id);
+    return {
+      id,
+      jobId: "job-1",
+      position: 0,
+      status: "imported",
+      review: {} as IngredientImportDraft["review"],
+      issues: [],
+      attachments: [],
+      sourceLinks: [],
+      importedVariantId: "variant-1",
+      createdAt: "2026-08-20T00:00:00Z",
+      updatedAt: "2026-08-20T00:00:00Z",
+    };
+  }
+}
+
+class StaleRecipeArtifactPanelApi extends HarnessPanelApi {
+  override async listHarnessTurns() {
+    return [{
+      ...firstTurn,
+      contentBlocks: [{ type: "artifact_ref" as const, artifactId: "artifact-stale" }],
+    }];
+  }
+
+  override async listHarnessArtifacts(): Promise<ArtifactManifest[]> {
+    return [{
+      id: "artifact-stale",
+      taskId: task.id,
+      turnId: firstTurn.id,
+      toolCallId: "call-proposal",
+      kind: "recipe_proposal",
+      title: "未生成有效配方提案",
+      domainRef: null,
+      logicalPath: null,
+      mimeType: null,
+      sha256: null,
+      byteSize: null,
+      status: "stale",
+      provenance: { tool: "create_recipe_proposal" },
+      createdAt: "2026-08-20T00:00:00Z",
+      updatedAt: "2026-08-20T00:00:00Z",
+    }];
+  }
+}
+
+class TextOnlyPanelApi extends HarnessPanelApi {
+  createdTaskCount = 0;
+
+  override async getAgentModelDirectory() {
+    return {
+      current: { provider: "deepseek-official", model: "deepseek-v4-flash" },
+      routable: true,
+      hasUsableProvider: true,
+      currentUsable: true,
+      groups: [{
+        provider: "deepseek-official",
+        displayName: "DeepSeek",
+        models: [{
+          id: "deepseek-v4-flash",
+          name: "DeepSeek V4 Flash",
+          inputModalities: ["text" as const],
+          capabilityStatus: "known" as const,
+          capabilitySource: "catalog" as const,
+        }],
+      }],
+      failures: [],
+    };
+  }
+
+  override async createHarnessTask(input: Parameters<BrowserDemoApi["createHarnessTask"]>[0]) {
+    this.createdTaskCount += 1;
+    return super.createHarnessTask(input);
+  }
+}
+
 const filePicker: ImportFilePicker = {
   async pickSources() { return []; },
   async pickDestination() { return null; },
 };
 
 describe("HarnessAgentPanel", () => {
+  it("opens an ingredient artifact using the real persisted draft id", async () => {
+    const api = new ArtifactPanelApi({ storage: window.localStorage });
+    const onOpenImported = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <HarnessAgentPanel
+        api={api}
+        events={new BrowserAgentEventSource()}
+        filePicker={filePicker}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={onOpenImported}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    const artifactButtons = await screen.findAllByRole("button", {
+      name: "打开待复核：复配乳化剂",
+    });
+    await user.click(artifactButtons[0]!);
+    await waitFor(() => expect(api.requestedDraftIds).toEqual(["real-draft-id"]));
+    expect(onOpenImported).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains that a historical ghost recipe artifact is stale", async () => {
+    const api = new StaleRecipeArtifactPanelApi({ storage: window.localStorage });
+    const user = userEvent.setup();
+    render(
+      <HarnessAgentPanel
+        api={api}
+        events={new BrowserAgentEventSource()}
+        filePicker={filePicker}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "打开未生成有效配方提案" }));
+    expect(await screen.findByText(/未生成有效配方提案，该成果已过期/)).toBeTruthy();
+  });
+
+  it("blocks a JPEG before creating a task when the selected model is known text-only", async () => {
+    const api = new TextOnlyPanelApi({ storage: window.localStorage });
+    const user = userEvent.setup();
+    const imagePicker: ImportFilePicker = {
+      async pickSources() {
+        return [{ kind: "native_path", value: "/tmp/ingredient-label.jpg" }];
+      },
+      async pickDestination() { return null; },
+    };
+    render(
+      <HarnessAgentPanel
+        api={api}
+        events={new BrowserAgentEventSource()}
+        filePicker={imagePicker}
+        onClose={() => {}}
+        onConfigure={() => {}}
+        onOpenImported={() => {}}
+        onReviewDraft={() => {}}
+        open
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "新建会话" }));
+    await user.click(screen.getByRole("button", { name: "添加附件" }));
+    await user.type(screen.getByRole("textbox", { name: "给 Ninka Agent 发消息" }), "导入这个原料");
+    await user.click(screen.getByRole("button", { name: "发送消息" }));
+
+    expect(await screen.findByText(/当前模型仅支持文本，不能读取图片/)).toBeTruthy();
+    expect(api.createdTaskCount).toBe(0);
+  });
+
   it("replaces the connecting placeholder with a retryable startup failure", async () => {
     const api = new FailingRuntimeApi({ storage: window.localStorage });
     render(

@@ -21,7 +21,7 @@ use food_rd_desktop::{
         repository::IngredientRepository,
     },
     recipes::{
-        model::{RecipeSchemeStatus, RecipeVersionInput},
+        model::{RecipeInput, RecipeSchemeStatus, RecipeVersionInput},
         repository::RecipeRepository,
     },
 };
@@ -84,6 +84,7 @@ fn proposal_payload(
 ) -> AgentRecipeProposalPayload {
     AgentRecipeProposalPayload {
         product_name: "低糖乳味冷冻甜品".into(),
+        recipe_code: None,
         recipe_kind: food_rd_desktop::recipes::model::RecipeKind::Formula,
         mode: AgentRecipeProposalMode::GoalDesign,
         finished_mass_grams: None,
@@ -130,8 +131,9 @@ fn acceptance_atomically_creates_an_agent_draft_and_material_need() {
     let path = temporary_database("accept");
     let variant = seed_ingredient(&path);
     let ingredients = IngredientRepository::open(&path).unwrap();
-    let (payload, evaluation) =
-        normalize_and_evaluate(&ingredients, proposal_payload(&variant)).unwrap();
+    let mut payload = proposal_payload(&variant);
+    payload.recipe_code = Some("R002".into());
+    let (payload, evaluation) = normalize_and_evaluate(&ingredients, payload).unwrap();
     drop(ingredients);
 
     let mut proposals = AgentRecipeRepository::open(&path).unwrap();
@@ -157,6 +159,7 @@ fn acceptance_atomically_creates_an_agent_draft_and_material_need() {
     let recipe = recipes.get_recipe(&recipe_id).unwrap();
     let draft = recipes.get_draft(&recipe_id).unwrap().unwrap();
     assert_eq!(recipe.scheme_status, RecipeSchemeStatus::Current);
+    assert_eq!(recipe.code.as_deref(), Some("R002"));
     assert_eq!(draft.source, "agent");
     assert_eq!(draft.payload["items"][1]["kind"], "material_need");
     assert!(
@@ -228,5 +231,156 @@ fn changed_ingredient_data_marks_a_proposal_stale_without_partial_writes() {
     );
 
     drop(proposals);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn similar_material_name_cannot_silently_bind_to_a_different_identity() {
+    let path = temporary_database("identity");
+    let variant = seed_ingredient(&path);
+    let ingredients = IngredientRepository::open(&path).unwrap();
+    let mut payload = proposal_payload(&variant);
+    if let AgentRecipeProposalItem::Ingredient { material_name, .. } = &mut payload.items[0] {
+        *material_name = "低脂脱脂乳粉".into();
+    }
+
+    let error = normalize_and_evaluate(&ingredients, payload).unwrap_err();
+    assert_eq!(error.code(), "invalid_input");
+    assert!(error.message().contains("相似名称不能自动替换"));
+
+    drop(ingredients);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn mixed_units_keep_original_amounts_and_use_actual_input_total() {
+    let path = temporary_database("mixed-units");
+    let variant = seed_ingredient(&path);
+    let ingredients = IngredientRepository::open(&path).unwrap();
+    let mut payload = proposal_payload(&variant);
+    if let AgentRecipeProposalItem::Ingredient { amount, unit, .. } = &mut payload.items[0] {
+        *amount = "0.5".into();
+        *unit = "kg".into();
+    }
+    if let AgentRecipeProposalItem::MaterialNeed { amount, unit, .. } = &mut payload.items[1] {
+        *amount = "250".into();
+        *unit = "g".into();
+    }
+    payload.finished_mass_grams = Some("700".into());
+    payload.yield_assumption = "provided".into();
+    payload
+        .warnings
+        .push("附件声明总量为 800 g，与原料明细 750 g 不一致；未自动缩放".into());
+
+    let (normalized, evaluation) = normalize_and_evaluate(&ingredients, payload).unwrap();
+    assert_eq!(normalized.items[0].amount(), "0.5");
+    assert_eq!(normalized.items[0].unit(), "kg");
+    assert_eq!(normalized.items[1].amount(), "250");
+    assert_eq!(normalized.items[1].unit(), "g");
+    assert_eq!(evaluation["calculation"]["inputMassGrams"], "750");
+    assert_eq!(evaluation["calculation"]["basisMassGrams"], "700");
+    assert!(normalized.warnings[1].contains("未自动缩放"));
+
+    drop(ingredients);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn duplicate_imported_recipe_code_keeps_the_proposal_pending() {
+    let path = temporary_database("duplicate-code");
+    let variant = seed_ingredient(&path);
+    RecipeRepository::open(&path)
+        .unwrap()
+        .create_recipe(RecipeInput {
+            name: "现有配方".into(),
+            code: Some("R001".into()),
+            tags: Vec::new(),
+            kind: food_rd_desktop::recipes::model::RecipeKind::Formula,
+        })
+        .unwrap();
+    let ingredients = IngredientRepository::open(&path).unwrap();
+    let mut payload = proposal_payload(&variant);
+    payload.recipe_code = Some(" R001 ".into());
+    payload.mode = AgentRecipeProposalMode::AttachmentImport;
+    let (payload, evaluation) = normalize_and_evaluate(&ingredients, payload).unwrap();
+    assert_eq!(payload.recipe_code.as_deref(), Some("R001"));
+    drop(ingredients);
+
+    let mut proposals = AgentRecipeRepository::open(&path).unwrap();
+    let proposal = proposals
+        .create_proposal(None, None, payload, evaluation, vec!["attachment-1".into()])
+        .unwrap();
+    assert_eq!(proposal.payload_version, 2);
+    let error = proposals
+        .accept_proposal(&proposal.id, AgentRecipeProposalDestination::NewProduct)
+        .unwrap_err();
+    assert_eq!(error.code(), "duplicate_code");
+    assert_eq!(
+        proposals.get_proposal(&proposal.id).unwrap().status,
+        AgentRecipeProposalStatus::PendingReview
+    );
+    assert_eq!(
+        RecipeRepository::open(&path)
+            .unwrap()
+            .list_recipes()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let ingredients = IngredientRepository::open(&path).unwrap();
+    let mut corrected_payload = proposals.get_proposal(&proposal.id).unwrap().payload;
+    corrected_payload.recipe_code = Some("R002".into());
+    let (corrected_payload, corrected_evaluation) =
+        normalize_and_evaluate(&ingredients, corrected_payload).unwrap();
+    drop(ingredients);
+    proposals
+        .update_proposal(&proposal.id, corrected_payload, corrected_evaluation)
+        .unwrap();
+    let (accepted_recipe_id, _) = proposals
+        .accept_proposal(&proposal.id, AgentRecipeProposalDestination::NewProduct)
+        .unwrap();
+    assert_eq!(
+        RecipeRepository::open(&path)
+            .unwrap()
+            .get_recipe(&accepted_recipe_id)
+            .unwrap()
+            .code
+            .as_deref(),
+        Some("R002")
+    );
+
+    drop(proposals);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn version_one_proposal_without_recipe_code_remains_readable() {
+    let path = temporary_database("payload-v1");
+    let variant = seed_ingredient(&path);
+    let mut payload_json = serde_json::to_value(proposal_payload(&variant)).unwrap();
+    payload_json.as_object_mut().unwrap().remove("recipeCode");
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "INSERT INTO agent_recipe_proposals (
+               id, conversation_id, run_id, status, payload_version, payload_json,
+               evaluation_json, source_attachment_ids_json, accepted_recipe_id,
+               created_at, updated_at
+             ) VALUES ('legacy-proposal', NULL, NULL, 'pending_review', 1, ?1, '{}', '[]', NULL, ?2, ?2)",
+            [
+                serde_json::to_string(&payload_json).unwrap(),
+                "2026-08-29T00:00:00Z".into(),
+            ],
+        )
+        .unwrap();
+
+    let proposal = AgentRecipeRepository::open(&path)
+        .unwrap()
+        .get_proposal("legacy-proposal")
+        .unwrap();
+    assert_eq!(proposal.payload_version, 1);
+    assert_eq!(proposal.payload.recipe_code, None);
+
     fs::remove_file(path).unwrap();
 }

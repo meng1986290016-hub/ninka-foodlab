@@ -5,7 +5,7 @@ import { createBackupFilePicker } from "../../api/backup-file-picker";
 import type { BackupManifest, BackupPreflight } from "../../api/backup-types";
 import type { DesktopApi } from "../../api/desktop-api";
 import { Icon } from "../../components/Icon";
-import { LegacyAgentReset } from "./LegacyAgentReset";
+import { DataResetSettings } from "./DataResetSettings";
 
 interface DataManagementSettingsProps {
   api: DesktopApi;
@@ -227,7 +227,7 @@ export function DataManagementSettings({
         ) : null}
       </section>
 
-      <LegacyAgentReset api={api} />
+      <DataResetSettings api={api} nativeAvailable={nativeAvailable} />
 
       {message !== null ? (
         <p className="data-management-message is-success" role="status">

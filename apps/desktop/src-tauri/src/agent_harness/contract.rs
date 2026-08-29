@@ -3,6 +3,7 @@ use super::model::{ApprovalPolicy, TaskContract};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Workflow {
     IngredientImport,
+    RecipeImport,
     RecipeProposal,
     RecipeAnalysis,
     RecipeEstimate,
@@ -15,6 +16,7 @@ impl Workflow {
     pub fn id(self) -> &'static str {
         match self {
             Self::IngredientImport => "ingredient_import",
+            Self::RecipeImport => "recipe_import",
             Self::RecipeProposal => "recipe_proposal",
             Self::RecipeAnalysis => "recipe_analysis",
             Self::RecipeEstimate => "recipe_estimate",
@@ -45,8 +47,30 @@ pub fn contract_for(workflow: Workflow) -> TaskContract {
             ApprovalPolicy::ReviewBeforeCommit,
             "all attachments are represented by reviewable drafts or an explicit needs_input outcome",
         ),
+        Workflow::RecipeImport => (
+            vec![
+                "read_task_attachments",
+                "search_material_groups",
+                "search_supplier_variants",
+                "search_suppliers",
+                "list_nutrient_definitions",
+                "evaluate_recipe_proposal",
+                "create_recipe_proposal",
+                "update_recipe_proposal",
+                "request_open_recipe_proposal_review",
+            ],
+            vec![
+                "read_task_attachments",
+                "evaluate_recipe_proposal",
+                "create_recipe_proposal",
+            ],
+            vec!["recipe_proposal"],
+            ApprovalPolicy::ReviewBeforeCommit,
+            "every recipe found in the attachments has its own validated proposal in needs_review state, or the task has an explicit needs_input outcome",
+        ),
         Workflow::RecipeProposal => (
             vec![
+                "read_task_attachments",
                 "search_material_groups",
                 "search_supplier_variants",
                 "evaluate_recipe_proposal",
@@ -200,5 +224,26 @@ mod tests {
         )
         .unwrap_err();
         assert!(errors.contains(&"missing_artifact:label_compliance_review".to_string()));
+    }
+
+    #[test]
+    fn recipe_import_reads_attachments_without_web_or_ingredient_draft_tools() {
+        let contract = contract_for(Workflow::RecipeImport);
+        assert!(
+            contract
+                .allowed_tools
+                .contains(&"read_task_attachments".into())
+        );
+        assert!(
+            contract
+                .allowed_tools
+                .contains(&"create_recipe_proposal".into())
+        );
+        assert!(!contract.allowed_tools.contains(&"web_search".into()));
+        assert!(
+            !contract
+                .allowed_tools
+                .contains(&"create_ingredient_import_draft".into())
+        );
     }
 }

@@ -53,6 +53,14 @@ pub fn list_ingredient_import_drafts(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn get_ingredient_import_draft(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<IngredientImportDraft, CommandError> {
+    with_coordinator(&state, |coordinator| coordinator.get_draft(&id))
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub fn update_ingredient_import_draft(
     id: String,
     review: ReviewedIngredientImportDraft,

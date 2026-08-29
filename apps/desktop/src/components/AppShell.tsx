@@ -11,6 +11,7 @@ interface AppShellProps {
   agentOpen: boolean;
   databaseStatus: DatabaseStatus | null;
   activePage: AppPage;
+  appVersion?: string | null;
   onNavigate(page: AppPage): void;
   onToggleAgent(): void;
 }
@@ -29,6 +30,7 @@ export function AppShell({
   agentOpen,
   databaseStatus,
   activePage,
+  appVersion = null,
   onNavigate,
   onToggleAgent,
 }: AppShellProps) {
@@ -116,7 +118,7 @@ export function AppShell({
 
       <footer className="statusbar">
         <span>{isBrowserDemo ? "浏览器演示数据" : "SQLite 本地数据"}</span>
-        <span>版本 0.2.0 · 离线模式</span>
+        <span>版本 {appVersion ?? "—"} · 离线可用</span>
       </footer>
     </div>
   );

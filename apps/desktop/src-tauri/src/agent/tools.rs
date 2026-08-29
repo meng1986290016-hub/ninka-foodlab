@@ -1392,7 +1392,7 @@ fn definition(name: &str) -> AgentToolDefinition {
             recipe_proposal_payload_schema(false, false),
         ),
         "create_recipe_proposal" => (
-            "创建一张待用户人工复核的配方提案卡，不能直接创建配方或正式版本",
+            "创建一张有真实本地记录、待用户人工复核的配方提案卡，不能直接创建配方或正式版本；附件含多个配方时必须逐个调用，每个配方单独创建",
             recipe_proposal_payload_schema(true, false),
         ),
         "update_recipe_proposal" => (
@@ -1616,8 +1616,9 @@ fn recipe_proposal_schema() -> Value {
         "type": "object",
         "properties": {
             "productName": { "type": "string" },
+            "recipeCode": { "type": ["string", "null"] },
             "recipeKind": { "type": "string", "enum": ["formula", "semi_finished"] },
-            "mode": { "type": "string", "enum": ["goal_design", "label_reverse"] },
+            "mode": { "type": "string", "enum": ["goal_design", "label_reverse", "attachment_import"] },
             "finishedMassGrams": { "type": ["string", "null"] },
             "yieldAssumption": { "type": "string", "enum": ["provided", "assumed_100_percent"] },
             "items": {
@@ -1681,7 +1682,7 @@ fn recipe_proposal_schema() -> Value {
             "warnings": { "type": "array", "items": { "type": "string" } },
             "markdownNotes": { "type": "string" }
         },
-        "required": ["productName", "recipeKind", "mode", "finishedMassGrams", "yieldAssumption", "items", "requirements", "assumptions", "warnings", "markdownNotes"],
+        "required": ["productName", "recipeCode", "recipeKind", "mode", "finishedMassGrams", "yieldAssumption", "items", "requirements", "assumptions", "warnings", "markdownNotes"],
         "additionalProperties": false
     })
 }

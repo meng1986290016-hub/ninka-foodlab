@@ -26,6 +26,14 @@ import type {
   LegacyResetPreview,
   LegacyResetResult,
 } from "./agent-harness-types";
+import type { AppVersionInfo, UpdateCheckResult } from "./app-info-types";
+import type {
+  DataResetExecuteRequest,
+  DataResetPreview,
+  DataResetRecoveryInfo,
+  DataResetRestoreResult,
+  DataResetResult,
+} from "./data-reset-types";
 import type {
   AcceptedAgentRecipeProposal,
   AgentRecipeProposal,
@@ -119,6 +127,15 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "conversion_unavailable",
   "import_failure",
   "attachment_failure",
+  "model_does_not_support_images",
+  "attachment_too_large",
+  "attachment_too_many",
+  "attachment_dimensions_exceeded",
+  "attachment_unsupported_format",
+  "attachment_corrupt",
+  "attachment_read_failed",
+  "provider_auth_failed",
+  "provider_network_unavailable",
   "unsupported_file",
   "invalid_state",
   "provider_not_configured",
@@ -135,6 +152,15 @@ const desktopErrorCodes = new Set<DesktopErrorCode>([
   "restore_rollback_failed",
   "restore_completed_restart_required",
   "unsupported_operation",
+  "update_offline",
+  "update_timeout",
+  "update_rate_limited",
+  "update_unavailable",
+  "update_no_release",
+  "update_invalid_response",
+  "safety_backup_failed",
+  "agent_stop_failed",
+  "recovery_unavailable",
   "storage_failure",
   "unknown",
 ]);
@@ -166,6 +192,43 @@ export class TauriDesktopApi implements DesktopApi {
     return this.invokeCommand<T>(command, args).catch((cause: unknown) => {
       throw toDesktopApiError(cause);
     });
+  }
+
+  getAppVersion() {
+    return this.invoke<AppVersionInfo>("get_app_version");
+  }
+
+  checkForUpdates() {
+    return this.invoke<UpdateCheckResult>("check_for_updates");
+  }
+
+  openReleasePage(url: string) {
+    return this.invoke<void>("open_release_page", { url });
+  }
+
+  previewDataReset() {
+    return this.invoke<DataResetPreview>("preview_data_reset");
+  }
+
+  executeDataReset(request: DataResetExecuteRequest) {
+    return this.invoke<DataResetResult>("execute_data_reset", { request });
+  }
+
+  getLatestDataResetRecovery() {
+    return this.invoke<DataResetRecoveryInfo | null>(
+      "get_latest_data_reset_recovery",
+    );
+  }
+
+  restoreLatestDataResetRecovery(confirmed: boolean) {
+    return this.invoke<DataResetRestoreResult>(
+      "restore_latest_data_reset_recovery",
+      { confirmed },
+    );
+  }
+
+  restartApplication() {
+    return this.invoke<void>("restart_application");
   }
 
   getHarnessHealth() {
@@ -752,6 +815,10 @@ export class TauriDesktopApi implements DesktopApi {
 
   getIngredientImportJob(id: string) {
     return this.invoke<IngredientImportJob>("get_ingredient_import_job", { id });
+  }
+
+  getIngredientImportDraft(id: string) {
+    return this.invoke<IngredientImportDraft>("get_ingredient_import_draft", { id });
   }
 
   listIngredientImportDrafts(jobId: string) {

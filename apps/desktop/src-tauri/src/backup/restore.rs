@@ -225,7 +225,7 @@ fn validate_sqlite_integrity(connection: &Connection) -> Result<(), RepositoryEr
 }
 
 fn migrate_staged_database(path: &Path, migrated_at: &str) -> Result<(), RepositoryError> {
-    let mut connection = database::open(path)?;
+    let mut connection = database::open_for_maintenance(path)?;
     migrations::apply(&mut connection, migrated_at)?;
     validate_sqlite_integrity(&connection)?;
     let schema_version = connection.query_row(
@@ -244,6 +244,63 @@ fn migrate_staged_database(path: &Path, migrated_at: &str) -> Result<(), Reposit
         .map_err(RepositoryError::io)?
         .sync_all()
         .map_err(RepositoryError::io)
+}
+
+pub(crate) fn install_staged_data(
+    staged_database: &Path,
+    staged_attachments: &Path,
+    database_path: &Path,
+    attachment_root: &Path,
+) -> Result<(), RepositoryError> {
+    install_staged_data_with_hook(
+        staged_database,
+        staged_attachments,
+        database_path,
+        attachment_root,
+        |_| Ok(()),
+    )
+}
+
+#[doc(hidden)]
+pub(crate) fn install_staged_data_with_hook(
+    staged_database: &Path,
+    staged_attachments: &Path,
+    database_path: &Path,
+    attachment_root: &Path,
+    hook: impl Fn(RestoreCheckpoint) -> std::io::Result<()>,
+) -> Result<(), RepositoryError> {
+    validate_database_and_attachments(staged_database, staged_attachments)?;
+    let parent = database_path
+        .parent()
+        .ok_or_else(|| invalid_state("数据替换目标位置无效"))?;
+    if staged_database.parent().and_then(Path::parent) != Some(parent)
+        || staged_attachments.parent().and_then(Path::parent) != Some(parent)
+    {
+        return Err(invalid_input("暂存数据必须位于应用数据目录"));
+    }
+    let rollback = parent.join(format!(".foodrd-reset-rollback-{}", Uuid::new_v4()));
+    fs::create_dir(&rollback).map_err(RepositoryError::io)?;
+    let mut swap = RestoreSwap::new(database_path, attachment_root, &rollback);
+    if let Err(error) = swap.install(staged_database, staged_attachments, &hook) {
+        if swap.rollback().is_err() {
+            return Err(domain(
+                "restore_rollback_failed",
+                "数据替换失败，且自动回滚未能完成；请停止继续操作",
+            ));
+        }
+        return Err(error);
+    }
+    if let Err(error) = validate_database_and_attachments(database_path, attachment_root) {
+        if swap.rollback().is_err() {
+            return Err(domain(
+                "restore_rollback_failed",
+                "数据替换校验失败，且自动回滚未能完成；请停止继续操作",
+            ));
+        }
+        return Err(error);
+    }
+    swap.commit();
+    Ok(())
 }
 
 fn validate_database_and_attachments(

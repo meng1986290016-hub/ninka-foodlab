@@ -25,7 +25,10 @@ import {
 import { SampleSheetWorkspace } from "./features/recipes/SampleSheetWorkspace";
 import type { SampleSheetLaunch } from "./features/recipes/sample-sheet-source";
 import type { RecipeAgentWorkbenchContext } from "./features/recipes/recipe-agent-analysis";
-import { SettingsPage } from "./features/settings/SettingsPage";
+import {
+  SettingsPage,
+  type SettingsSection,
+} from "./features/settings/SettingsPage";
 import "./styles/app.css";
 import {
   applyThemePreference,
@@ -56,11 +59,11 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus | null>(
     null,
   );
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<AppPage>("ingredients");
   const [agentOpen, setAgentOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<
-    "general" | "models" | "data"
-  >("general");
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("general");
   const [reviewDraft, setReviewDraft] =
     useState<IngredientImportDraft | null>(null);
   const [reviewQueue, setReviewQueue] = useState<IngredientImportDraft[]>([]);
@@ -93,10 +96,26 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
   }, []);
 
   useEffect(() => {
+    if (typeof desktopApi.getAppVersion !== "function") return;
     let active = true;
     void desktopApi.getDatabaseStatus().then((status) => {
       if (active) setDatabaseStatus(status);
     });
+    return () => {
+      active = false;
+    };
+  }, [desktopApi]);
+
+  useEffect(() => {
+    let active = true;
+    void desktopApi
+      .getAppVersion()
+      .then((info) => {
+        if (active) setAppVersion(info.currentVersion);
+      })
+      .catch(() => {
+        if (active) setAppVersion(null);
+      });
     return () => {
       active = false;
     };
@@ -207,6 +226,7 @@ export function App({ api, agentEvents, filePicker }: AppProps) {
     <>
       <AppShell
         activePage={activePage}
+        appVersion={appVersion}
         agentOpen={agentOpen}
         agentPanel={
           <AgentPanel

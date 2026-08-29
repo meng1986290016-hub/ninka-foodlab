@@ -8,6 +8,22 @@ dist/
 coverage/
 .playwright-cli/
 output/playwright/
+apps/promo-video/out/
+apps/promo-video/build/
+apps/promo-video/public/brand/
+apps/promo-video/public/captures/
+apps/promo-video/public/audio/
+apps/promo-video/.capture/
+# Third-party reference analysis is local-only. Keep the written analysis and
+# reproducible scripts, but never publish extracted frames or source audio.
+apps/promo-video/reference/reference-a-x/analysis-manifest.json
+apps/promo-video/reference/reference-a-x/audio-analysis/
+apps/promo-video/reference/reference-a-x/contact-sheets/
+apps/promo-video/reference/reference-a-x/frames-500ms/
+apps/promo-video/reference/reference-a-x/major-keyframes/
+apps/promo-video/reference/reference-a-x/reference-a-audio-mono.wav
+apps/promo-video/reference/reference-a-x/scene-cuts/
+apps/promo-video/reference/reference-a-x/scene-scores.csv
 .DS_Store
 *.log
 **/src-tauri/target/

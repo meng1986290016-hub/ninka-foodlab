@@ -26,6 +26,7 @@ pub fn ingest_history(
     let mut task = repository.get_task(task_id)?;
     let mut last_seen_seq = task.last_event_seq;
     let mut active_harness_turn: Option<String> = None;
+    let (tool_names_by_call, tool_calls_by_seq) = raw_tool_call_index(&ordered);
 
     for entry in &ordered {
         let Some(event) = entry
@@ -59,7 +60,10 @@ pub fn ingest_history(
             .transpose()?
             .flatten();
         let mut payload = event.clone();
-        redact_event_payload(event_type, &mut payload);
+        let result_tool = raw_tool_result_call_id(event, &tool_calls_by_seq)
+            .and_then(|call_id| tool_names_by_call.get(call_id))
+            .map(String::as_str);
+        redact_event_payload(event_type, &mut payload, result_tool);
         if let Some(view) = entry.get("view")
             && let Some(object) = payload.as_object_mut()
         {
@@ -229,9 +233,13 @@ fn project_turns(repository: &mut HarnessRepository, task_id: &str) -> Result<()
                     if let Some(name) = call_id.and_then(|call_id| tool_names.get(call_id)) {
                         let audited_status =
                             call_id.and_then(|call_id| audited_call_status.get(call_id));
-                        let succeeded = audited_status
-                            .map(|status| status == "completed")
-                            .unwrap_or_else(|| tool_result_succeeded(data));
+                        let succeeded = if requires_completed_local_audit(name) {
+                            audited_status.is_some_and(|status| status == "completed")
+                        } else {
+                            audited_status
+                                .map(|status| status == "completed")
+                                .unwrap_or_else(|| tool_result_succeeded(data))
+                        };
                         if !succeeded {
                             continue;
                         }
@@ -247,7 +255,7 @@ fn project_turns(repository: &mut HarnessRepository, task_id: &str) -> Result<()
                         }
                         if let Some(kind) = artifact_kind_for_tool(name) {
                             artifact_kinds.push(kind.to_string());
-                            let domain_id = tool_result_domain_id(data)
+                            let domain_id = tool_result_domain_id_for_tool(name, data)
                                 .or_else(|| call_id.map(str::to_string))
                                 .unwrap_or_else(|| format!("event-{}", event.seq));
                             let domain_ref = format!("{kind}:{domain_id}");
@@ -380,6 +388,22 @@ fn normalized_provider_error(reason: &Value) -> (String, String) {
         .and_then(Value::as_str)
         .unwrap_or("");
     let diagnostic = format!("{raw_code} {raw_message}").to_ascii_lowercase();
+    if diagnostic.contains("model_does_not_support_images")
+        || diagnostic.contains("attachment-error")
+            && diagnostic.contains("support")
+            && diagnostic.contains("image")
+    {
+        return (
+            "model_does_not_support_images".into(),
+            "当前模型仅支持文本，不能读取图片。请切换到支持图片的模型后重试".into(),
+        );
+    }
+    if diagnostic.contains("attachment-error") {
+        return (
+            "attachment_error".into(),
+            "附件未能完成校验或发送，请检查文件大小、格式与完整性后重试".into(),
+        );
+    }
     if diagnostic.contains("provider is not configured") {
         return (
             "provider_not_configured".into(),
@@ -478,6 +502,10 @@ fn tool_result_succeeded(data: &Value) -> bool {
         && data.pointer("/message/isError").and_then(Value::as_bool) != Some(true)
 }
 
+fn requires_completed_local_audit(name: &str) -> bool {
+    matches!(name, "create_recipe_proposal" | "update_recipe_proposal")
+}
+
 fn tool_result_call_id<'a>(
     event: &'a AgentTaskEvent,
     tool_calls_by_seq: &'a BTreeMap<i64, String>,
@@ -505,7 +533,7 @@ fn artifact_kind_for_tool(name: &str) -> Option<&'static str> {
         "create_ingredient_import_draft" | "update_ingredient_import_draft" => {
             "ingredient_import_draft"
         }
-        "create_recipe_proposal" | "update_recipe_proposal" => "recipe_proposal",
+        "create_recipe_proposal" => "recipe_proposal",
         "create_recipe_estimate_card" => "recipe_estimate_card",
         "diagnose_recipe" => "recipe_analysis",
         "create_label_compliance_review" => "label_compliance_review",
@@ -549,6 +577,54 @@ fn tool_result_domain_id(data: &Value) -> Option<String> {
             "id",
         ],
     )
+}
+
+fn tool_result_domain_id_for_tool(tool: &str, data: &Value) -> Option<String> {
+    if let Some(domain_id) = data.get("domainId").and_then(Value::as_str) {
+        return Some(domain_id.to_string());
+    }
+    let paths: &[&[&str]] = match tool {
+        "create_ingredient_import_draft" | "update_ingredient_import_draft" => {
+            &[&["draftId"], &["draft", "id"]]
+        }
+        "create_recipe_proposal" | "update_recipe_proposal" => {
+            &[&["proposalId"], &["proposal", "id"]]
+        }
+        "create_recipe_estimate_card" => &[
+            &["estimateCardId"],
+            &["estimateCard", "id"],
+            &["card", "id"],
+        ],
+        "create_label_compliance_review" | "create_research_report_draft" => &[&["artifactId"]],
+        _ => return tool_result_domain_id(data),
+    };
+    for value in tool_result_values(data) {
+        for path in paths {
+            if let Some(id) = value_at_string_path(&value, path) {
+                return Some(id.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn tool_result_values(data: &Value) -> Vec<Value> {
+    let mut values = vec![data.clone()];
+    if let Some(content) = data.pointer("/message/content").and_then(Value::as_array) {
+        values.extend(content.iter().filter_map(|block| {
+            block
+                .get("text")
+                .and_then(Value::as_str)
+                .and_then(|text| serde_json::from_str::<Value>(text).ok())
+        }));
+    }
+    values
+}
+
+fn value_at_string_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
+    path.iter()
+        .try_fold(value, |current, part| current.get(*part))?
+        .as_str()
 }
 
 fn tool_result_embedded_string(data: &Value, keys: &[&str]) -> Option<String> {
@@ -624,7 +700,7 @@ fn collect_sources(value: &Value, sources: &mut BTreeMap<String, ContentSource>)
     }
 }
 
-fn redact_event_payload(event_type: &str, payload: &mut Value) {
+fn redact_event_payload(event_type: &str, payload: &mut Value, result_tool: Option<&str>) {
     let sources = sanitized_source_values(payload);
     let Some(data) = payload.get_mut("data").and_then(Value::as_object_mut) else {
         return;
@@ -685,7 +761,9 @@ fn redact_event_payload(event_type: &str, payload: &mut Value) {
             let message = data.get("message").cloned().unwrap_or(Value::Null);
             let tool_call_id = message.get("toolCallId").cloned();
             let is_error = message.get("isError").cloned();
-            let domain_id = tool_result_domain_id(&Value::Object(data.clone()));
+            let domain_id = result_tool
+                .and_then(|tool| tool_result_domain_id_for_tool(tool, &Value::Object(data.clone())))
+                .or_else(|| tool_result_domain_id(&Value::Object(data.clone())));
             let artifact_title =
                 tool_result_embedded_string(&Value::Object(data.clone()), &["title", "name"]);
             let evidence_source =
@@ -748,6 +826,52 @@ fn redact_event_payload(event_type: &str, payload: &mut Value) {
     {
         object.insert("_sources".into(), Value::Array(sources));
     }
+}
+
+fn raw_tool_call_index(entries: &[Value]) -> (BTreeMap<String, String>, BTreeMap<i64, String>) {
+    let mut names = BTreeMap::new();
+    let mut calls_by_seq = BTreeMap::new();
+    for entry in entries {
+        let Some(event) = entry
+            .get("event")
+            .or_else(|| entry.get("type").map(|_| entry))
+        else {
+            continue;
+        };
+        if event.get("type").and_then(Value::as_str) != Some("tool/call") {
+            continue;
+        }
+        let data = event.get("data").unwrap_or(&Value::Null);
+        let (Some(seq), Some(call_id), Some(name)) = (
+            event.get("seq").and_then(Value::as_i64),
+            data.get("callId").and_then(Value::as_str),
+            data.get("name").and_then(Value::as_str),
+        ) else {
+            continue;
+        };
+        names.insert(call_id.to_string(), normalize_tool_name(name).to_string());
+        calls_by_seq.insert(seq, call_id.to_string());
+    }
+    (names, calls_by_seq)
+}
+
+fn raw_tool_result_call_id<'a>(
+    event: &'a Value,
+    calls_by_seq: &'a BTreeMap<i64, String>,
+) -> Option<&'a str> {
+    event
+        .pointer("/data/message/toolCallId")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            event
+                .get("sourceEventSeqs")
+                .or_else(|| event.pointer("/data/sourceEventSeqs"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_i64)
+                .find_map(|seq| calls_by_seq.get(&seq).map(String::as_str))
+        })
 }
 
 fn sanitized_question_value(arguments: &Value) -> Option<Value> {
@@ -881,6 +1005,68 @@ mod tests {
             stored[2].payload.pointer("/data/resultRedacted"),
             Some(&Value::Bool(true))
         );
+    }
+
+    #[test]
+    fn ingredient_artifact_uses_the_real_draft_id_instead_of_a_job_or_attachment_id() {
+        let mut repository = repository();
+        let task = repository
+            .create_task(
+                "导入原料",
+                &contract_for(Workflow::IngredientImport),
+                None,
+                None,
+            )
+            .unwrap();
+        repository
+            .create_turn(&task.id, None, "读取图片并生成草稿")
+            .unwrap();
+        let events = vec![
+            json!({"event":{"type":"turn/start","seq":0,"time":1,"data":{"turn":0}}}),
+            json!({"event":{"type":"tool/call","seq":1,"time":2,"data":{"turn":0,"step":0,"callId":"read-1","name":"mcp__food_rd__read_task_attachments","arguments":"{}"}}}),
+            json!({"event":{"type":"tool/result","seq":2,"time":3,"data":{"turn":0,"step":0,"message":{"toolCallId":"read-1","content":[{"type":"text","text":"{}"}],"isError":false}}}}),
+            json!({"event":{"type":"tool/call","seq":3,"time":4,"data":{"turn":0,"step":1,"callId":"draft-1","name":"mcp__food_rd__create_ingredient_import_draft","arguments":"{}"}}}),
+            json!({"event":{"type":"tool/result","seq":4,"time":5,"data":{"turn":0,"step":1,"message":{"toolCallId":"draft-1","content":[{"type":"text","text":"{\"job\":{\"id\":\"wrong-job\"},\"attachment\":{\"id\":\"wrong-attachment\"},\"draft\":{\"id\":\"real-draft\"}}"}],"isError":false}}}}),
+            json!({"event":{"type":"turn/end","seq":5,"time":6,"data":{"turn":0,"reason":{"kind":"completed"}}}}),
+        ];
+        let projected = ingest_history(&mut repository, &task.id, &events).unwrap();
+        assert_eq!(projected.status, TaskOutcome::NeedsReview);
+        let artifact = repository.list_artifacts(&task.id).unwrap().pop().unwrap();
+        assert_eq!(
+            artifact.domain_ref.as_deref(),
+            Some("ingredient_import_draft:real-draft")
+        );
+        assert!(!artifact.domain_ref.unwrap().contains("wrong-"));
+    }
+
+    #[test]
+    fn unaudited_recipe_tool_result_cannot_create_a_ghost_artifact() {
+        let mut repository = repository();
+        let task = repository
+            .create_task(
+                "导入配方",
+                &contract_for(Workflow::RecipeImport),
+                None,
+                None,
+            )
+            .unwrap();
+        repository
+            .create_turn(&task.id, None, "读取附件并生成提案")
+            .unwrap();
+        let events = vec![
+            json!({"event":{"type":"turn/start","seq":0,"time":1,"data":{"turn":0}}}),
+            json!({"event":{"type":"tool/call","seq":1,"time":2,"data":{"turn":0,"step":0,"callId":"create-1","name":"mcp__food_rd__create_recipe_proposal","arguments":"{}"}}}),
+            json!({"event":{"type":"tool/result","seq":2,"time":3,"data":{"turn":0,"step":0,"message":{"toolCallId":"create-1","content":[{"type":"text","text":"{\"proposal\":{\"id\":\"not-real\"}}"}],"isError":false}}}}),
+            json!({"event":{"type":"turn/end","seq":3,"time":4,"data":{"turn":0,"reason":{"kind":"completed"}}}}),
+        ];
+
+        let projected = ingest_history(&mut repository, &task.id, &events).unwrap();
+        assert_eq!(projected.status, TaskOutcome::Failed);
+        assert_eq!(
+            projected.error_code.as_deref(),
+            Some("required_contract_unmet")
+        );
+        assert!(repository.list_artifacts(&task.id).unwrap().is_empty());
     }
 
     #[test]

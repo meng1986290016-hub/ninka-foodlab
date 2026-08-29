@@ -84,7 +84,7 @@ fn validation_errors_name_the_first_field_that_needs_correction() {
 
 #[test]
 fn every_grouped_desktop_api_method_is_registered() {
-    assert_eq!(REGISTERED_COMMANDS.len(), 130);
+    assert_eq!(REGISTERED_COMMANDS.len(), 139);
     for command in [
         "list_categories",
         "create_supplier",
@@ -112,6 +112,15 @@ fn every_grouped_desktop_api_method_is_registered() {
         "list_harness_tasks",
         "preview_legacy_agent_reset",
         "execute_legacy_agent_reset",
+        "get_ingredient_import_draft",
+        "get_app_version",
+        "check_for_updates",
+        "open_release_page",
+        "preview_data_reset",
+        "execute_data_reset",
+        "get_latest_data_reset_recovery",
+        "restore_latest_data_reset_recovery",
+        "restart_application",
         "export_sample_sheet",
         "database_status",
     ] {

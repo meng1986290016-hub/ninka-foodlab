@@ -29,6 +29,14 @@ import type {
   LegacyResetPreview,
   LegacyResetResult,
 } from "./agent-harness-types";
+import type { AppVersionInfo, UpdateCheckResult } from "./app-info-types";
+import type {
+  DataResetExecuteRequest,
+  DataResetPreview,
+  DataResetRecoveryInfo,
+  DataResetRestoreResult,
+  DataResetResult,
+} from "./data-reset-types";
 import type {
   AcceptedAgentRecipeProposal,
   AgentRecipeProposal,
@@ -110,6 +118,14 @@ export interface LegacyIngredientApi {
 }
 
 export interface DesktopApi extends LegacyIngredientApi {
+  getAppVersion(): Promise<AppVersionInfo>;
+  checkForUpdates(): Promise<UpdateCheckResult>;
+  openReleasePage(url: string): Promise<void>;
+  previewDataReset(): Promise<DataResetPreview>;
+  executeDataReset(request: DataResetExecuteRequest): Promise<DataResetResult>;
+  getLatestDataResetRecovery(): Promise<DataResetRecoveryInfo | null>;
+  restoreLatestDataResetRecovery(confirmed: boolean): Promise<DataResetRestoreResult>;
+  restartApplication(): Promise<void>;
   getHarnessHealth(): Promise<HarnessHealth>;
   startHarness(request?: HarnessStartRequest): Promise<HarnessHealth>;
   stopHarness(): Promise<HarnessHealth>;
@@ -309,6 +325,7 @@ export interface DesktopApi extends LegacyIngredientApi {
     request: IngredientImportJobRequest,
   ): Promise<IngredientImportJob>;
   getIngredientImportJob(id: string): Promise<IngredientImportJob>;
+  getIngredientImportDraft(id: string): Promise<IngredientImportDraft>;
   listIngredientImportDrafts(jobId: string): Promise<IngredientImportDraft[]>;
   updateIngredientImportDraft(
     id: string,

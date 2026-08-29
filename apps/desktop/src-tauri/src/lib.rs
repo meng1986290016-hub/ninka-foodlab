@@ -37,13 +37,18 @@ use commands::agent_recipes::{
     evaluate_agent_recipe_proposal, get_agent_recipe_proposal, list_agent_recipe_proposals,
     list_material_needs, resolve_material_need, update_agent_recipe_proposal,
 };
+use commands::app_info::{check_for_updates, get_app_version, open_release_page};
 use commands::backup::{create_data_backup, inspect_data_backup, restore_data_backup};
+use commands::data_reset::{
+    execute_data_reset, get_latest_data_reset_recovery, preview_data_reset, restart_application,
+    restore_latest_data_reset_recovery,
+};
 use commands::ingest::{
     cancel_ingredient_import_job, cleanup_orphan_attachments, commit_ingredient_import_job,
     commit_reviewed_ingredient_import_draft, create_ingredient_import_job,
     discard_ingredient_import_draft, export_ingredient_library, export_ingredient_template,
-    get_ingredient_import_job, list_ingredient_import_drafts, retry_ingredient_import_job,
-    update_ingredient_import_draft,
+    get_ingredient_import_draft, get_ingredient_import_job, list_ingredient_import_drafts,
+    retry_ingredient_import_job, update_ingredient_import_draft,
 };
 use commands::ingredients::{
     archive_category, archive_ingredient_variant, archive_material_group,
@@ -81,6 +86,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            let data_directory = std::env::var_os("FOODLAB_DEV_DATA_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or(app.path().app_data_dir()?);
+            #[cfg(not(debug_assertions))]
             let data_directory = app.path().app_data_dir()?;
             let database_path = data_directory.join("food-rd.sqlite3");
             let attachment_root = data_directory.join("attachments");
@@ -108,6 +118,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_app_version,
+            check_for_updates,
+            open_release_page,
+            preview_data_reset,
+            execute_data_reset,
+            get_latest_data_reset_recovery,
+            restore_latest_data_reset_recovery,
+            restart_application,
             list_categories,
             create_category,
             rename_category,
@@ -136,6 +154,7 @@ pub fn run() {
             database_status,
             create_ingredient_import_job,
             get_ingredient_import_job,
+            get_ingredient_import_draft,
             list_ingredient_import_drafts,
             update_ingredient_import_draft,
             discard_ingredient_import_draft,

@@ -9,8 +9,9 @@ import type {
   AgentSettingsDescription,
   AgentSettingsNamespace,
 } from "../../api/agent-harness-types";
-import { AppearanceSettings } from "./AppearanceSettings";
 import type { DesktopApi } from "../../api/desktop-api";
+import { Icon } from "../../components/Icon";
+import { AppearanceSettings } from "./AppearanceSettings";
 
 interface HarnessSettingsProps {
   api: DesktopApi;
@@ -63,6 +64,14 @@ const statusCopy: Record<
     title: "Agent 服务启动失败",
     detail: "可以重试；若持续失败，请查看 FoodLab 诊断信息。",
   },
+};
+
+const compactStatusCopy: Record<AgentRuntimeHealth["status"], string> = {
+  idle: "尚未启动",
+  starting: "正在启动",
+  ready: "已就绪",
+  damaged: "组件损坏",
+  failed: "启动失败",
 };
 
 export function HarnessSettings({ api, section }: HarnessSettingsProps) {
@@ -127,7 +136,7 @@ export function HarnessSettings({ api, section }: HarnessSettingsProps) {
   }
 
   return (
-    <section className="settings-section" aria-labelledby="agent-general-title">
+    <section className="settings-section settings-section--general" aria-labelledby="agent-general-title">
       <div className="settings-section__heading">
         <h2 id="agent-general-title">Ninka Agent</h2>
         <p>运行组件随 FoodLab 安装和升级，不需要单独安装任何开发工具。</p>
@@ -137,6 +146,7 @@ export function HarnessSettings({ api, section }: HarnessSettingsProps) {
         {health ? (
           <RuntimeStatusCard
             busy={busy}
+            compact
             copy={statusCopy[health.status]}
             health={health}
             onRetry={() => void retry()}
@@ -144,8 +154,11 @@ export function HarnessSettings({ api, section }: HarnessSettingsProps) {
         ) : (
           <p className="settings-loading">正在启动 Ninka Agent…</p>
         )}
-        <div className="settings-card settings-safety-note">
-          Agent 仅可使用当前任务声明的 FoodLab 工具。终端、任意文件系统、网页抓取、浏览器自动化和外部工具服务均未开放；保存、覆盖、删除、外发或采纳仍须确认。
+        <div className="agent-general-safety-note">
+          <Icon name="lock" size={18} />
+          <p>
+            Agent 仅可使用当前任务声明的 FoodLab 工具。终端、任意文件系统、网页抓取、浏览器自动化和外部工具服务均未开放；保存、覆盖、删除、外发或采纳仍须确认。
+          </p>
         </div>
       </div>
       {message ? <p className="settings-message" role="status">{message}</p> : null}
@@ -155,15 +168,44 @@ export function HarnessSettings({ api, section }: HarnessSettingsProps) {
 
 function RuntimeStatusCard({
   busy,
+  compact = false,
   copy,
   health,
   onRetry,
 }: {
   busy: boolean;
+  compact?: boolean;
   copy: { title: string; detail: string };
   health: AgentRuntimeHealth;
   onRetry(): void;
 }) {
+  if (compact) {
+    return (
+      <div className="settings-preference-row settings-runtime-row">
+        <Icon className="settings-preference-row__icon" name="database" size={22} />
+        <div className="settings-preference-row__copy">
+          <strong>Agent 服务</strong>
+          <p>{health.lastError || copy.detail}</p>
+        </div>
+        <div className="settings-runtime-row__actions">
+          <span className={`settings-runtime-status is-${health.status}`}>
+            <span className={`harness-status-dot is-${health.status}`} />
+            <span aria-hidden="true">{compactStatusCopy[health.status]}</span>
+            <span className="sr-only">{copy.title}</span>
+          </span>
+          {health.status === "failed" || health.status === "idle" ? (
+            <button className="button button--secondary settings-runtime-retry" disabled={busy} onClick={onRetry} type="button">
+              {busy ? "正在启动…" : "重试启动"}
+            </button>
+          ) : null}
+        </div>
+        {health.reinstallRequired ? (
+          <p className="settings-runtime-row__reinstall">请重新安装当前架构对应的 FoodLab 安装包。</p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="settings-card harness-settings-card">
       <div className="settings-row">
@@ -362,7 +404,7 @@ function DefaultModelPicker({
           <optgroup key={`${group.engine ?? "foodlab_runtime"}-${group.provider}`} label={group.displayName || group.provider}>
             {group.models.map((model) => (
               <option key={model.id} value={`${group.engine ?? "foodlab_runtime"}\u0000${group.provider}\u0000${model.id}`}>
-                {model.name || model.id}
+                {model.name || model.id} · {modelCapabilityLabel(model)}
               </option>
             ))}
           </optgroup>
@@ -372,6 +414,12 @@ function DefaultModelPicker({
       {error ? <p className="settings-message is-error" role="alert">{error}</p> : null}
     </div>
   );
+}
+
+function modelCapabilityLabel(model: AgentModelCatalogItem) {
+  if (model.inputModalities?.includes("image")) return "支持图片";
+  if (model.capabilityStatus === "known" || model.capabilityStatus === "probed") return "仅文本";
+  return "首次使用时确认";
 }
 
 function ProviderEditor({

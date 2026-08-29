@@ -8,6 +8,7 @@ use crate::recipes::model::{Recipe, RecipeKind};
 pub enum AgentRecipeProposalMode {
     GoalDesign,
     LabelReverse,
+    AttachmentImport,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +106,8 @@ impl AgentRecipeProposalItem {
 #[serde(rename_all = "camelCase")]
 pub struct AgentRecipeProposalPayload {
     pub product_name: String,
+    #[serde(default)]
+    pub recipe_code: Option<String>,
     pub recipe_kind: RecipeKind,
     pub mode: AgentRecipeProposalMode,
     pub finished_mass_grams: Option<String>,

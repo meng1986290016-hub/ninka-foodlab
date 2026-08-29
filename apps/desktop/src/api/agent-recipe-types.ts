@@ -4,7 +4,10 @@ import type {
   RecipeKind,
 } from "./recipe-types";
 
-export type AgentRecipeProposalMode = "goal_design" | "label_reverse";
+export type AgentRecipeProposalMode =
+  | "goal_design"
+  | "label_reverse"
+  | "attachment_import";
 export type AgentRecipeProposalStatus =
   | "pending_review"
   | "accepted"
@@ -57,6 +60,7 @@ export type AgentRecipeProposalItem =
 
 export interface AgentRecipeProposalPayload {
   productName: string;
+  recipeCode?: string | null;
   recipeKind: RecipeKind;
   mode: AgentRecipeProposalMode;
   finishedMassGrams: string | null;

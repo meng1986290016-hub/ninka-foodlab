@@ -92,6 +92,10 @@ export interface AgentModelCatalogItem {
     efforts?: Array<{ id: string; name?: string; description?: string }>;
     defaultEffort?: string;
   };
+  inputModalities?: Array<"text" | "image">;
+  capabilityStatus?: "known" | "probed" | "unknown";
+  capabilitySource?: "catalog" | "runtime_probe" | "unknown";
+  capabilityKey?: string;
 }
 
 export interface AgentModelProviderGroup {

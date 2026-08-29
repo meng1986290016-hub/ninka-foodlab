@@ -40,6 +40,7 @@ import {
   IconPlus,
   IconPrinter,
   IconReportAnalytics,
+  IconRefresh,
   IconRestore,
   IconScale,
   IconSearch,
@@ -118,6 +119,7 @@ export type IconName =
   | "recipe-version"
   | "recipe-workbench"
   | "report"
+  | "refresh"
   | "restore"
   | "sample-sheet"
   | "scale"
@@ -175,6 +177,7 @@ const icons: Record<IconName, TablerIcon> = {
   "recipe-version": IconStack2,
   "recipe-workbench": IconFlask2,
   report: IconReportAnalytics,
+  refresh: IconRefresh,
   restore: IconRestore,
   "sample-sheet": IconClipboardText,
   scale: IconScale,

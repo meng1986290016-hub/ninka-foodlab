@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::Duration,
+};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::Deserialize;
@@ -29,7 +32,12 @@ use crate::{
         repository::HarnessRepository,
         reset::LegacyAgentReset,
     },
+    agent_recipe::{
+        model::{AgentRecipeProposal, AgentRecipeProposalStatus},
+        repository::AgentRecipeRepository,
+    },
     ingest::coordinator::IngredientIngestCoordinator,
+    ingredients::repository::IngredientRepository,
     recipes::repository::RecipeRepository,
 };
 
@@ -37,6 +45,7 @@ use super::{AppState, CommandError};
 
 const MODEL_SETTINGS_SESSION_ID: &str = "00000000-0000-4000-8000-000000000001";
 const PROVIDER_TEST_SESSION_ID: &str = "00000000-0000-4000-8000-000000000002";
+const MODEL_CAPABILITY_CACHE_SETTING: &str = "agent.model_input_capabilities.v1";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -392,6 +401,8 @@ pub async fn get_agent_model_directory(state: State<'_, AppState>) -> Result<Val
     let mut directory = ensure_model_settings_session(&state.harness).await?;
     let usable = usable_model_providers(&state.harness).await?;
     normalize_model_directory(&mut directory);
+    let context = model_capability_context(&state.harness, &state.database_path).await;
+    annotate_model_capabilities(&mut directory, &context);
     if let Some(object) = directory.as_object_mut() {
         if let Some(groups) = object.get_mut("groups").and_then(Value::as_array_mut) {
             groups.retain(|group| {
@@ -904,17 +915,13 @@ pub async fn create_harness_task(
     state: State<'_, AppState>,
 ) -> Result<AgentTask, CommandError> {
     let route = current_agent_route(&state).await?;
-    let workflow = request
-        .workflow
-        .as_deref()
-        .map(parse_workflow)
-        .transpose()?
-        .unwrap_or_else(|| {
-            infer_workflow(
-                request.content.as_deref().unwrap_or(&request.title),
-                !request.files.is_empty(),
-            )
-        });
+    let workflow = match request.workflow.as_deref() {
+        Some(workflow) => parse_workflow(workflow)?,
+        None => infer_workflow(
+            request.content.as_deref().unwrap_or(&request.title),
+            !request.files.is_empty(),
+        )?,
+    };
     let task = repository(&state)?
         .create_task(
             &request.title,
@@ -1118,6 +1125,21 @@ pub async fn create_harness_turn(
         }
         AgentEngine::CodexAppServer => return Err(chatgpt_route_disabled()),
     }
+    let sends_images = repository(&state)?.list_turns(&request.task_id)?.is_empty()
+        && task_has_image_attachments(&state, &task)?;
+    let image_capability = if sends_images {
+        current_model_image_capability(&state, &task.active_route).await
+    } else {
+        ModelImageCapability::Unknown
+    };
+    if sends_images && image_capability == ModelImageCapability::Unsupported {
+        return Err(CommandError {
+            code: "model_does_not_support_images".into(),
+            message: "当前模型仅支持文本，不能读取图片。请切换到标注为“支持图片”的模型后重试"
+                .into(),
+            field: None,
+        });
+    }
     let parent_turn_id = request
         .parent_turn_id
         .as_deref()
@@ -1177,7 +1199,26 @@ pub async fn create_harness_turn(
                 .await
             {
                 Ok(_) => Ok(turn),
-                Err(message) => fail_turn(&state, &task, &turn, "prompt_failed", &message),
+                Err(message) => {
+                    if sends_images
+                        && image_capability == ModelImageCapability::Unknown
+                        && is_model_image_unsupported_message(&message)
+                    {
+                        let _ = cache_model_image_capability(
+                            &state,
+                            &task.active_route,
+                            ModelImageCapability::Unsupported,
+                        )
+                        .await;
+                    }
+                    fail_turn(
+                        &state,
+                        &task,
+                        &turn,
+                        prompt_failure_code(&message),
+                        &message,
+                    )
+                }
             }
         }
         AgentEngine::CodexAppServer => Err(chatgpt_route_disabled()),
@@ -1193,6 +1234,12 @@ pub async fn sync_harness_task(
     if task.active_route.engine == AgentEngine::CodexAppServer {
         return Ok(task);
     }
+    let sends_images = task_has_image_attachments(&state, &task).unwrap_or(false);
+    let image_capability = if sends_images {
+        current_model_image_capability(&state, &task.active_route).await
+    } else {
+        ModelImageCapability::Unknown
+    };
     let active_branch = if let Some(turn_id) = task.active_leaf_turn_id.as_deref() {
         repository(&state)?.get_turn(turn_id)?.branch_id
     } else {
@@ -1205,6 +1252,34 @@ pub async fn sync_harness_task(
         .ok_or_else(|| command_failure("当前任务尚未初始化".into()))?;
     let entries = fetch_complete_history(&state.harness, &session_id).await?;
     let updated = ingest_history(&mut repository(&state)?, &task_id, &entries)?;
+    if sends_images && image_capability == ModelImageCapability::Unknown {
+        match updated.status {
+            crate::agent_harness::model::TaskOutcome::Completed
+            | crate::agent_harness::model::TaskOutcome::NeedsInput
+            | crate::agent_harness::model::TaskOutcome::NeedsReview => {
+                let _ = cache_model_image_capability(
+                    &state,
+                    &task.active_route,
+                    ModelImageCapability::Supported,
+                )
+                .await;
+            }
+            crate::agent_harness::model::TaskOutcome::Failed
+                if updated
+                    .error_summary
+                    .as_deref()
+                    .is_some_and(is_model_image_unsupported_message) =>
+            {
+                let _ = cache_model_image_capability(
+                    &state,
+                    &task.active_route,
+                    ModelImageCapability::Unsupported,
+                )
+                .await;
+            }
+            _ => {}
+        }
+    }
     if updated.status != crate::agent_harness::model::TaskOutcome::Running {
         let _ = repository(&state)?.clear_steering_messages(&task_id);
     }
@@ -1320,9 +1395,75 @@ pub fn list_harness_artifacts(
     task_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ArtifactManifest>, CommandError> {
-    repository(&state)?
-        .list_artifacts(&task_id)
-        .map_err(Into::into)
+    let repository = repository(&state)?;
+    let mut artifacts = repository.list_artifacts(&task_id)?;
+    let legacy_bridge = repository.legacy_bridge(&task_id);
+    drop(repository);
+
+    if let Ok((run_id, import_job_id)) = legacy_bridge {
+        let draft_ids = state.coordinator.lock().ok().and_then(|coordinator| {
+            coordinator.as_ref().and_then(|coordinator| {
+                coordinator
+                    .list_drafts(&import_job_id)
+                    .ok()
+                    .map(|drafts| drafts.into_iter().map(|draft| draft.id).collect::<Vec<_>>())
+            })
+        });
+        if let Some(draft_ids) = draft_ids {
+            reconcile_legacy_ingredient_artifact_refs(&mut artifacts, &draft_ids);
+        }
+        let proposals =
+            AgentRecipeRepository::open(&state.database_path)?.list_proposals_for_run(&run_id)?;
+        reconcile_legacy_recipe_artifact_refs(&mut artifacts, &proposals);
+    }
+
+    Ok(artifacts)
+}
+
+fn reconcile_legacy_recipe_artifact_refs(
+    artifacts: &mut [ArtifactManifest],
+    proposals_by_position: &[AgentRecipeProposal],
+) {
+    let mut proposals = proposals_by_position.iter();
+    for artifact in artifacts.iter_mut().filter(|artifact| {
+        artifact.kind == "recipe_proposal"
+            && artifact.provenance.get("tool").and_then(Value::as_str)
+                == Some("create_recipe_proposal")
+    }) {
+        let Some(proposal) = proposals.next() else {
+            artifact.domain_ref = None;
+            artifact.status = crate::agent_harness::model::ArtifactStatus::Stale;
+            artifact.title = "未生成有效配方提案".into();
+            continue;
+        };
+        artifact.domain_ref = Some(format!("recipe_proposal:{}", proposal.id));
+        artifact.title = format!("配方提案 · {}", proposal.payload.product_name);
+        artifact.status = match proposal.status {
+            AgentRecipeProposalStatus::PendingReview => {
+                crate::agent_harness::model::ArtifactStatus::NeedsReview
+            }
+            AgentRecipeProposalStatus::Accepted => {
+                crate::agent_harness::model::ArtifactStatus::Accepted
+            }
+            AgentRecipeProposalStatus::Discarded => {
+                crate::agent_harness::model::ArtifactStatus::Rejected
+            }
+        };
+    }
+}
+
+fn reconcile_legacy_ingredient_artifact_refs(
+    artifacts: &mut [ArtifactManifest],
+    draft_ids_by_position: &[String],
+) {
+    let create_artifacts = artifacts.iter_mut().filter(|artifact| {
+        artifact.kind == "ingredient_import_draft"
+            && artifact.provenance.get("tool").and_then(Value::as_str)
+                == Some("create_ingredient_import_draft")
+    });
+    for (artifact, draft_id) in create_artifacts.zip(draft_ids_by_position) {
+        artifact.domain_ref = Some(format!("ingredient_import_draft:{draft_id}"));
+    }
 }
 
 #[tauri::command]
@@ -1362,6 +1503,7 @@ pub fn execute_legacy_agent_reset(
 fn parse_workflow(value: &str) -> Result<Workflow, CommandError> {
     match value {
         "ingredient_import" => Ok(Workflow::IngredientImport),
+        "recipe_import" => Ok(Workflow::RecipeImport),
         "recipe_proposal" => Ok(Workflow::RecipeProposal),
         "recipe_analysis" => Ok(Workflow::RecipeAnalysis),
         "recipe_estimate" => Ok(Workflow::RecipeEstimate),
@@ -1615,6 +1757,327 @@ fn normalize_model_directory(directory: &mut Value) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ModelImageCapability {
+    Supported,
+    Unsupported,
+    Unknown,
+}
+
+#[derive(Default)]
+struct ModelCapabilityContext {
+    base_urls: BTreeMap<String, String>,
+    cache: BTreeMap<String, ModelImageCapability>,
+}
+
+async fn model_capability_context(
+    host: &crate::agent_harness::host::HarnessHost,
+    database_path: &std::path::Path,
+) -> ModelCapabilityContext {
+    let mut context = ModelCapabilityContext::default();
+    if let (Ok(providers), Ok(settings)) = (
+        host.rpc_with_id(
+            "llm.providers",
+            json!({}),
+            &format!("capability-providers-{}", uuid::Uuid::new_v4()),
+        )
+        .await,
+        host.rpc_with_id(
+            "settings.describe",
+            json!({}),
+            &format!("capability-settings-{}", uuid::Uuid::new_v4()),
+        )
+        .await,
+    ) {
+        context.base_urls = provider_base_urls(&providers, &settings);
+    }
+    if let Ok(repository) = IngredientRepository::open(database_path)
+        && let Ok(Some(Value::Object(values))) =
+            repository.get_setting(MODEL_CAPABILITY_CACHE_SETTING)
+    {
+        context.cache = values
+            .into_iter()
+            .filter_map(|(key, value)| match value.as_str() {
+                Some("image") => Some((key, ModelImageCapability::Supported)),
+                Some("text") => Some((key, ModelImageCapability::Unsupported)),
+                _ => None,
+            })
+            .collect();
+    }
+    context
+}
+
+fn provider_base_urls(providers: &Value, settings: &Value) -> BTreeMap<String, String> {
+    let namespaces = settings
+        .get("namespaces")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    providers
+        .get("providers")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let provider = entry.get("provider")?.as_str()?;
+            let namespace = entry.get("settingsNs")?.as_str()?;
+            let path = entry
+                .get("settingsPath")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let section = namespaces
+                .iter()
+                .find(|value| value.get("ns").and_then(Value::as_str) == Some(namespace))?
+                .get("value")?;
+            let profile = value_at_path(section, &path)?;
+            Some((
+                provider.to_string(),
+                profile
+                    .get("baseURL")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim_end_matches('/')
+                    .to_ascii_lowercase(),
+            ))
+        })
+        .collect()
+}
+
+fn annotate_model_capabilities(directory: &mut Value, context: &ModelCapabilityContext) {
+    let Some(groups) = directory.get_mut("groups").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for group in groups {
+        let Some(group) = group.as_object_mut() else {
+            continue;
+        };
+        let provider = group
+            .get("provider")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let base_url = context
+            .base_urls
+            .get(&provider)
+            .map(String::as_str)
+            .unwrap_or("");
+        let Some(models) = group.get_mut("models").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for model in models {
+            let Some(model) = model.as_object_mut() else {
+                continue;
+            };
+            let id = model
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let key = model_capability_key(&provider, base_url, &id);
+            let catalog = declared_image_capability(model)
+                .or_else(|| bundled_image_capability(&provider, &id));
+            let (capability, status, source) = if let Some(capability) = catalog {
+                (capability, "known", "catalog")
+            } else if let Some(capability) = context.cache.get(&key).copied() {
+                (capability, "probed", "runtime_probe")
+            } else {
+                (ModelImageCapability::Unknown, "unknown", "unknown")
+            };
+            let modalities = match capability {
+                ModelImageCapability::Supported => json!(["text", "image"]),
+                ModelImageCapability::Unsupported | ModelImageCapability::Unknown => {
+                    json!(["text"])
+                }
+            };
+            model.insert("inputModalities".into(), modalities);
+            model.insert("capabilityStatus".into(), json!(status));
+            model.insert("capabilitySource".into(), json!(source));
+            model.insert("capabilityKey".into(), json!(key));
+        }
+    }
+}
+
+fn declared_image_capability(
+    model: &serde_json::Map<String, Value>,
+) -> Option<ModelImageCapability> {
+    let modalities = model
+        .get("inputModalities")
+        .or_else(|| model.get("input_modalities"))?
+        .as_array()?;
+    if modalities
+        .iter()
+        .any(|value| value.as_str() == Some("image"))
+    {
+        Some(ModelImageCapability::Supported)
+    } else if modalities
+        .iter()
+        .any(|value| value.as_str() == Some("text"))
+    {
+        Some(ModelImageCapability::Unsupported)
+    } else {
+        None
+    }
+}
+
+fn bundled_image_capability(provider: &str, model: &str) -> Option<ModelImageCapability> {
+    let provider = provider.to_ascii_lowercase();
+    let model = model.to_ascii_lowercase();
+    if (provider.contains("deepseek") && model.starts_with("deepseek-v4"))
+        || matches!(
+            model.as_str(),
+            "kimi-k2-0711-preview"
+                | "kimi-k2-0905-preview"
+                | "kimi-k2-thinking"
+                | "kimi-k2-thinking-turbo"
+                | "kimi-k2-turbo-preview"
+                | "gpt-4"
+                | "o3-mini"
+        )
+    {
+        return Some(ModelImageCapability::Unsupported);
+    }
+    if model.starts_with("kimi-k2.5")
+        || model.starts_with("kimi-k2.6")
+        || model.starts_with("kimi-k2.7")
+        || model.starts_with("kimi-k3")
+    {
+        return Some(ModelImageCapability::Supported);
+    }
+    None
+}
+
+fn model_capability_key(provider: &str, base_url: &str, model: &str) -> String {
+    let identity = format!(
+        "{}\0{}\0{}",
+        provider.trim().to_ascii_lowercase(),
+        base_url.trim_end_matches('/').to_ascii_lowercase(),
+        model.trim().to_ascii_lowercase(),
+    );
+    hex::encode(Sha256::digest(identity.as_bytes()))
+}
+
+async fn current_model_image_capability(
+    state: &State<'_, AppState>,
+    route: &AgentModelRoute,
+) -> ModelImageCapability {
+    let Ok(mut directory) = ensure_model_settings_session(&state.harness).await else {
+        return bundled_image_capability(&route.provider, &route.model)
+            .unwrap_or(ModelImageCapability::Unknown);
+    };
+    normalize_model_directory(&mut directory);
+    let context = model_capability_context(&state.harness, &state.database_path).await;
+    annotate_model_capabilities(&mut directory, &context);
+    directory
+        .get("groups")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|group| group.get("provider").and_then(Value::as_str) == Some(&route.provider))
+        .and_then(|group| group.get("models").and_then(Value::as_array))
+        .into_iter()
+        .flatten()
+        .find(|model| model.get("id").and_then(Value::as_str) == Some(&route.model))
+        .map(|model| {
+            if model
+                .get("inputModalities")
+                .and_then(Value::as_array)
+                .is_some_and(|values| values.iter().any(|value| value.as_str() == Some("image")))
+            {
+                ModelImageCapability::Supported
+            } else if model.get("capabilityStatus").and_then(Value::as_str) != Some("unknown") {
+                ModelImageCapability::Unsupported
+            } else {
+                ModelImageCapability::Unknown
+            }
+        })
+        .unwrap_or(ModelImageCapability::Unknown)
+}
+
+async fn cache_model_image_capability(
+    state: &State<'_, AppState>,
+    route: &AgentModelRoute,
+    capability: ModelImageCapability,
+) -> Result<(), CommandError> {
+    let context = model_capability_context(&state.harness, &state.database_path).await;
+    let base_url = context
+        .base_urls
+        .get(&route.provider)
+        .map(String::as_str)
+        .unwrap_or("");
+    let key = model_capability_key(&route.provider, base_url, &route.model);
+    let mut values = context
+        .cache
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                ModelImageCapability::Supported => "image",
+                ModelImageCapability::Unsupported => "text",
+                ModelImageCapability::Unknown => "unknown",
+            };
+            (key, json!(value))
+        })
+        .collect::<serde_json::Map<_, _>>();
+    values.insert(
+        key,
+        json!(match capability {
+            ModelImageCapability::Supported => "image",
+            ModelImageCapability::Unsupported => "text",
+            ModelImageCapability::Unknown => "unknown",
+        }),
+    );
+    IngredientRepository::open(&state.database_path)?
+        .set_setting(MODEL_CAPABILITY_CACHE_SETTING, &Value::Object(values))?;
+    Ok(())
+}
+
+fn task_has_image_attachments(
+    state: &State<'_, AppState>,
+    task: &AgentTask,
+) -> Result<bool, CommandError> {
+    let (_, job_id) = repository(state)?.legacy_bridge(&task.id)?;
+    let coordinator =
+        IngredientIngestCoordinator::open(&state.database_path, &state.attachment_root)?;
+    Ok(coordinator
+        .list_job_attachments(&job_id)?
+        .iter()
+        .any(|attachment| attachment.media_type.starts_with("image/")))
+}
+
+fn is_model_image_unsupported_message(message: &str) -> bool {
+    let diagnostic = message.to_ascii_lowercase();
+    diagnostic.contains("model_does_not_support_images")
+        || diagnostic.contains("模型仅支持文本")
+        || (diagnostic.contains("model")
+            && diagnostic.contains("support")
+            && diagnostic.contains("image"))
+}
+
+fn prompt_failure_code(message: &str) -> &'static str {
+    if is_model_image_unsupported_message(message) {
+        "model_does_not_support_images"
+    } else if message.contains("超过当前模型允许的大小") {
+        "attachment_too_large"
+    } else if message.contains("图片数量超出限制") {
+        "attachment_too_many"
+    } else if message.contains("尺寸或总像素超出限制") {
+        "attachment_dimensions_exceeded"
+    } else if message.contains("图片格式与文件内容不匹配") {
+        "attachment_unsupported_format"
+    } else if message.contains("图片损坏或无法读取") {
+        "attachment_corrupt"
+    } else if message.contains("附件未能完成校验或发送") {
+        "attachment_read_failed"
+    } else if message.contains("密钥") {
+        "provider_auth_failed"
+    } else if message.contains("网络") || message.contains("连接") || message.contains("超时")
+    {
+        "provider_network_unavailable"
+    } else {
+        "prompt_failed"
+    }
+}
+
 async fn usable_model_providers(
     host: &crate::agent_harness::host::HarnessHost,
 ) -> Result<BTreeSet<String>, CommandError> {
@@ -1785,8 +2248,16 @@ async fn current_foodlab_route(
     })
 }
 
-fn infer_workflow(content: &str, has_files: bool) -> Workflow {
-    if has_files || contains_any(content, &["识别", "附件", "原料表", "导入原料"]) {
+fn infer_workflow(content: &str, has_files: bool) -> Result<Workflow, CommandError> {
+    let workflow = if contains_any(
+        content,
+        &["加入配方", "录入配方", "导入配方", "读取配方", "配方表"],
+    ) {
+        Workflow::RecipeImport
+    } else if contains_any(
+        content,
+        &["加入原料", "录入原料", "导入原料", "读取原料", "原料表"],
+    ) {
         Workflow::IngredientImport
     } else if contains_any(content, &["标签", "法规", "合规", "营养成分表"]) {
         Workflow::LabelCompliance
@@ -1797,11 +2268,22 @@ fn infer_workflow(content: &str, has_files: bool) -> Workflow {
         Workflow::RecipeProposal
     } else if contains_any(content, &["营养", "成本", "计算", "分析配方"]) {
         Workflow::RecipeAnalysis
+    } else if has_files && contains_any(content, &["配方"]) {
+        Workflow::RecipeImport
+    } else if has_files && contains_any(content, &["原料"]) {
+        Workflow::IngredientImport
     } else if contains_any(content, &["版本", "报告", "导出"]) {
         Workflow::VersionReporting
+    } else if has_files {
+        return Err(CommandError {
+            code: "attachment_purpose_required".into(),
+            message: "请说明附件用途，例如“导入原料”或“导入配方”，本次尚未创建 Agent 会话。".into(),
+            field: None,
+        });
     } else {
         Workflow::LocalKnowledge
-    }
+    };
+    Ok(workflow)
 }
 
 fn contains_any(content: &str, keywords: &[&str]) -> bool {
@@ -1934,7 +2416,14 @@ async fn ensure_foodlab_session(
         .harness
         .rpc_with_id(
             "session.create",
-            json!({ "sessionId": task.id, "agentPreset": "foodlab" }),
+            json!({
+                "sessionId": task.id,
+                "agentPreset": if task.task_contract.allowed_tools.iter().any(|tool| tool == "web_search") {
+                    "foodlab-web"
+                } else {
+                    "foodlab"
+                }
+            }),
             &format!("create-runtime-session-{}", task.id),
         )
         .await
@@ -2321,7 +2810,11 @@ fn fail_turn(
         Some(code),
         Some(message),
     );
-    Err(command_failure(message.to_string()))
+    Err(CommandError {
+        code: code.to_string(),
+        message: message.to_string(),
+        field: None,
+    })
 }
 
 fn codex_failure(_message: String) -> CommandError {
@@ -2354,6 +2847,23 @@ fn render_task_prompt(
 ) -> Result<String, CommandError> {
     let contract = serde_json::to_string_pretty(&task.task_contract)
         .map_err(|error| command_failure(error.to_string()))?;
+    let workflow_rules = match task.workflow.as_str() {
+        "recipe_import" => {
+            r#"
+- Treat attachments as source records to transcribe, not as a request to optimize or redesign a formula.
+- Infer the table structure semantically; do not require fixed sheet names, headers, columns, or cell positions.
+- Create exactly one attachment_import proposal for each recipe found. Preserve recipe order, ingredient order, original g/kg units, finished mass, attachment IDs, notes, and an explicitly supplied recipe code; use null when no code is clearly supplied.
+- Use the sum of converted ingredient amounts as inputMassGrams. If a declared total differs, add a warning and never rescale ingredient amounts.
+- Bind an existing supplier variant only when the attachment material name identifies the same generic material. Similar names are different identities and must remain material_need items with their original names, specifications, and purposes.
+"#
+        }
+        "ingredient_import" => {
+            r#"
+- Treat attachments as ingredient source records. Create reviewable ingredient drafts only; do not create recipe proposals.
+"#
+        }
+        _ => "",
+    };
     Ok(format!(
         r#"[FoodLab Task Context]
 taskId: {task_id}
@@ -2376,12 +2886,14 @@ Rules:
 - A formal label review must first confirm China-mainland domestic ordinary prepackaged-food scope; otherwise return needs_input and only extract visible packaging facts.
 - Regulatory search records must distinguish official full text, metadata only, user-provided text, not found, and ambiguous results. Search snippets are never formal evidence.
 - Never expose raw JSON to the user. Use concise Markdown and structured sources.
+{workflow_rules}
 
 [User Request]
 {user_content}"#,
         task_id = task.id,
         turn_id = turn.id,
         user_content = user_content.trim(),
+        workflow_rules = workflow_rules,
     ))
 }
 
@@ -2633,6 +3145,186 @@ mod tests {
     use super::*;
 
     #[test]
+    fn attachment_routing_respects_explicit_recipe_and_ingredient_intent() {
+        assert_eq!(
+            infer_workflow("请把附件里的三个配方加入配方库", true).unwrap(),
+            Workflow::RecipeImport
+        );
+        assert_eq!(
+            infer_workflow("导入这份原料表", true).unwrap(),
+            Workflow::IngredientImport
+        );
+        let ambiguous = infer_workflow("帮我识别这个附件", true).unwrap_err();
+        assert_eq!(ambiguous.code, "attachment_purpose_required");
+        assert!(ambiguous.message.contains("导入配方"));
+    }
+
+    #[test]
+    fn legacy_ingredient_artifacts_are_reconciled_with_job_draft_positions() {
+        let artifact = |id: &str, kind: &str, tool: &str, domain_ref: &str| ArtifactManifest {
+            id: id.into(),
+            task_id: "task-1".into(),
+            turn_id: "turn-1".into(),
+            tool_call_id: Some(format!("call-{id}")),
+            kind: kind.into(),
+            title: "待复核成果".into(),
+            domain_ref: Some(domain_ref.into()),
+            logical_path: None,
+            mime_type: None,
+            sha256: None,
+            byte_size: None,
+            status: crate::agent_harness::model::ArtifactStatus::NeedsReview,
+            provenance: json!({ "tool": tool }),
+            created_at: "2026-08-29T00:00:00Z".into(),
+            updated_at: "2026-08-29T00:00:00Z".into(),
+        };
+        let mut artifacts = vec![
+            artifact(
+                "first",
+                "ingredient_import_draft",
+                "create_ingredient_import_draft",
+                "ingredient_import_draft:wrong-category-id",
+            ),
+            artifact(
+                "other",
+                "recipe_proposal",
+                "create_recipe_proposal",
+                "recipe_proposal:keep-me",
+            ),
+            artifact(
+                "second",
+                "ingredient_import_draft",
+                "create_ingredient_import_draft",
+                "ingredient_import_draft:wrong-supplier-id",
+            ),
+            artifact(
+                "update",
+                "ingredient_import_draft",
+                "update_ingredient_import_draft",
+                "ingredient_import_draft:untouched-update",
+            ),
+        ];
+
+        reconcile_legacy_ingredient_artifact_refs(
+            &mut artifacts,
+            &["draft-position-0".into(), "draft-position-1".into()],
+        );
+
+        assert_eq!(
+            artifacts[0].domain_ref.as_deref(),
+            Some("ingredient_import_draft:draft-position-0")
+        );
+        assert_eq!(
+            artifacts[1].domain_ref.as_deref(),
+            Some("recipe_proposal:keep-me")
+        );
+        assert_eq!(
+            artifacts[2].domain_ref.as_deref(),
+            Some("ingredient_import_draft:draft-position-1")
+        );
+        assert_eq!(
+            artifacts[3].domain_ref.as_deref(),
+            Some("ingredient_import_draft:untouched-update")
+        );
+    }
+
+    #[test]
+    fn recipe_artifacts_use_real_proposals_and_mark_excess_history_stale() {
+        let artifact = |id: &str| ArtifactManifest {
+            id: id.into(),
+            task_id: "task-1".into(),
+            turn_id: "turn-1".into(),
+            tool_call_id: Some(format!("call-{id}")),
+            kind: "recipe_proposal".into(),
+            title: "配方提案".into(),
+            domain_ref: Some(format!("recipe_proposal:ghost-{id}")),
+            logical_path: None,
+            mime_type: None,
+            sha256: None,
+            byte_size: None,
+            status: crate::agent_harness::model::ArtifactStatus::NeedsReview,
+            provenance: json!({ "tool": "create_recipe_proposal" }),
+            created_at: "2026-08-29T00:00:00Z".into(),
+            updated_at: "2026-08-29T00:00:00Z".into(),
+        };
+        let proposal: AgentRecipeProposal = serde_json::from_value(json!({
+            "id": "real-proposal-1",
+            "conversationId": "conversation-1",
+            "runId": "run-1",
+            "status": "pending_review",
+            "payloadVersion": 2,
+            "payload": {
+                "productName": "巧克力夹心",
+                "recipeCode": "R001",
+                "recipeKind": "formula",
+                "mode": "attachment_import",
+                "finishedMassGrams": "1000",
+                "yieldAssumption": "provided",
+                "items": [{
+                    "kind": "material_need",
+                    "id": "line-1",
+                    "position": 0,
+                    "amount": "1000",
+                    "unit": "g",
+                    "estimatedMinimum": null,
+                    "estimatedMaximum": null,
+                    "confidence": "high",
+                    "materialName": "可可粉",
+                    "purpose": "提供风味",
+                    "desiredSpecification": "附件未注明",
+                    "missingReason": "原料库没有完全一致的通用原料"
+                }],
+                "requirements": [],
+                "assumptions": [],
+                "warnings": [],
+                "markdownNotes": ""
+            },
+            "evaluation": {},
+            "sourceAttachmentIds": ["attachment-1"],
+            "acceptedRecipeId": null,
+            "createdAt": "2026-08-29T00:00:00Z",
+            "updatedAt": "2026-08-29T00:00:00Z"
+        }))
+        .unwrap();
+        let mut second = proposal.clone();
+        second.id = "real-proposal-2".into();
+        second.payload.product_name = "香草夹心".into();
+        let mut third = proposal.clone();
+        third.id = "real-proposal-3".into();
+        third.payload.product_name = "可可基底".into();
+        let mut artifacts = vec![
+            artifact("first"),
+            artifact("second"),
+            artifact("third"),
+            artifact("ghost"),
+        ];
+
+        reconcile_legacy_recipe_artifact_refs(&mut artifacts, &[proposal, second, third]);
+
+        assert_eq!(
+            artifacts[0].domain_ref.as_deref(),
+            Some("recipe_proposal:real-proposal-1")
+        );
+        assert_eq!(artifacts[0].title, "配方提案 · 巧克力夹心");
+        assert_eq!(
+            artifacts[1].domain_ref.as_deref(),
+            Some("recipe_proposal:real-proposal-2")
+        );
+        assert_eq!(artifacts[1].title, "配方提案 · 香草夹心");
+        assert_eq!(
+            artifacts[2].domain_ref.as_deref(),
+            Some("recipe_proposal:real-proposal-3")
+        );
+        assert_eq!(artifacts[2].title, "配方提案 · 可可基底");
+        assert_eq!(
+            artifacts[3].status,
+            crate::agent_harness::model::ArtifactStatus::Stale
+        );
+        assert_eq!(artifacts[3].title, "未生成有效配方提案");
+        assert!(artifacts[3].domain_ref.is_none());
+    }
+
+    #[test]
     fn model_settings_bridge_rejects_unapproved_namespaces_and_literal_secrets() {
         let namespace_error = validate_settings_call(
             "settings.mutate",
@@ -2701,6 +3393,85 @@ mod tests {
         assert_eq!(directory["groups"][0]["provider"], "deepseek");
         assert_eq!(directory["groups"][0]["displayName"], "DeepSeek");
         assert_eq!(directory["failures"][0]["provider"], "custom");
+    }
+
+    #[test]
+    fn image_capability_catalog_distinguishes_deepseek_kimi_and_unknown_custom_models() {
+        assert_eq!(
+            bundled_image_capability("deepseek-official", "deepseek-v4-flash"),
+            Some(ModelImageCapability::Unsupported)
+        );
+        assert_eq!(
+            bundled_image_capability("moonshot", "kimi-k2.6"),
+            Some(ModelImageCapability::Supported)
+        );
+        assert_eq!(
+            bundled_image_capability("company-gateway", "my-private-model"),
+            None
+        );
+
+        let mut directory = json!({
+            "groups": [
+                { "provider": "deepseek-official", "models": [{ "id": "deepseek-v4-pro" }] },
+                { "provider": "moonshot", "models": [{ "id": "kimi-k2.6" }] },
+                { "provider": "custom", "models": [{ "id": "private-model" }] }
+            ]
+        });
+        annotate_model_capabilities(&mut directory, &ModelCapabilityContext::default());
+        assert_eq!(
+            directory["groups"][0]["models"][0]["capabilityStatus"],
+            "known"
+        );
+        assert_eq!(
+            directory["groups"][0]["models"][0]["inputModalities"],
+            json!(["text"])
+        );
+        assert_eq!(
+            directory["groups"][1]["models"][0]["inputModalities"],
+            json!(["text", "image"])
+        );
+        assert_eq!(
+            directory["groups"][2]["models"][0]["capabilityStatus"],
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn probed_capability_cache_is_isolated_by_provider_base_url_and_model() {
+        assert_ne!(
+            model_capability_key("custom", "https://one.example/v1", "model-a"),
+            model_capability_key("custom", "https://two.example/v1", "model-a")
+        );
+        assert_ne!(
+            model_capability_key("custom", "https://one.example/v1", "model-a"),
+            model_capability_key("custom", "https://one.example/v1", "model-b")
+        );
+    }
+
+    #[test]
+    fn only_explicit_image_rejection_can_downgrade_an_unknown_model() {
+        assert!(is_model_image_unsupported_message(
+            "MODEL_DOES_NOT_SUPPORT_IMAGES: image input is unsupported"
+        ));
+        assert!(!is_model_image_unsupported_message("401 invalid api key"));
+        assert!(!is_model_image_unsupported_message(
+            "network connection timed out"
+        ));
+        assert!(!is_model_image_unsupported_message(
+            "attachment file is corrupt"
+        ));
+        assert_eq!(
+            prompt_failure_code("图片文件超过当前模型允许的大小，请压缩后重试"),
+            "attachment_too_large"
+        );
+        assert_eq!(
+            prompt_failure_code("当前模型尚未配置密钥"),
+            "provider_auth_failed"
+        );
+        assert_eq!(
+            prompt_failure_code("Agent 服务响应超时，请检查网络后重试"),
+            "provider_network_unavailable"
+        );
     }
 
     #[test]
